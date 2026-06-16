@@ -2,6 +2,9 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { Logo } from "@/components/Logo";
+import { Candle } from "@/components/CandleArt";
+import { ArrowRight } from "lucide-react";
 
 export default function Login() {
   const { login } = useAuth();
@@ -15,34 +18,40 @@ export default function Login() {
     setLoading(true);
     try {
       const u = await login(email, password);
-      toast.success(`Welcome back, ${u.name || u.email}`);
+      toast.success(`Bon retour, ${u.name || u.email}`);
       nav(u.onboarded ? "/app/dashboard" : "/onboarding");
-    } catch (err) {
-      toast.error(err.response?.data?.detail || "Login failed");
-    } finally { setLoading(false); }
+    } catch (err) { toast.error(err.response?.data?.detail || "Connexion impossible"); }
+    finally { setLoading(false); }
   };
 
   return (
-    <div className="min-h-screen grid-bg flex items-center justify-center px-6 py-16">
-      <div className="w-full max-w-md card-elev p-8 glow-blue">
-        <Link to="/" className="text-sm text-[#9CA3AF] hover:text-white">← Back</Link>
-        <h1 className="text-3xl font-bold mt-4 text-gradient">Welcome back</h1>
-        <p className="text-[#9CA3AF] text-sm mt-2">Log in to your PipsEvo command center.</p>
-        <form onSubmit={submit} className="space-y-4 mt-8">
+    <div className="min-h-screen flex items-center justify-center px-6 py-16 relative overflow-hidden">
+      <div className="absolute inset-0 grid-floor opacity-40" />
+      <div className="absolute top-[10%] left-[15%] w-[400px] h-[400px] rounded-full blur-3xl opacity-30" style={{ background: "radial-gradient(circle, #7C4DFF, transparent)" }} />
+      <div className="absolute bottom-[10%] right-[15%] w-[400px] h-[400px] rounded-full blur-3xl opacity-25" style={{ background: "radial-gradient(circle, #4F8CFF, transparent)" }} />
+      <div className="absolute left-[8%] top-[28%] floaty"><Candle color="purple" height={90} rot={-6} /></div>
+      <div className="absolute right-[8%] top-[20%] floaty-slow"><Candle color="pink" height={110} rot={8} /></div>
+      <div className="absolute left-[12%] bottom-[15%] floaty-slow"><Candle color="green" height={80} rot={4} /></div>
+
+      <div className="w-full max-w-md card-elev p-9 glow-purple relative z-10">
+        <div className="mb-6"><Logo /></div>
+        <h1 className="text-3xl font-bold text-gradient">Bon retour.</h1>
+        <p className="text-[#9CA3AF] text-sm mt-2">Connecte-toi à ton command center.</p>
+        <form onSubmit={submit} className="space-y-4 mt-7">
           <div>
             <label className="text-xs font-mono uppercase text-[#9CA3AF]">Email</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} data-testid="login-email" className="w-full mt-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 focus:border-[#4F8CFF] outline-none" />
+            <input type="email" required value={email} onChange={(e)=>setEmail(e.target.value)} data-testid="login-email" className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 focus:border-[#7C4DFF] outline-none" />
           </div>
           <div>
-            <label className="text-xs font-mono uppercase text-[#9CA3AF]">Password</label>
-            <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} data-testid="login-password" className="w-full mt-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 focus:border-[#4F8CFF] outline-none" />
+            <label className="text-xs font-mono uppercase text-[#9CA3AF]">Mot de passe</label>
+            <input type="password" required value={password} onChange={(e)=>setPassword(e.target.value)} data-testid="login-password" className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 focus:border-[#7C4DFF] outline-none" />
           </div>
-          <button type="submit" disabled={loading} className="btn-primary w-full" data-testid="login-submit">{loading ? "Signing in…" : "Sign in"}</button>
+          <button type="submit" disabled={loading} className="btn-primary w-full inline-flex items-center justify-center gap-2" data-testid="login-submit">{loading ? "Connexion…" : (<>Se connecter <ArrowRight className="w-4 h-4"/></>)}</button>
         </form>
         <div className="text-center text-sm text-[#9CA3AF] mt-6">
-          New here? <Link to="/register" className="text-[#4F8CFF] hover:underline" data-testid="login-go-register">Create account</Link>
+          Pas encore de compte ? <Link to="/register" className="text-[#B58BFF] hover:underline" data-testid="login-go-register">Crée-en un</Link>
         </div>
-        <div className="mt-6 text-xs text-center text-[#9CA3AF]">Google login coming in v2</div>
+        <div className="mt-6 text-xs text-center text-[#6B7280]">Google login arrive en v2</div>
       </div>
     </div>
   );

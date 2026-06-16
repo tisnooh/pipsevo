@@ -1,0 +1,34 @@
+{
+  "summary": "Frontend E2E re-test of PipsEvo after testid fix. Complete happy-path verified: Landing → Register (fresh user) → Onboarding (5 steps) → Dashboard → Accounts (add via modal) → Journal (add trade via modal, detail panel) → Analytics (28 chart elements rendered) → Discipline → Payouts (add via modal + simulator) → AI Coach (real Claude Sonnet 4.5 response in ~28s) → Backtest placeholder → Logout. All previously blocked modal testids (acc-*, t-*, p-*) are now correctly placed on inputs and reachable. AI Coach uses data-testid='coach-input' (input, not textarea) — works end-to-end. 8/8 critical flows pass.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard / multiple pages", "issues": ["Recharts emits ~12 console warnings: 'width(-1) and height(-1) of chart should be greater than 0'. Likely sparkline ResponsiveContainer renders before parent gets dimensions on first paint. Charts still display correctly but the warning noise is significant. Add explicit minWidth/minHeight or aspect on ResponsiveContainer for sparkline cards (kpi-* sparklines)."]},
+      {"screen": "Payouts page (Add Payout modal)", "issues": ["React hydration error logged: 'In HTML, <span> cannot be a child of <option>'. The <select data-testid=p-account> renders <option> children that contain a tracking <span style='display:contents'> injected by the Emergent visual-edit overlay. The modal still works, but this produces a console error every time the modal opens. If the spans come from the Emergent dev overlay (x-excluded='true'), this is tooling-injection and not user code — safe in prod, but worth filtering in dev."]},
+      {"screen": "Logout flow", "issues": ["sidebar-logout redirects to /login, but the original spec says 'Logout from sidebar-logout returns to landing' (/). Minor — pick one and update spec or code."]},
+      {"screen": "Top-right toasts (Welcome / Compte ajouté)", "issues": ["Two stacked toasts can briefly overlap the 'Ajouter un compte' button area in the topbar (still clickable). Lower z or move toast position to bottom-right while topbar is active."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_pipsevo_backend.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Fix Recharts 'width(-1) height(-1)' warnings by giving each sparkline ResponsiveContainer a parent with explicit height (e.g., h-12) or set aspect={…} on ResponsiveContainer.",
+    "Decide logout destination: redirect to '/' (landing) per spec, currently goes to '/login'.",
+    "Optional: address Payouts <option><span> hydration warning if it comes from app code (unlikely — looks like Emergent overlay injection)."
+  ],
+  "critical_code_review_comments": [
+    "Accounts.jsx + Payouts.jsx + Journal.jsx now correctly put data-testid on the actual <input>/<select>/<button> elements — good fix from iteration 1.",
+    "AI Coach uses a single <input> (data-testid='coach-input') instead of a textarea — the original problem statement referenced 'input + presets + ask' so this is consistent, but a multi-line textarea would be more ergonomic for longer questions.",
+    "Modal pattern: pages use plain fixed-overlay divs instead of Radix Dialog. Works reliably for Playwright now, but no focus trap / Esc-to-close — acceptable for MVP.",
+    "Recharts ResponsiveContainer used inside small KPI cards without fixed height causes the negative-dimension warning storm; refactor to fixed-height wrappers."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "93% (from prev iter, unchanged)", "frontend": "100% (all critical flows green)" },
+  "test_credentials": "demo@pipsevo.com / demo123 verified. Fresh user playtest_<ts>@pipsevo.com / TestPass123 registered + onboarded end-to-end.",
+  "seed_data_creation": "Created 1 fresh user via register, 1 account (TEST Combine 50K, Topstep), 1 trade (EURUSD long +$450), 1 payout ($1500) on that user. Demo user used for AI Coach test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All E2E modal flows now work. The iteration 1 blocker (data-testid on modal triggers only) is resolved — testids are on inputs/selects/buttons. AI Coach via Claude Sonnet 4.5 confirmed real (28s latency for substantive markdown response). Only remaining items are cosmetic: chart sizing warnings and a tooling-related hydration warning. Logout target (login vs landing) is the only spec/code mismatch.",
+  "rca of the issue": "Iteration 1 modal-input testid issue is fully resolved: data-testid attributes are now placed on the actual form <input>/<select>/<button> elements (see Accounts.jsx Fld component lines 113-118 spreading testid as data-testid onto the <input>). Modal opens on first click via setOpen(true) in onClick. Playwright can reach acc-name, acc-firm, acc-balance, acc-initial, acc-target, acc-dd, acc-submit within <8s; same pattern for t-* and p-*."
+}
