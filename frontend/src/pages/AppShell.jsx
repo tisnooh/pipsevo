@@ -74,7 +74,7 @@ export default function AppShell() {
         </div>
 
         <div className="border-t border-white/5 px-3 py-3 text-xs text-[#9CA3AF]">
-          <button onClick={() => { logout(); nav("/"); }} className="flex items-center gap-2 hover:text-[#FF5252]" data-testid="sidebar-logout"><LogOut className="w-3.5 h-3.5"/> Déconnexion</button>
+          <button onClick={() => { logout(); window.location.href = "/"; }} className="flex items-center gap-2 hover:text-[#FF5252]" data-testid="sidebar-logout"><LogOut className="w-3.5 h-3.5"/> Déconnexion</button>
         </div>
       </aside>
 
