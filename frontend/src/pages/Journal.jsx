@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { trades, accounts as accAPI } from "@/lib/api";
 import { toast } from "sonner";
 import { Plus, Filter, Star, X, Edit, Trash2, Calendar } from "lucide-react";
+import { DEMO_TRADES, DEMO_METRICS, isEmpty } from "@/lib/demo";
 
 const SETUPS = ["London FVG", "NY Open Drive", "Asia Range", "Liquidity Sweep", "Order Block", "Breakout", "Reversal", "Trend", "FVG", "News", "Volatility", "Other"];
 const EMOTIONS = ["Confident", "Neutral", "Disciplined", "Stressed", "Fearful", "Revenge"];
@@ -20,7 +21,8 @@ export default function Journal() {
     const [t, a] = await Promise.all([trades.list(), accAPI.list()]);
     setList(t.data); setAccs(a.data);
     if (!form.account_id && a.data.length > 0) setForm(f => ({...f, account_id: a.data[0].id}));
-    if (!selected && t.data.length > 0) setSelected(t.data[0]);
+    const initial = t.data.length > 0 ? t.data[0] : DEMO_TRADES[0];
+    if (!selected) setSelected(initial);
   };
   useEffect(() => { load(); }, []);
 
@@ -41,15 +43,18 @@ export default function Journal() {
     load();
   };
 
-  const filtered = tab === "Positions ouvertes" ? [] : tab === "Favoris" ? list.filter(t => t.fav) : list;
+  const useDemo = isEmpty(list);
+  const sourceList = useDemo ? DEMO_TRADES : list;
+  const filtered = tab === "Positions ouvertes" ? [] : tab === "Favoris" ? sourceList.filter(t => t.fav) : sourceList;
 
-  const wins = list.filter(t => t.pnl > 0);
-  const losses = list.filter(t => t.pnl < 0);
-  const wr = list.length ? (wins.length/list.length*100).toFixed(0) : 0;
-  const sumPnl = list.reduce((a,b)=>a+(b.pnl||0),0);
-  const avgWin = wins.length ? wins.reduce((a,b)=>a+b.pnl,0)/wins.length : 0;
-  const avgLoss = losses.length ? losses.reduce((a,b)=>a+b.pnl,0)/losses.length : 0;
-  const avgR = list.length ? (sumPnl/list.length/100).toFixed(2) : 0;
+  const wins = sourceList.filter(t => t.pnl > 0);
+  const losses = sourceList.filter(t => t.pnl < 0);
+  const wr = sourceList.length ? Math.round(wins.length/sourceList.length*100) : 62;
+  const sumPnl = useDemo ? 12450 : sourceList.reduce((a,b)=>a+(b.pnl||0),0);
+  const avgWin = useDemo ? 210.50 : (wins.length ? wins.reduce((a,b)=>a+b.pnl,0)/wins.length : 0);
+  const avgLoss = useDemo ? -118.30 : (losses.length ? losses.reduce((a,b)=>a+b.pnl,0)/losses.length : 0);
+  const avgR = useDemo ? "1.78" : (sourceList.length ? (sumPnl/sourceList.length/100).toFixed(2) : 0);
+  const tradesCount = useDemo ? 328 : sourceList.length;
 
   return (
     <div className="p-7 space-y-5">
@@ -70,7 +75,7 @@ export default function Journal() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <JKpi label="Trades" value={list.length} sub={`+ ${list.length} vs période précédente`} color="white" />
+        <JKpi label="Trades" value={tradesCount} sub={`+ 18 vs période précédente`} color="white" />
         <JKpi label="Win Rate" value={`${wr}%`} sub="+ 8%" color="white" />
         <JKpi label="Profit net" value={`${sumPnl>=0?"+":""}$${sumPnl.toFixed(0)}`} sub="+ 12.4%" color="#00E676" />
         <JKpi label="Gain moyen" value={`+$${avgWin.toFixed(2)}`} color="#00E676" />
@@ -101,11 +106,11 @@ export default function Journal() {
                   <td className="py-3 pl-5 text-xs text-[#B5BBC9]"><Star className="w-3.5 h-3.5 inline mr-2 text-[#6B7280]"/>{t.date}</td>
                   <td className="font-medium">{t.instrument}</td>
                   <td className={t.direction === "long" ? "text-[#00E676]" : "text-[#FF5252]"}>{t.direction === "long" ? "Achat (Long)" : "Vente (Short)"}</td>
-                  <td className="text-right font-mono" style={{ color: t.pnl >= 0 ? "#00E676" : "#FF5252" }}>{t.pnl>=0?"+":""}${t.pnl}</td>
-                  <td className="text-right font-mono text-[#B5BBC9]">{((t.pnl||0)/100).toFixed(2)}R</td>
-                  <td className="pl-4 text-xs text-[#9CA3AF]">{t.session?"2h 15m":"—"}</td>
-                  <td className="text-xs text-[#B5BBC9]">{(accs.find(a=>a.id===t.account_id)?.firm)||"—"}</td>
-                  <td>{t.setup && <span className="text-[10px] px-2 py-0.5 rounded border border-white/10 text-[#B5BBC9]">{t.setup}</span>}</td>
+                  <td className="text-right font-mono" style={{ color: t.pnl >= 0 ? "#00E676" : "#FF5252" }}>{t.pnl>=0?"+":""}${Math.abs(t.pnl).toFixed(2)}</td>
+                  <td className="text-right font-mono" style={{ color: t.pnl >= 0 ? "#00E676" : "#FF5252" }}>{(t.r ?? (t.pnl/100)).toFixed?.(2) ?? "0.00"}R</td>
+                  <td className="pl-4 text-xs text-[#9CA3AF]">{t.duration || (t.session ? "2h 15m" : "—")}</td>
+                  <td className="text-xs text-[#B5BBC9]">{t.account || (accs.find(a=>a.id===t.account_id)?.firm) || "—"}</td>
+                  <td className="space-x-1">{(t.tags || (t.setup ? [t.setup] : [])).map((tag,i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded border border-white/10 text-[#B5BBC9] inline-block">{tag}</span>)}</td>
                   <td className="pr-4 text-[#6B7280]">⋯</td>
                 </tr>
               ))}
@@ -126,33 +131,36 @@ export default function Journal() {
                 <button onClick={()=>setSelected(null)} className="text-[#6B7280] hover:text-white"><X className="w-4 h-4"/></button>
               </div>
               <div className={`text-sm font-medium flex items-center gap-1 ${selected.direction==="long"?"text-[#00E676]":"text-[#FF5252]"}`}>↗ {selected.direction==="long"?"Achat (Long)":"Vente (Short)"}</div>
-              <div className="flex justify-between text-sm font-mono mt-3 pb-3 border-b border-white/5">
-                <span className="text-[#B58BFF]">+{((selected.pnl||0)/100).toFixed(2)}R</span>
-                <span className="text-[#00E676]">{selected.pnl>=0?"+":""}${selected.pnl}</span>
+              <div className="grid grid-cols-3 gap-3 mt-3 pb-3 border-b border-white/5 text-center">
+                <div><div className="text-[10px] text-[#9CA3AF] uppercase">R Multiple</div><div className="font-mono font-bold mt-0.5" style={{color:"#B58BFF"}}>{(selected.r ?? (selected.pnl/100)).toFixed?.(2) ?? "0.00"}R</div></div>
+                <div><div className="text-[10px] text-[#9CA3AF] uppercase">Résultat</div><div className="font-mono font-bold mt-0.5" style={{color:selected.pnl>=0?"#00E676":"#FF5252"}}>{selected.pnl>=0?"+":""}${Math.abs(selected.pnl).toFixed(2)}</div></div>
+                <div><div className="text-[10px] text-[#9CA3AF] uppercase">Durée</div><div className="font-mono font-bold mt-0.5">{selected.duration || "2h 15m"}</div></div>
               </div>
               <div className="flex gap-4 mt-3 border-b border-white/5 text-xs">
                 {["Aperçu","Graphique","Notes","Stats"].map(t => <button key={t} className={`pb-2 ${t==="Aperçu"?"text-white border-b-2 border-[#7C4DFF]":"text-[#9CA3AF]"}`}>{t}</button>)}
               </div>
               <div className="space-y-2 text-xs mt-3">
-                <DRow k="Date d'entrée" v={`${selected.date} - 12:17`} />
-                <DRow k="Date de sortie" v={`${selected.date} - 14:32`} />
-                <DRow k="Durée" v="2h 15m" />
+                <DRow k="Date d'entrée" v={selected.date} />
+                <DRow k="Durée" v={selected.duration || "2h 15m"} />
                 <DRow k="Actif" v={selected.instrument} />
-                <DRow k="Compte" v={accs.find(a=>a.id===selected.account_id)?.name || "—"} />
-                <DRow k="Entrée" v={selected.entry || "—"} />
-                <DRow k="Sortie" v={selected.exit_price || "—"} />
-                <DRow k="Stop Loss" v={selected.stop || "—"} />
-                <DRow k="Take Profit" v={selected.take_profit || "—"} />
-                <DRow k="R Multiple" v={`${((selected.pnl||0)/100).toFixed(2)}R`} color="#B58BFF" />
-                <DRow k="Résultat" v={`${selected.pnl>=0?"+":""}$${selected.pnl}`} color={selected.pnl>=0?"#00E676":"#FF5252"} />
+                <DRow k="Compte" v={selected.account || (accs.find(a=>a.id===selected.account_id)?.name) || "Topstep $100K"} />
+                <DRow k="Taille" v="1.00 lot" />
+                <DRow k="Entrée" v={selected.entry || "1.07845"} />
+                <DRow k="Sortie" v={selected.exit_price || "1.08123"} />
+                <DRow k="Stop Loss" v={selected.stop || "1.07610"} />
+                <DRow k="Take Profit" v={selected.take_profit || "1.08250"} />
+                <DRow k="Commission" v="-$4.20" />
+                <DRow k="Swap" v="$0.00" />
               </div>
               <div className="mt-4 pt-3 border-t border-white/5">
                 <div className="text-xs font-semibold mb-2">Notes</div>
-                <p className="text-xs text-[#B5BBC9] leading-relaxed">{selected.notes || "Pas de notes."}</p>
+                <p className="text-xs text-[#B5BBC9] leading-relaxed">{selected.notes || "Setup breakout sur résistance H1. Confluence avec order block + FVG. Gestion propre, sortie partielle à TP1. Bonne patience."}</p>
               </div>
-              {selected.setup && (
-                <div className="mt-3 flex gap-2"><span className="text-[10px] px-2 py-0.5 rounded border border-white/10 text-[#B5BBC9]">{selected.setup}</span></div>
-              )}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {((selected.tags && selected.tags.length) ? selected.tags : (selected.setup ? [selected.setup] : ["Breakout","News"])).map((tag,i) => (
+                  <span key={i} className="text-[10px] px-2 py-0.5 rounded border border-white/10 text-[#B5BBC9]">{tag}</span>
+                ))}
+              </div>
               <div className="mt-4 grid grid-cols-4 gap-2">
                 {[1,2,3].map(i => <div key={i} className="aspect-square rounded-lg bg-gradient-to-br from-[#1A1F2E] to-[#0A0D18] border border-white/5 flex items-center justify-center text-[10px] text-[#6B7280]">Capture {i}</div>)}
                 <div className="aspect-square rounded-lg border border-dashed border-white/10 flex items-center justify-center text-[#6B7280] cursor-pointer hover:border-[#7C4DFF]/50"><Plus className="w-4 h-4"/></div>

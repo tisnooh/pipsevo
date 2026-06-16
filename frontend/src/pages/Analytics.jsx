@@ -3,6 +3,7 @@ import { dashboard } from "@/lib/api";
 import { AreaChart, Area, BarChart, Bar, Cell, PieChart, Pie, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { Sparkles, Crown } from "lucide-react";
 import { Link } from "react-router-dom";
+import { DEMO_KPIS, DEMO_METRICS, DEMO_EQUITY, DEMO_BEST_ASSETS } from "@/lib/demo";
 
 const TABS = ["Vue d'ensemble","Performance","Trades","Temps","Risques","Comportement"];
 
@@ -11,8 +12,11 @@ export default function Analytics() {
   const [tab, setTab] = useState("Vue d'ensemble");
   useEffect(() => { dashboard().then(r => setD(r.data)).catch(()=>{}); }, []);
 
-  const m = d?.metrics || { winrate: 62, profit_factor: 1.78, avg_win: 210.5, avg_loss: -118.3 };
-  const totalProfit = d?.kpis?.total_profit ?? 12450;
+  const useDemo = !d?.kpis?.total_trades;
+  const m = useDemo ? DEMO_METRICS : (d?.metrics || DEMO_METRICS);
+  const totalProfit = useDemo ? DEMO_KPIS.total_profit : (d?.kpis?.total_profit ?? DEMO_KPIS.total_profit);
+  const totalTrades = useDemo ? DEMO_KPIS.total_trades : (d?.kpis?.total_trades || DEMO_KPIS.total_trades);
+  const equity = (useDemo || !d?.equity_curve?.length) ? DEMO_EQUITY : d.equity_curve;
 
   return (
     <div className="p-7 space-y-5">
@@ -38,8 +42,8 @@ export default function Analytics() {
         <SparkCard label="Profit net" value={`+$${totalProfit.toLocaleString()}`} sub="+ 12.4% vs période précédente" color="#00E676" />
         <SparkCard label="Taux de réussite" value={`${m.winrate}%`} sub="+ 8% vs période précédente" color="#00E676" />
         <SparkCard label="Facteur de profit" value={m.profit_factor} sub="Bon" color="#B58BFF" subColor="#B58BFF" />
-        <SparkCard label="Gain moyen" value={`+$${m.avg_win}`} sub="" color="#00E676" />
-        <SparkCard label="Perte moyenne" value={`${m.avg_loss}`} sub="" color="#FF5252" down />
+        <SparkCard label="Gain moyen" value={`+$${m.avg_win.toFixed(2)}`} sub="" color="#00E676" />
+        <SparkCard label="Perte moyenne" value={`${m.avg_loss.toFixed(2)}`} sub="" color="#FF5252" down />
         <div className="card-elev p-5 glow-purple">
           <div className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="w-4 h-4 text-[#B58BFF]"/> Insight IA</div>
           <p className="text-xs text-[#B5BBC9] mt-3 leading-relaxed">Tu sur-trades les mardis. Ton win rate ce jour-là est 18% plus basse que la moyenne.</p>
@@ -56,7 +60,7 @@ export default function Analytics() {
           </div>
           <div className="h-72 mt-4">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={d?.equity_curve?.length ? d.equity_curve : sampleEquity()}>
+              <AreaChart data={equity}>
                 <defs><linearGradient id="cap-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7C4DFF" stopOpacity="0.55"/><stop offset="100%" stopColor="#7C4DFF" stopOpacity="0"/></linearGradient></defs>
                 <XAxis dataKey="date" stroke="#6B7280" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis stroke="#6B7280" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v)=>`$${(v/1000).toFixed(0)}K`} />
@@ -73,30 +77,24 @@ export default function Analytics() {
             <div className="flex items-center gap-4">
               <ResponsiveContainer width={130} height={130}>
                 <PieChart>
-                  <Pie data={[{name:"W",value:62},{name:"L",value:38}]} dataKey="value" innerRadius={42} outerRadius={60} strokeWidth={0}>
+                  <Pie data={[{name:"W",value:m.winrate},{name:"L",value:100-m.winrate}]} dataKey="value" innerRadius={42} outerRadius={60} strokeWidth={0}>
                     <Cell fill="#00E676"/><Cell fill="#FF5252"/>
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
               <div className="text-sm space-y-2">
-                <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#00E676]"/>Gagnants <span className="text-[#9CA3AF] ml-2">{Math.round(0.62*(d?.kpis?.total_trades||328))} (62%)</span></div>
-                <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#FF5252]"/>Perdants <span className="text-[#9CA3AF] ml-2">{Math.round(0.38*(d?.kpis?.total_trades||328))} (38%)</span></div>
-                <div className="text-2xl font-bold font-mono pt-2">{d?.kpis?.total_trades || 328}<div className="text-xs text-[#9CA3AF] font-sans font-normal">Trades</div></div>
+                <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#00E676]"/>Gagnants <span className="text-[#9CA3AF] ml-2">{Math.round(m.winrate/100*totalTrades)} ({m.winrate}%)</span></div>
+                <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#FF5252]"/>Perdants <span className="text-[#9CA3AF] ml-2">{Math.round((100-m.winrate)/100*totalTrades)} ({100-m.winrate}%)</span></div>
+                <div className="text-2xl font-bold font-mono pt-2">{totalTrades}<div className="text-xs text-[#9CA3AF] font-sans font-normal">Trades</div></div>
               </div>
             </div>
           </div>
           <div className="card-elev p-5">
             <div className="text-sm font-semibold mb-3">Meilleurs actifs</div>
-            {[
-              { s: "EURUSD", v: 3240, up: true },
-              { s: "XAUUSD", v: 2180, up: true },
-              { s: "NAS100", v: -780, up: false },
-              { s: "GBPUSD", v: -420, up: false },
-              { s: "US30", v: 310, up: true },
-            ].map(x => (
+            {DEMO_BEST_ASSETS.map(x => (
               <div key={x.s} className="flex justify-between py-1.5 text-xs">
                 <span className="text-[#B5BBC9]">{x.s}</span>
-                <span className="font-mono" style={{ color: x.up ? "#00E676" : "#FF5252" }}>{x.up?"+":""}${x.v}</span>
+                <span className="font-mono" style={{ color: x.v >= 0 ? "#00E676" : "#FF5252" }}>{x.v>=0?"+":""}${x.v.toLocaleString()}</span>
               </div>
             ))}
           </div>

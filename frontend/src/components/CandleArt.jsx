@@ -90,6 +90,17 @@ export const DashboardMock = () => (
               <div className="text-[8px] text-[#B58BFF] mt-1 font-semibold">View Insight →</div>
             </div>
           </div>
+          <div className="rounded-md bg-black/40 border border-white/5 p-2">
+            <div className="text-[9px] text-gray-300 mb-1.5">Risk Management</div>
+            {[
+              { k: "Consistency", v: 96 },
+              { k: "Emotional Control", v: 92 },
+              { k: "Risk Management", v: 95 },
+              { k: "Patience", v: 93 },
+            ].map((r) => (
+              <div key={r.k} className="flex justify-between text-[8px] py-0.5"><span className="text-gray-400">{r.k}</span><span className="text-white font-mono">{r.v}</span></div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
