@@ -12,7 +12,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+import anthropic
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -425,14 +425,13 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
     user_prompt = f"Trader question: {body.question}\n\nContext (focus: {body.context_tag}):\n" + "\n".join(ctx_lines)
 
     try:
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"coach-{user['id']}",
-            system_message=COACH_SYSTEM,
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        msg = UserMessage(text=user_prompt)
-        response = await chat.send_message(msg)
-        answer = response if isinstance(response, str) else str(response)
+        message = client_ai.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            system=COACH_SYSTEM,
+            messages=[{"role": "user", "content": user_prompt}]
+        )
+        answer = message.content[0].text
     except Exception as e:
         logging.exception("Coach error")
         raise HTTPException(502, f"AI Coach error: {str(e)[:200]}")
