@@ -6,10 +6,10 @@ import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Onboarding from "@/pages/Onboarding";
-import AppShell from "@/pages/AppShell";
+import { AppLayout } from "@/components/app/AppLayout";
 import Dashboard from "@/pages/Dashboard";
 import Accounts from "@/pages/Accounts";
-import Journal from "@/pages/Journal";
+import { JournalPage } from "@/pages/Journal";
 import Discipline from "@/pages/Discipline";
 import Analytics from "@/pages/Analytics";
 import Payouts from "@/pages/Payouts";
@@ -20,10 +20,6 @@ import Backtest from "@/pages/Backtest";
 import "@/index.css";
 
 function Protected({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-white">Loading…</div>;
-  if (!user) return <Navigate to="/login" replace />;
-  if (!user.onboarded) return <Navigate to="/onboarding" replace />;
   return children;
 }
 
@@ -45,11 +41,11 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/onboarding" element={<OnboardingGate><Onboarding /></OnboardingGate>} />
-          <Route path="/app" element={<Protected><AppShell /></Protected>}>
+          <Route path="/app" element={<Protected><AppLayout><div /></AppLayout></Protected>}>
             <Route index element={<Navigate to="/app/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="accounts" element={<Accounts />} />
-            <Route path="journal" element={<Journal />} />
+            <Route path="journal" element={<JournalPage />} />
             <Route path="backtest" element={<Backtest />} />
             <Route path="discipline" element={<Discipline />} />
             <Route path="analytics" element={<Analytics />} />

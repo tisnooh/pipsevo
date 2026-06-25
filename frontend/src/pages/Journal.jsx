@@ -1,224 +1,305 @@
-import React, { useEffect, useState } from "react";
-import { trades, accounts as accAPI } from "@/lib/api";
-import { toast } from "sonner";
-import { Plus, Filter, Star, X, Edit, Trash2, Calendar } from "lucide-react";
-import { DEMO_TRADES, DEMO_METRICS, isEmpty } from "@/lib/demo";
+import { useState } from "react"
+import { motion } from "framer-motion"
+import { Star, MoreHorizontal, Edit2, Trash2, Camera, Plus, Filter, ChevronDown } from "lucide-react"
+import {
+  AreaChart, Area, ResponsiveContainer
+} from "recharts"
 
-const SETUPS = ["London FVG", "NY Open Drive", "Asia Range", "Liquidity Sweep", "Order Block", "Breakout", "Reversal", "Trend", "FVG", "News", "Volatility", "Other"];
-const EMOTIONS = ["Confident", "Neutral", "Disciplined", "Stressed", "Fearful", "Revenge"];
-const SESSIONS = ["London", "NY", "Asia"];
+const trades = [
+  { id: 1, date: "9 juin 2025 14:32", asset: "EURUSD", direction: "Achat (Long)", result: "+$320.00", r: "+1.32R", duration: "2h 15m", account: "Topstep $100K", tags: ["Breakout", "News"], win: true },
+  { id: 2, date: "9 juin 2025 12:17", asset: "NAS100", direction: "Vente (Short)", result: "-$110.00", r: "-0.45R", duration: "1h 02m", account: "Apex $50K", tags: ["FVG"], win: false },
+  { id: 3, date: "8 juin 2025 16:45", asset: "XAUUSD", direction: "Achat (Long)", result: "+$550.00", r: "+2.11R", duration: "3h 10m", account: "FTMO $100K", tags: ["Trend", "TP1"], win: true },
+  { id: 4, date: "8 juin 2025 09:21", asset: "GBPUSD", direction: "Achat (Long)", result: "+$280.00", r: "+1.05R", duration: "1h 45m", account: "FundedNext $25K", tags: ["London"], win: true },
+  { id: 5, date: "7 juin 2025 11:03", asset: "US30", direction: "Vente (Short)", result: "-$210.00", r: "-0.78R", duration: "2h 05m", account: "Topstep $100K", tags: ["Reversal"], win: false },
+  { id: 6, date: "7 juin 2025 10:11", asset: "EURUSD", direction: "Achat (Long)", result: "+$150.00", r: "+0.65R", duration: "54m", account: "Topstep $100K", tags: [], win: true },
+  { id: 7, date: "6 juin 2025 15:32", asset: "NAS100", direction: "Achat (Long)", result: "+$430.00", r: "+1.80R", duration: "2h 30m", account: "Apex $50K", tags: ["Breakout", "News"], win: true },
+  { id: 8, date: "6 juin 2025 09:47", asset: "BTCUSD", direction: "Vente (Short)", result: "-$360.00", r: "-1.20R", duration: "4h 12m", account: "FTMO $100K", tags: ["Volatility"], win: false },
+  { id: 9, date: "5 juin 2025 14:05", asset: "XAUUSD", direction: "Achat (Long)", result: "+$620.00", r: "+2.35R", duration: "3h 05m", account: "FundedNext $25K", tags: ["Trend", "TP2"], win: true },
+  { id: 10, date: "5 juin 2025 11:22", asset: "GBPJPY", direction: "Vente (Short)", result: "-$180.00", r: "-0.62R", duration: "1h 20m", account: "Topstep $100K", tags: [], win: false },
+]
 
-export default function Journal() {
-  const [list, setList] = useState([]);
-  const [accs, setAccs] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState(null);
-  const [tab, setTab] = useState("Tous les trades");
-  const today = new Date().toISOString().slice(0,10);
-  const [form, setForm] = useState({ account_id: "", date: today, instrument: "EURUSD", direction: "long", entry: 0, stop: 0, take_profit: 0, exit_price: 0, pnl: 0, setup: "Breakout", session: "London", emotion: "Disciplined", notes: "", plan_respected: true });
+const miniChartData = [
+  { t: 1, v: 1.0784 },
+  { t: 2, v: 1.0790 },
+  { t: 3, v: 1.0785 },
+  { t: 4, v: 1.0795 },
+  { t: 5, v: 1.0802 },
+  { t: 6, v: 1.0808 },
+  { t: 7, v: 1.0815 },
+  { t: 8, v: 1.0812 },
+]
 
-  const load = async () => {
-    const [t, a] = await Promise.all([trades.list(), accAPI.list()]);
-    setList(t.data); setAccs(a.data);
-    if (!form.account_id && a.data.length > 0) setForm(f => ({...f, account_id: a.data[0].id}));
-    const initial = t.data.length > 0 ? t.data[0] : DEMO_TRADES[0];
-    if (!selected) setSelected(initial);
-  };
-  useEffect(() => { load(); }, []);
+const kpis = [
+  { label: "Trades", value: "328", sub: "+18 vs période précédente", icon: "📊", color: "#4F8CFF" },
+  { label: "Win Rate", value: "62%", sub: "+8%", icon: "🎯", color: "#00E676" },
+  { label: "Profit net", value: "+$12,450", sub: "+12.4%", icon: "📈", color: "#00E676" },
+  { label: "Gain moyen", value: "+$210.50", sub: "", icon: "⬆️", color: "#00E676" },
+  { label: "Perte moyenne", value: "-$118.30", sub: "", icon: "⬇️", color: "#FF5252" },
+  { label: "R Multiple moyen", value: "1.78", sub: "", icon: "📐", color: "#7C4DFF" },
+]
 
-  const create = async (e) => {
-    e.preventDefault();
-    if (!form.account_id) return toast.error("Ajoute un compte d'abord");
-    try {
-      const { data } = await trades.create({ ...form, entry: +form.entry, stop: +form.stop, take_profit: +form.take_profit, exit_price: +form.exit_price, pnl: +form.pnl });
-      toast.success("Trade logué");
-      setOpen(false); load();
-      setSelected(data);
-    } catch { toast.error("Erreur"); }
-  };
+export function JournalPage() {
+  const [selectedTrade, setSelectedTrade] = useState(trades[0])
+  const [activeTab, setActiveTab] = useState("Aperçu")
+  const [activeFilter, setActiveFilter] = useState("Tous")
 
-  const del = async (id) => {
-    await trades.delete(id); toast.success("Supprimé");
-    if (selected?.id === id) setSelected(null);
-    load();
-  };
-
-  const useDemo = isEmpty(list);
-  const sourceList = useDemo ? DEMO_TRADES : list;
-  const filtered = tab === "Positions ouvertes" ? [] : tab === "Favoris" ? sourceList.filter(t => t.fav) : sourceList;
-
-  const wins = sourceList.filter(t => t.pnl > 0);
-  const losses = sourceList.filter(t => t.pnl < 0);
-  const wr = sourceList.length ? Math.round(wins.length/sourceList.length*100) : 62;
-  const sumPnl = useDemo ? 12450 : sourceList.reduce((a,b)=>a+(b.pnl||0),0);
-  const avgWin = useDemo ? 210.50 : (wins.length ? wins.reduce((a,b)=>a+b.pnl,0)/wins.length : 0);
-  const avgLoss = useDemo ? -118.30 : (losses.length ? losses.reduce((a,b)=>a+b.pnl,0)/losses.length : 0);
-  const avgR = useDemo ? "1.78" : (sourceList.length ? (sumPnl/sourceList.length/100).toFixed(2) : 0);
-  const tradesCount = useDemo ? 328 : sourceList.length;
+  const detailTabs = ["Aperçu", "Graphique", "Notes", "Capture d'écran", "Statistiques"]
 
   return (
-    <div className="p-7 space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Journal</h1>
-        <div className="flex items-center gap-2">
-          <button className="card-flat px-3 py-2 text-xs flex items-center gap-2">📋 Tous les comptes ▾</button>
-          <button className="card-flat px-3 py-2 text-xs flex items-center gap-2"><Calendar className="w-3 h-3"/>30 derniers jours</button>
-          <button className="card-flat px-3 py-2 text-xs flex items-center gap-2"><Filter className="w-3 h-3"/>Filtres</button>
-          <button onClick={() => setOpen(true)} className="btn-primary inline-flex items-center gap-2 text-sm py-2" data-testid="add-trade-btn"><Plus className="w-4 h-4"/> Nouveau trade</button>
-        </div>
-      </div>
-
-      <div className="flex gap-6 border-b border-white/5">
-        {["Tous les trades","Positions ouvertes","Favoris"].map(t => (
-          <button key={t} onClick={()=>setTab(t)} data-testid={`journal-tab-${t}`} className={`pb-3 text-sm ${tab===t?"text-white border-b-2 border-[#7C4DFF]":"text-[#9CA3AF]"}`}>{t}</button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <JKpi label="Trades" value={tradesCount} sub={`+ 18 vs période précédente`} color="white" />
-        <JKpi label="Win Rate" value={`${wr}%`} sub="+ 8%" color="white" />
-        <JKpi label="Profit net" value={`${sumPnl>=0?"+":""}$${sumPnl.toFixed(0)}`} sub="+ 12.4%" color="#00E676" />
-        <JKpi label="Gain moyen" value={`+$${avgWin.toFixed(2)}`} color="#00E676" />
-        <JKpi label="Perte moyenne" value={`$${avgLoss.toFixed(2)}`} color="#FF5252" />
-        <JKpi label="R Multiple moyen" value={avgR} color="#B58BFF" />
-      </div>
-
-      <div className="grid lg:grid-cols-[1fr_360px] gap-4">
-        <div className="card-elev overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="text-[10px] uppercase font-mono text-[#6B7280]">
-              <tr className="border-b border-white/5">
-                <th className="text-left py-3 pl-5 font-normal">Date</th>
-                <th className="text-left font-normal">Actif</th>
-                <th className="text-left font-normal">Direction</th>
-                <th className="text-right font-normal">Résultat</th>
-                <th className="text-right font-normal">R Multiple</th>
-                <th className="text-left pl-4 font-normal">Durée</th>
-                <th className="text-left font-normal">Compte</th>
-                <th className="text-left font-normal">Tags</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && <tr><td colSpan={9} className="text-center py-12 text-[#9CA3AF] text-sm">Aucun trade dans cet onglet.</td></tr>}
-              {filtered.map(t => (
-                <tr key={t.id} onClick={()=>setSelected(t)} className={`border-t border-white/5 cursor-pointer hover:bg-white/[0.02] ${selected?.id===t.id?"bg-[#7C4DFF]/5":""}`} data-testid={`trade-row-${t.id}`}>
-                  <td className="py-3 pl-5 text-xs text-[#B5BBC9]"><Star className="w-3.5 h-3.5 inline mr-2 text-[#6B7280]"/>{t.date}</td>
-                  <td className="font-medium">{t.instrument}</td>
-                  <td className={t.direction === "long" ? "text-[#00E676]" : "text-[#FF5252]"}>{t.direction === "long" ? "Achat (Long)" : "Vente (Short)"}</td>
-                  <td className="text-right font-mono" style={{ color: t.pnl >= 0 ? "#00E676" : "#FF5252" }}>{t.pnl>=0?"+":""}${Math.abs(t.pnl).toFixed(2)}</td>
-                  <td className="text-right font-mono" style={{ color: t.pnl >= 0 ? "#00E676" : "#FF5252" }}>{(t.r ?? (t.pnl/100)).toFixed?.(2) ?? "0.00"}R</td>
-                  <td className="pl-4 text-xs text-[#9CA3AF]">{t.duration || (t.session ? "2h 15m" : "—")}</td>
-                  <td className="text-xs text-[#B5BBC9]">{t.account || (accs.find(a=>a.id===t.account_id)?.firm) || "—"}</td>
-                  <td className="space-x-1">{(t.tags || (t.setup ? [t.setup] : [])).map((tag,i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded border border-white/10 text-[#B5BBC9] inline-block">{tag}</span>)}</td>
-                  <td className="pr-4 text-[#6B7280]">⋯</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filtered.length > 0 && <div className="text-center py-4 text-xs text-[#B58BFF] border-t border-white/5">Voir plus de trades ↓</div>}
+    <div className="flex h-full overflow-hidden">
+      {/* Left: trades list */}
+      <div className="flex-1 p-6 overflow-y-auto scrollbar-thin">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-5">
+          <h1 className="text-2xl font-bold text-white">Journal</h1>
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF] flex items-center gap-2 cursor-pointer hover:border-[#7C4DFF]/50">
+              <span>Tous les comptes</span><ChevronDown className="w-3 h-3" />
+            </div>
+            <div className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF] flex items-center gap-2 cursor-pointer hover:border-[#7C4DFF]/50">
+              <span>30 derniers jours</span><ChevronDown className="w-3 h-3" />
+            </div>
+            <button className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF] flex items-center gap-1.5 hover:border-[#7C4DFF]/50">
+              <Filter className="w-3 h-3" /> Filtres
+            </button>
+            <button
+              className="px-4 py-1.5 rounded-lg text-xs font-medium text-white flex items-center gap-1.5"
+              style={{ background: "linear-gradient(135deg, #7C4DFF, #4F8CFF)" }}
+            >
+              <Plus className="w-3 h-3" /> Nouveau trade
+            </button>
+          </div>
         </div>
 
-        {/* DETAIL PANEL */}
-        <div className="card-elev p-5 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">
-          {selected ? (
-            <>
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <div className="text-xl font-bold">{selected.instrument}</div>
-                  <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded ${selected.pnl>=0?"bg-[#00E676]/15 text-[#00E676] border border-[#00E676]/30":"bg-[#FF5252]/15 text-[#FF5252] border border-[#FF5252]/30"}`}>{selected.pnl>=0?"Gagnant":"Perdant"}</span>
-                </div>
-                <button onClick={()=>setSelected(null)} className="text-[#6B7280] hover:text-white"><X className="w-4 h-4"/></button>
+        {/* Filter tabs */}
+        <div className="flex gap-1 mb-5 border-b border-[#1E2430]">
+          {["Tous les trades", "Positions ouvertes", "✩ Favoris"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveFilter(tab)}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeFilter === tab || (tab === "Tous les trades" && activeFilter === "Tous")
+                  ? "text-[#7C4DFF] border-b-2 border-[#7C4DFF]"
+                  : "text-[#9CA3AF] hover:text-white"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {/* KPI row */}
+        <div className="grid grid-cols-6 gap-3 mb-5">
+          {kpis.map((kpi) => (
+            <div key={kpi.label} className="p-3 rounded-xl border border-[#1E2430] bg-[#0F1117]">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] text-[#9CA3AF]">{kpi.label}</span>
+                <span className="text-xs">{kpi.icon}</span>
               </div>
-              <div className={`text-sm font-medium flex items-center gap-1 ${selected.direction==="long"?"text-[#00E676]":"text-[#FF5252]"}`}>↗ {selected.direction==="long"?"Achat (Long)":"Vente (Short)"}</div>
-              <div className="grid grid-cols-3 gap-3 mt-3 pb-3 border-b border-white/5 text-center">
-                <div><div className="text-[10px] text-[#9CA3AF] uppercase">R Multiple</div><div className="font-mono font-bold mt-0.5" style={{color:"#B58BFF"}}>{(selected.r ?? (selected.pnl/100)).toFixed?.(2) ?? "0.00"}R</div></div>
-                <div><div className="text-[10px] text-[#9CA3AF] uppercase">Résultat</div><div className="font-mono font-bold mt-0.5" style={{color:selected.pnl>=0?"#00E676":"#FF5252"}}>{selected.pnl>=0?"+":""}${Math.abs(selected.pnl).toFixed(2)}</div></div>
-                <div><div className="text-[10px] text-[#9CA3AF] uppercase">Durée</div><div className="font-mono font-bold mt-0.5">{selected.duration || "2h 15m"}</div></div>
-              </div>
-              <div className="flex gap-4 mt-3 border-b border-white/5 text-xs">
-                {["Aperçu","Graphique","Notes","Stats"].map(t => <button key={t} className={`pb-2 ${t==="Aperçu"?"text-white border-b-2 border-[#7C4DFF]":"text-[#9CA3AF]"}`}>{t}</button>)}
-              </div>
-              <div className="space-y-2 text-xs mt-3">
-                <DRow k="Date d'entrée" v={selected.date} />
-                <DRow k="Durée" v={selected.duration || "2h 15m"} />
-                <DRow k="Actif" v={selected.instrument} />
-                <DRow k="Compte" v={selected.account || (accs.find(a=>a.id===selected.account_id)?.name) || "Topstep $100K"} />
-                <DRow k="Taille" v="1.00 lot" />
-                <DRow k="Entrée" v={selected.entry || "1.07845"} />
-                <DRow k="Sortie" v={selected.exit_price || "1.08123"} />
-                <DRow k="Stop Loss" v={selected.stop || "1.07610"} />
-                <DRow k="Take Profit" v={selected.take_profit || "1.08250"} />
-                <DRow k="Commission" v="-$4.20" />
-                <DRow k="Swap" v="$0.00" />
-              </div>
-              <div className="mt-4 pt-3 border-t border-white/5">
-                <div className="text-xs font-semibold mb-2">Notes</div>
-                <p className="text-xs text-[#B5BBC9] leading-relaxed">{selected.notes || "Setup breakout sur résistance H1. Confluence avec order block + FVG. Gestion propre, sortie partielle à TP1. Bonne patience."}</p>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {((selected.tags && selected.tags.length) ? selected.tags : (selected.setup ? [selected.setup] : ["Breakout","News"])).map((tag,i) => (
-                  <span key={i} className="text-[10px] px-2 py-0.5 rounded border border-white/10 text-[#B5BBC9]">{tag}</span>
+              <div className="text-base font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
+              {kpi.sub && <p className="text-[9px] text-[#9CA3AF] mt-0.5">{kpi.sub}</p>}
+            </div>
+          ))}
+        </div>
+
+        {/* Table */}
+        <div className="rounded-xl border border-[#1E2430] bg-[#0F1117] overflow-hidden">
+          {/* Header */}
+          <div
+            className="grid text-[11px] text-[#9CA3AF] px-4 py-3 border-b border-[#1E2430] bg-[#0A0C14]"
+            style={{ gridTemplateColumns: "2rem 2fr 1fr 1.5fr 1fr 0.8fr 1fr 1.5fr 1fr 2rem" }}
+          >
+            <span></span>
+            <span>Date</span>
+            <span>Actif</span>
+            <span>Direction</span>
+            <span>Résultat</span>
+            <span>R Multiple</span>
+            <span>Durée</span>
+            <span>Compte</span>
+            <span>Tags</span>
+            <span></span>
+          </div>
+
+          {trades.map((trade, i) => (
+            <motion.div
+              key={trade.id}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.04 }}
+              onClick={() => setSelectedTrade(trade)}
+              className={`grid items-center px-4 py-3 border-b border-[#1E2430]/50 last:border-0 cursor-pointer transition-all text-xs ${
+                selectedTrade.id === trade.id ? "bg-[#111322]" : "hover:bg-[#111322]/50"
+              }`}
+              style={{ gridTemplateColumns: "2rem 2fr 1fr 1.5fr 1fr 0.8fr 1fr 1.5fr 1fr 2rem" }}
+            >
+              <Star className="w-3.5 h-3.5 text-[#1E2430] hover:text-yellow-400 transition-colors" />
+              <span className="text-[#9CA3AF] text-[10px]">{trade.date}</span>
+              <span className="text-white font-medium">{trade.asset}</span>
+              <span className={trade.win ? "text-[#00E676]" : "text-[#FF5252]"}>{trade.direction}</span>
+              <span className={`font-medium ${trade.win ? "text-[#00E676]" : "text-[#FF5252]"}`}>{trade.result}</span>
+              <span className={trade.win ? "text-[#00E676]" : "text-[#FF5252]"}>{trade.r}</span>
+              <span className="text-[#9CA3AF]">{trade.duration}</span>
+              <span className="text-[#9CA3AF] text-[10px] truncate">{trade.account}</span>
+              <div className="flex gap-1 flex-wrap">
+                {trade.tags.map((tag) => (
+                  <span key={tag} className="px-1.5 py-0.5 bg-[#1E2430] text-[#9CA3AF] rounded text-[9px]">{tag}</span>
                 ))}
               </div>
-              <div className="mt-4 grid grid-cols-4 gap-2">
-                {[1,2,3].map(i => <div key={i} className="aspect-square rounded-lg bg-gradient-to-br from-[#1A1F2E] to-[#0A0D18] border border-white/5 flex items-center justify-center text-[10px] text-[#6B7280]">Capture {i}</div>)}
-                <div className="aspect-square rounded-lg border border-dashed border-white/10 flex items-center justify-center text-[#6B7280] cursor-pointer hover:border-[#7C4DFF]/50"><Plus className="w-4 h-4"/></div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 mt-4">
-                <button className="btn-ghost text-xs py-2 inline-flex items-center justify-center gap-2"><Edit className="w-3 h-3"/>Modifier</button>
-                <button onClick={()=>del(selected.id)} className="card-flat text-xs py-2 inline-flex items-center justify-center gap-2 text-[#FF5252] border-[#FF5252]/30"><Trash2 className="w-3 h-3"/>Supprimer</button>
-              </div>
-            </>
-          ) : <div className="text-center text-sm text-[#9CA3AF] py-10">Sélectionne un trade pour voir les détails.</div>}
+              <button className="text-[#9CA3AF] hover:text-white">
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </motion.div>
+          ))}
         </div>
+
+        <button className="w-full mt-4 text-sm text-[#7C4DFF] hover:underline flex items-center justify-center gap-1 py-2">
+          Voir plus de trades ↓
+        </button>
       </div>
 
-      {/* MODAL */}
-      {open && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto" onClick={()=>setOpen(false)}>
-          <form onClick={(e)=>e.stopPropagation()} onSubmit={create} className="card-elev p-8 w-full max-w-2xl space-y-4 glow-purple my-8">
-            <h2 className="text-2xl font-bold">Nouveau trade</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <Sel label="Compte" value={form.account_id} onChange={(v)=>setForm({...form,account_id:v})} options={accs.map(a=>({v:a.id,l:`${a.firm} — ${a.name}`}))} testid="t-account" />
-              <Fld label="Date" type="date" value={form.date} onChange={(v)=>setForm({...form,date:v})} testid="t-date" />
-              <Fld label="Actif" value={form.instrument} onChange={(v)=>setForm({...form,instrument:v})} testid="t-instrument" />
-              <Sel label="Direction" value={form.direction} onChange={(v)=>setForm({...form,direction:v})} options={[{v:"long",l:"Achat (Long)"},{v:"short",l:"Vente (Short)"}]} testid="t-direction" />
-              <Fld label="Entrée" type="number" step="0.0001" value={form.entry} onChange={(v)=>setForm({...form,entry:v})} testid="t-entry" />
-              <Fld label="Stop Loss" type="number" step="0.0001" value={form.stop} onChange={(v)=>setForm({...form,stop:v})} testid="t-stop" />
-              <Fld label="Take Profit" type="number" step="0.0001" value={form.take_profit} onChange={(v)=>setForm({...form,take_profit:v})} testid="t-tp" />
-              <Fld label="Sortie" type="number" step="0.0001" value={form.exit_price} onChange={(v)=>setForm({...form,exit_price:v})} testid="t-exit" />
-              <Fld label="Résultat ($)" type="number" step="0.01" value={form.pnl} onChange={(v)=>setForm({...form,pnl:v})} testid="t-pnl" />
-              <Sel label="Setup" value={form.setup} onChange={(v)=>setForm({...form,setup:v})} options={SETUPS.map(s=>({v:s,l:s}))} testid="t-setup" />
-              <Sel label="Session" value={form.session} onChange={(v)=>setForm({...form,session:v})} options={SESSIONS.map(s=>({v:s,l:s}))} testid="t-session" />
-              <Sel label="Émotion" value={form.emotion} onChange={(v)=>setForm({...form,emotion:v})} options={EMOTIONS.map(s=>({v:s,l:s}))} testid="t-emotion" />
+      {/* Right: trade detail panel */}
+      <div className="w-[320px] flex-shrink-0 border-l border-[#1E2430] bg-[#0A0C14] overflow-y-auto scrollbar-thin">
+        {selectedTrade && (
+          <div className="p-4">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-base font-bold text-white">{selectedTrade.asset}</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                    selectedTrade.win ? "bg-[#00E676]/20 text-[#00E676]" : "bg-[#FF5252]/20 text-[#FF5252]"
+                  }`}
+                >
+                  {selectedTrade.win ? "Gagnant" : "Perdant"}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button className="p-1 text-[#9CA3AF] hover:text-white"><Edit2 className="w-3.5 h-3.5" /></button>
+                <button className="p-1 text-[#9CA3AF] hover:text-[#FF5252]"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button className="p-1 text-[#9CA3AF] hover:text-white"><MoreHorizontal className="w-3.5 h-3.5" /></button>
+              </div>
             </div>
-            <div>
-              <label className="text-xs font-mono uppercase text-[#9CA3AF]">Notes</label>
-              <textarea value={form.notes} onChange={(e)=>setForm({...form,notes:e.target.value})} rows={3} data-testid="t-notes" className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-2.5 outline-none focus:border-[#7C4DFF]" />
-            </div>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.plan_respected} onChange={(e)=>setForm({...form,plan_respected:e.target.checked})} data-testid="t-plan" /> Plan respecté</label>
-            <button className="btn-primary w-full" data-testid="t-submit">Logger le trade</button>
-          </form>
-        </div>
-      )}
-    </div>
-  );
-}
 
-const JKpi = ({ label, value, sub, color }) => (
-  <div className="card-elev p-4">
-    <div className="text-xs text-[#9CA3AF]">{label}</div>
-    <div className="text-2xl font-bold font-mono mt-2" style={{ color: color || "white" }}>{value}</div>
-    {sub && <div className="text-[10px] text-[#00E676] mt-1">{sub}</div>}
-  </div>
-);
-const DRow = ({ k, v, color }) => (
-  <div className="flex justify-between"><span className="text-[#9CA3AF]">{k}</span><span className="font-mono" style={{ color: color || "white" }}>{v}</span></div>
-);
-const Fld = ({ label, value, onChange, type="text", step, testid }) => (
-  <div><label className="text-xs font-mono uppercase text-[#9CA3AF]">{label}</label><input type={type} step={step} required value={value} onChange={(e)=>onChange(e.target.value)} data-testid={testid} className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-2.5 font-mono outline-none focus:border-[#7C4DFF]"/></div>
-);
-const Sel = ({ label, value, onChange, options, testid }) => (
-  <div><label className="text-xs font-mono uppercase text-[#9CA3AF]">{label}</label><select value={value} onChange={(e)=>onChange(e.target.value)} data-testid={testid} className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-2.5 outline-none focus:border-[#7C4DFF]">{options.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}</select></div>
-);
+            {/* Direction + values */}
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#1E2430]">
+              <span className={`text-xs font-medium flex items-center gap-1 ${selectedTrade.win ? "text-[#00E676]" : "text-[#FF5252]"}`}>
+                📈 {selectedTrade.direction}
+              </span>
+              <div className="text-right">
+                <div className={`text-sm font-bold ${selectedTrade.win ? "text-[#00E676]" : "text-[#FF5252]"}`}>{selectedTrade.r}</div>
+                <div className={`text-sm font-bold ${selectedTrade.win ? "text-[#00E676]" : "text-[#FF5252]"}`}>{selectedTrade.result}</div>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-0 mb-4 border-b border-[#1E2430] overflow-x-auto scrollbar-thin">
+              {detailTabs.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-2 py-1.5 text-[10px] font-medium whitespace-nowrap transition-colors ${
+                    activeTab === tab ? "text-[#7C4DFF] border-b-2 border-[#7C4DFF]" : "text-[#9CA3AF] hover:text-white"
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === "Aperçu" && (
+              <div>
+                {/* Trade details */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px] mb-4">
+                  {[
+                    ["Date d'entrée", "9 juin 2025 - 12:17"],
+                    ["Date de sortie", "9 juin 2025 - 14:32"],
+                    ["Durée", selectedTrade.duration],
+                    ["Actif", selectedTrade.asset],
+                    ["Compte", "Topstep $100K"],
+                    ["Taille", "1.00 lot"],
+                    ["Entrée", "1.07845"],
+                    ["Sortie", "1.08123"],
+                    ["Stop Loss", "1.07610"],
+                    ["Take Profit", "1.08250"],
+                    ["R Multiple", selectedTrade.r],
+                    ["Résultat", selectedTrade.result],
+                    ["Commission", "-$4.20"],
+                    ["Swap", "$0.00"],
+                  ].map(([k, v]) => (
+                    <div key={k} className="flex justify-between py-0.5 border-b border-[#1E2430]/50">
+                      <span className="text-[#9CA3AF]">{k}</span>
+                      <span className={`text-white font-medium ${v.includes("+") && !v.includes("$0") ? "text-[#00E676]" : v.includes("-") && !v.includes("$0") ? "text-[#FF5252]" : ""}`}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Tags */}
+                <div className="flex gap-1.5 flex-wrap mb-4">
+                  {selectedTrade.tags.map((tag) => (
+                    <span key={tag} className="px-2 py-1 bg-[#111322] border border-[#1E2430] text-[#9CA3AF] rounded text-[10px]">{tag}</span>
+                  ))}
+                </div>
+
+                {/* Notes */}
+                <div className="mb-4">
+                  <p className="text-[10px] font-medium text-[#9CA3AF] mb-2">Notes</p>
+                  <p className="text-[11px] text-[#9CA3AF] leading-relaxed bg-[#0F1117] rounded-lg p-3 border border-[#1E2430]">
+                    Setup breakout sur résistance H1. Confluence avec order block + FVG. Gestion propre, sortie partielle à TP1. Bonne patience.
+                  </p>
+                </div>
+
+                {/* Mini chart */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-medium text-[#9CA3AF]">Mini graphique</p>
+                    <a href="#" className="text-[9px] text-[#7C4DFF] hover:underline">Voir sur TradingView →</a>
+                  </div>
+                  <div className="bg-[#0F1117] rounded-lg border border-[#1E2430] overflow-hidden">
+                    <ResponsiveContainer width="100%" height={70}>
+                      <AreaChart data={miniChartData}>
+                        <defs>
+                          <linearGradient id="miniGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#00E676" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#00E676" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <Area type="monotone" dataKey="v" stroke="#00E676" strokeWidth={1.5} fill="url(#miniGrad)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Screenshots */}
+                <div className="mb-4">
+                  <p className="text-[10px] font-medium text-[#9CA3AF] mb-2">Captures d'écran</p>
+                  <div className="grid grid-cols-4 gap-1">
+                    {["Before Entry", "During Trade", "After Exit"].map((label) => (
+                      <div key={label} className="aspect-square bg-[#0F1117] rounded-lg border border-[#1E2430] flex flex-col items-center justify-center text-center p-1 cursor-pointer hover:border-[#7C4DFF]/50 transition-all">
+                        <Camera className="w-3 h-3 text-[#9CA3AF]" />
+                        <span className="text-[7px] text-[#9CA3AF] mt-0.5">{label}</span>
+                      </div>
+                    ))}
+                    <div className="aspect-square bg-[#0F1117] rounded-lg border border-dashed border-[#1E2430] flex items-center justify-center cursor-pointer hover:border-[#7C4DFF]/50 transition-all">
+                      <Plus className="w-4 h-4 text-[#9CA3AF]" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <button className="flex-1 py-2 rounded-lg text-xs font-medium text-white border border-[#1E2430] hover:border-[#7C4DFF]/50 flex items-center justify-center gap-1 transition-all">
+                    <Edit2 className="w-3 h-3" /> Modifier le trade
+                  </button>
+                  <button className="p-2 rounded-lg border border-[#FF5252]/30 text-[#FF5252] hover:bg-[#FF5252]/10 transition-all">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
