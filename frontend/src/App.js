@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import Landing from "@/pages/Landing";
@@ -19,8 +19,12 @@ import Settings from "@/pages/Settings";
 import Backtest from "@/pages/Backtest";
 import "@/index.css";
 
-function Protected({ children }) {
-  return children;
+function Protected() {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-white">Loading…</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!user.onboarded) return <Navigate to="/onboarding" replace />;
+  return <AppLayout><Outlet /></AppLayout>;
 }
 
 function OnboardingGate({ children }) {
@@ -41,7 +45,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/onboarding" element={<OnboardingGate><Onboarding /></OnboardingGate>} />
-          <Route path="/app" element={<Protected><AppLayout><div /></AppLayout></Protected>}>
+          <Route path="/app" element={<Protected />}>
             <Route index element={<Navigate to="/app/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="accounts" element={<Accounts />} />
