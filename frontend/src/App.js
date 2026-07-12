@@ -17,6 +17,7 @@ import AICoach from "@/pages/AICoach";
 import TradingDNA from "@/pages/TradingDNA";
 import Settings from "@/pages/Settings";
 import Backtest from "@/pages/Backtest";
+import { FAQPage, ContactPage, PricingPage, LegalPage } from "@/pages/SupportPages";
 import "@/index.css";
 
 function Protected() {
@@ -44,6 +45,12 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/faq" element={<FAQPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/privacy" element={<LegalPage type="privacy" />} />
+          <Route path="/terms" element={<LegalPage type="terms" />} />
+          <Route path="/security" element={<LegalPage type="security" />} />
           <Route path="/onboarding" element={<OnboardingGate><Onboarding /></OnboardingGate>} />
           <Route path="/app" element={<Protected />}>
             <Route index element={<Navigate to="/app/dashboard" replace />} />

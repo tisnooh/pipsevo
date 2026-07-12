@@ -28,9 +28,10 @@ export default function Landing() {
           <div className="hidden md:flex items-center gap-9 text-sm text-[#B5BBC9]">
             <a href="#features" className="hover:text-white transition">Features</a>
             <a href="#how" className="hover:text-white transition">How it Works</a>
-            <a href="#pricing" className="hover:text-white transition">Pricing</a>
+            <Link to="/pricing" className="hover:text-white transition">Tarifs</Link>
             <a href="#reviews" className="hover:text-white transition">Reviews</a>
-            <a href="#faq" className="hover:text-white transition">FAQ</a>
+            <Link to="/faq" className="hover:text-white transition">FAQ</Link>
+            <Link to="/contact" className="hover:text-white transition">Contact</Link>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-3">
             <Link to="/login" className="text-xs sm:text-sm px-2.5 sm:px-4 py-2 text-[#9CA3AF] hover:text-white" data-testid="nav-login">Log in</Link>
@@ -279,6 +280,7 @@ export default function Landing() {
       <footer className="border-t border-white/5 py-8 sm:py-10 px-5 sm:px-6 lg:px-10 text-sm text-[#9CA3AF]">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 text-center sm:text-left">
           <Logo />
+          <div className="flex flex-wrap justify-center gap-4"><Link to="/faq">FAQ</Link><Link to="/contact">Contact</Link><Link to="/pricing">Tarifs</Link><Link to="/privacy">Confidentialité</Link><Link to="/terms">Conditions</Link></div>
           <div>© 2026 PipsEvo · The Operating System for Funded Traders.</div>
         </div>
       </footer>

@@ -271,6 +271,8 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, onNotification
         </div>
         <button onClick={()=>{onNavigate("/app/settings");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 mt-1 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><Cog className="w-4 h-4"/>Mon profil et paramètres</button>
         <button onClick={()=>{onNavigate("/app/accounts");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><Wallet className="w-4 h-4"/>Mes comptes</button>
+        <button onClick={()=>{onNavigate("/faq");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><BookOpen className="w-4 h-4"/>FAQ et centre d'aide</button>
+        <button onClick={()=>{onNavigate("/contact");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><Bell className="w-4 h-4"/>Contacter le support</button>
         <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 border-t border-white/5 mt-1 rounded-lg text-sm text-[#FF7A7A] hover:bg-[#FF5252]/10"><LogOut className="w-4 h-4"/>Se déconnecter</button>
       </div>}
       </div>

@@ -45,3 +45,4 @@ export const coach = {
 export const billing = {
   checkout: (plan = "pro") => api.post("/billing/checkout", null, { params: { plan } }),
 };
+export const contact = (data) => api.post("/contact", data);

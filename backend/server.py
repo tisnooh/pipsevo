@@ -140,7 +140,22 @@ class CoachQuery(BaseModel):
     context_tag: Optional[str] = "overall"
 
 
+class ContactIn(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    email: EmailStr
+    subject: str = Field(min_length=3, max_length=120)
+    message: str = Field(min_length=10, max_length=3000)
+
+
 # ============= AUTH =============
+@api.post("/contact")
+async def contact(body: ContactIn):
+    doc = body.model_dump()
+    doc.update({"id": str(uuid.uuid4()), "status": "new", "created_at": now_utc()})
+    await db.contact_messages.insert_one(doc)
+    return {"ok": True, "message": "Message received"}
+
+
 @api.post("/auth/register")
 async def register(body: RegisterIn):
     existing = await db.users.find_one({"email": body.email.lower()})
