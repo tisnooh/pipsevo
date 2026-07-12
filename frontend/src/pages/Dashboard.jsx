@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { dashboard, trades, accounts as accAPI } from "@/lib/api";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Plus, TrendingUp, Shield, Wallet, Target, ArrowDownRight, Sparkles, Calendar, ChevronRight, BarChart3 } from "lucide-react";
+import { Plus, TrendingUp, Shield, Wallet, Target, ArrowDownRight, Sparkles, Calendar, BarChart3 } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { DEMO_TRADES, DEMO_ACCOUNTS, DEMO_KPIS, DEMO_METRICS, DEMO_EQUITY, isEmpty } from "@/lib/demo";
 
@@ -51,6 +51,9 @@ export default function Dashboard() {
   const [recent, setRecent] = useState([]);
   const [accs, setAccs] = useState([]);
   const [tab, setTab] = useState("Tous");
+  const [period, setPeriod] = useState("30");
+  const [accountFilter, setAccountFilter] = useState("");
+  const [assetFilter, setAssetFilter] = useState("");
 
   useEffect(() => {
     dashboard().then(r => setD(r.data)).catch(()=>{});
@@ -66,7 +69,11 @@ export default function Dashboard() {
   const tradeList = useDemo ? DEMO_TRADES : recent;
   const accList = useDemo ? DEMO_ACCOUNTS : accs;
 
-  const filtered = tab === "Tous" ? tradeList.slice(0, 5) : tab === "Gagnants" ? tradeList.filter(t => t.pnl > 0).slice(0, 5) : tradeList.filter(t => t.pnl < 0).slice(0, 5);
+  const filtered = tradeList.filter(t =>
+    (!accountFilter || t.account_id === accountFilter) &&
+    (!assetFilter || t.instrument === assetFilter) &&
+    (tab === "Tous" || (tab === "Gagnants" ? t.pnl > 0 : t.pnl < 0))
+  ).slice(0, 5);
 
   return (
     <div className="p-4 sm:p-7 space-y-5">
@@ -77,7 +84,7 @@ export default function Dashboard() {
           <p className="text-sm text-[#9CA3AF] mt-1">Track. Analyse. Improve. Get Paid.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button className="card-flat px-3 py-2 text-sm flex items-center gap-2 hover:border-[#7C4DFF]/40" data-testid="date-range"><Calendar className="w-3.5 h-3.5 text-[#9CA3AF]"/>30 derniers jours</button>
+          <label className="card-flat px-3 py-2 text-sm flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-[#9CA3AF]"/><select value={period} onChange={e=>setPeriod(e.target.value)} className="bg-transparent"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select></label>
           <Link to="/app/accounts" className="btn-primary inline-flex items-center gap-2 text-sm py-2.5" data-testid="dash-add-account"><Plus className="w-4 h-4"/> Ajouter un compte</Link>
         </div>
       </div>
@@ -94,7 +101,7 @@ export default function Dashboard() {
         <div className="card-elev p-5 lg:col-span-2">
           <div className="flex justify-between items-center">
             <div className="text-sm font-semibold">Courbe d'équité</div>
-            <button className="text-xs text-[#9CA3AF] flex items-center gap-1 px-2.5 py-1 rounded-lg border border-white/5">30 derniers jours <ChevronRight className="w-3 h-3"/></button>
+            <select value={period} onChange={e=>setPeriod(e.target.value)} className="text-xs bg-[#0D1020] text-[#9CA3AF] px-2.5 py-1 rounded-lg border border-white/5"><option value="7">7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option></select>
           </div>
           <div className="mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -137,8 +144,8 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <div className="text-sm font-semibold">Trades récents</div>
             <div className="flex items-center gap-2">
-              <button className="text-xs text-[#9CA3AF] flex items-center gap-1 px-2.5 py-1 rounded-lg border border-white/5">Tous les comptes ▾</button>
-              <button className="text-xs text-[#9CA3AF] flex items-center gap-1 px-2.5 py-1 rounded-lg border border-white/5">Tous les actifs ▾</button>
+              <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className="text-xs bg-[#0D1020] text-[#9CA3AF] px-2 py-1 rounded-lg border border-white/5"><option value="">Tous les comptes</option>{accList.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
+              <select value={assetFilter} onChange={e=>setAssetFilter(e.target.value)} className="text-xs bg-[#0D1020] text-[#9CA3AF] px-2 py-1 rounded-lg border border-white/5"><option value="">Tous les actifs</option>{[...new Set(tradeList.map(t=>t.instrument))].filter(Boolean).map(x=><option key={x}>{x}</option>)}</select>
             </div>
           </div>
           <div className="flex gap-5 border-b border-white/5 text-sm">

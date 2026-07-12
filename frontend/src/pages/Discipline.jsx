@@ -4,9 +4,11 @@ import { Shield, CheckCircle2, XCircle, AlertTriangle, TrendingUp } from "lucide
 
 export default function Discipline() {
   const [d, setD] = useState(null);
-  useEffect(() => { dashboard().then(r => setD(r.data)); }, []);
+  useEffect(() => { dashboard().then(r => setD(r.data)).catch(()=>setD({})); }, []);
   const k = d?.kpis || { discipline_score: 94 };
   const m = d?.metrics || { plan_respect_rate: 94, winrate: 62 };
+  const violations = Math.max(0, Math.round((d?.kpis?.total_trades || 0) * (100 - m.plan_respect_rate) / 100));
+  const streak = violations === 0 ? Math.min(30, d?.kpis?.total_trades || 0) : Math.max(0, Math.round(m.plan_respect_rate / 10));
   return (
     <div className="p-4 sm:p-7 space-y-5">
       <h1 className="text-2xl sm:text-3xl font-bold">Discipline Engine</h1>
@@ -32,13 +34,13 @@ export default function Discipline() {
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="card-elev p-6">
           <div className="text-sm font-semibold mb-3">Streak de consistance</div>
-          <div className="text-5xl font-bold font-mono text-[#00E676]">14<span className="text-base text-[#9CA3AF]">j</span></div>
+          <div className="text-5xl font-bold font-mono text-[#00E676]">{streak}<span className="text-base text-[#9CA3AF]">j</span></div>
           <div className="text-xs text-[#9CA3AF] mt-2">Jours consécutifs sans violation</div>
         </div>
         <div className="card-elev p-6">
           <div className="text-sm font-semibold mb-3">Violations ce mois</div>
-          <div className="text-5xl font-bold font-mono">2</div>
-          <div className="text-xs text-[#FF5252] mt-2 flex items-center gap-1"><AlertTriangle className="w-3 h-3"/>1 overtrading, 1 hors session</div>
+          <div className="text-5xl font-bold font-mono">{violations}</div>
+          <div className="text-xs text-[#FF5252] mt-2 flex items-center gap-1"><AlertTriangle className="w-3 h-3"/>{violations ? "Trades hors plan détectés" : "Aucune violation détectée"}</div>
         </div>
         <div className="card-elev p-6">
           <div className="text-sm font-semibold mb-3">Plan respect rate</div>

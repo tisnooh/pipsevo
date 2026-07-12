@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Star, MoreHorizontal, Edit2, Trash2, Camera, Plus, Filter, ChevronDown } from "lucide-react"
+import { Star, MoreHorizontal, Edit2, Trash2, Camera, Plus } from "lucide-react"
 import { AreaChart, Area, ResponsiveContainer } from "recharts"
 import { trades as tradesAPI, accounts as accAPI } from "@/lib/api"
 import { toast } from "sonner"
@@ -21,6 +21,8 @@ export function JournalPage() {
   const [activeFilter, setActiveFilter] = useState("Tous les trades")
   const [loading, setLoading] = useState(true)
   const [openForm, setOpenForm] = useState(false)
+  const [accountFilter, setAccountFilter] = useState("")
+  const [days, setDays] = useState("30")
   const [form, setForm] = useState({
     instrument: "", direction: "long", pnl: "", r: "",
     account_id: "", date: new Date().toISOString().slice(0, 10),
@@ -90,11 +92,15 @@ export function JournalPage() {
 
   const normalized = tradeList.map(normalize)
 
+  const byAccountAndDate = normalized.filter(t => {
+    const recentEnough = !t.date || (Date.now() - new Date(t.date).getTime()) <= Number(days) * 86400000
+    return (!accountFilter || t.account_id === accountFilter) && recentEnough
+  })
   const filtered = activeFilter === "Tous les trades" || activeFilter === "Tous"
-    ? normalized
+    ? byAccountAndDate
     : activeFilter === "Positions ouvertes"
-    ? normalized.filter(t => !t.exit)
-    : normalized.filter(t => t.starred)
+    ? byAccountAndDate.filter(t => !t.exit)
+    : byAccountAndDate.filter(t => t.starred)
 
   // KPIs calculés depuis les vraies données
   const wins = normalized.filter(t => t.win)
@@ -128,15 +134,8 @@ export function JournalPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
           <h1 className="text-2xl font-bold text-white">Journal</h1>
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF] flex items-center gap-2 cursor-pointer hover:border-[#7C4DFF]/50">
-              <span>Tous les comptes</span><ChevronDown className="w-3 h-3" />
-            </div>
-            <div className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF] flex items-center gap-2 cursor-pointer hover:border-[#7C4DFF]/50">
-              <span>30 derniers jours</span><ChevronDown className="w-3 h-3" />
-            </div>
-            <button className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF] flex items-center gap-1.5 hover:border-[#7C4DFF]/50">
-              <Filter className="w-3 h-3" /> Filtres
-            </button>
+            <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF]"><option value="">Tous les comptes</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
+            <select value={days} onChange={e=>setDays(e.target.value)} className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF]"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option><option value="3650">Toute la période</option></select>
             <button
               onClick={() => setOpenForm(true)}
               className="px-4 py-1.5 rounded-lg text-xs font-medium text-white flex items-center gap-1.5"
@@ -243,7 +242,7 @@ export function JournalPage() {
               </motion.div>
             ))}
 
-            <button className="w-full mt-3 py-2 text-[11px] text-[#7C4DFF] font-medium hover:bg-[rgba(124,77,255,0.06)] rounded-lg transition-all flex items-center justify-center gap-1">
+            <button onClick={()=>{setActiveFilter("Tous les trades");setAccountFilter("");setDays("3650")}} className="w-full mt-3 py-2 text-[11px] text-[#7C4DFF] font-medium hover:bg-[rgba(124,77,255,0.06)] rounded-lg transition-all flex items-center justify-center gap-1">
               Voir tous les trades →
             </button>
           </div>
@@ -271,7 +270,7 @@ export function JournalPage() {
                   <button className="p-1 text-[#9CA3AF] hover:text-[#FF5252]" onClick={() => deleteTrade(selectedTrade.id)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                  <button className="p-1 text-[#9CA3AF] hover:text-white"><MoreHorizontal className="w-3.5 h-3.5" /></button>
+                  <button onClick={()=>toast.info("Toutes les informations du trade sont affichées ci-dessous")} className="p-1 text-[#9CA3AF] hover:text-white"><MoreHorizontal className="w-3.5 h-3.5" /></button>
                 </div>
               </div>
 

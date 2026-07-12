@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 import anthropic
+import asyncio
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -25,6 +26,7 @@ JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALG = os.environ.get('JWT_ALGORITHM', 'HS256')
 JWT_EXP_HOURS = int(os.environ.get('JWT_EXPIRE_HOURS', '168'))
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+client_ai = anthropic.Anthropic(api_key=EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
 
 app = FastAPI(title="PipsEvo API")
 api = APIRouter(prefix="/api")
@@ -81,6 +83,11 @@ class LoginIn(BaseModel):
     password: str
 
 
+class ProfileIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    trader_type: Optional[str] = None
+
+
 class OnboardingIn(BaseModel):
     trader_type: str  # futures | cfd | both
     prop_firms: List[str]
@@ -115,6 +122,10 @@ class TradeIn(BaseModel):
     notes: Optional[str] = None
     plan_respected: bool = True
     screenshots: List[str] = []
+    r: float = 0
+    size: float = 1
+    duration: Optional[str] = None
+    tags: List[str] = []
 
 
 class PayoutIn(BaseModel):
@@ -167,6 +178,13 @@ async def login(body: LoginIn):
 @api.get("/auth/me")
 async def me(user=Depends(get_current_user)):
     return user
+
+
+@api.patch("/auth/me")
+async def update_profile(body: ProfileIn, user=Depends(get_current_user)):
+    updates = {"name": body.name.strip(), "trader_type": body.trader_type}
+    await db.users.update_one({"id": user["id"]}, {"$set": updates})
+    return await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
 
 
 @api.post("/auth/google")
@@ -252,6 +270,9 @@ async def list_trades(account_id: Optional[str] = None, user=Depends(get_current
 
 @api.post("/trades")
 async def create_trade(body: TradeIn, user=Depends(get_current_user)):
+    account = await db.accounts.find_one({"id": body.account_id, "user_id": user["id"]})
+    if not account:
+        raise HTTPException(404, "Account not found")
     t = body.model_dump()
     t["id"] = str(uuid.uuid4())
     t["user_id"] = user["id"]
@@ -377,6 +398,9 @@ async def list_payouts(user=Depends(get_current_user)):
 
 @api.post("/payouts")
 async def create_payout(body: PayoutIn, user=Depends(get_current_user)):
+    account = await db.accounts.find_one({"id": body.account_id, "user_id": user["id"]})
+    if not account:
+        raise HTTPException(404, "Account not found")
     p = body.model_dump()
     p["id"] = str(uuid.uuid4())
     p["user_id"] = user["id"]
@@ -425,11 +449,12 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
     user_prompt = f"Trader question: {body.question}\n\nContext (focus: {body.context_tag}):\n" + "\n".join(ctx_lines)
 
     try:
-        message = client_ai.messages.create(
+        message = await asyncio.to_thread(
+            client_ai.messages.create,
             model="claude-sonnet-4-6",
             max_tokens=1024,
             system=COACH_SYSTEM,
-            messages=[{"role": "user", "content": user_prompt}]
+            messages=[{"role": "user", "content": user_prompt}],
         )
         answer = message.content[0].text
     except Exception as e:

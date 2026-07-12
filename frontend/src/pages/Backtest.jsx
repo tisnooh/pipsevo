@@ -1,20 +1,38 @@
-import React from "react";
-import { FlaskConical, Lock } from "lucide-react";
-import { Link } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import { FlaskConical, Play, RotateCcw } from "lucide-react";
 
 export default function Backtest() {
-  return (
-    <div className="p-4 sm:p-7">
-      <div className="card-elev p-6 sm:p-12 text-center relative overflow-hidden">
-        <div className="absolute -top-10 -left-10 w-[400px] h-[400px] rounded-full blur-3xl opacity-30" style={{ background: "radial-gradient(circle, #7C4DFF, transparent)" }} />
-        <div className="relative">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] flex items-center justify-center mb-6 glow-purple"><FlaskConical className="w-8 h-8"/></div>
-          <h1 className="text-3xl font-bold">Backtest</h1>
-          <p className="text-[#9CA3AF] mt-3 max-w-md mx-auto">Importe ton historique, simule des stratégies et compare leur performance dans des conditions réelles.</p>
-          <div className="inline-flex items-center gap-2 mt-6 px-3 py-1.5 rounded-full border border-[#7C4DFF]/30 bg-[#7C4DFF]/10 text-[#B58BFF] text-xs"><Lock className="w-3 h-3"/> En préparation — v2</div>
-          <Link to="/app/dashboard" className="block mt-8 text-sm text-[#B58BFF] hover:underline">← Retour au dashboard</Link>
-        </div>
+  const initial = { capital: 10000, trades: 100, winrate: 55, gain: 2, loss: 1, risk: 1 };
+  const [form, setForm] = useState(initial);
+  const [ran, setRan] = useState(false);
+  const result = useMemo(() => {
+    let equity = +form.capital, peak = equity, maxDd = 0; const curve = [];
+    const wins = Math.round(+form.trades * +form.winrate / 100);
+    for (let i=0;i<+form.trades;i++) {
+      const risk = equity * (+form.risk/100);
+      equity += i < wins ? risk * +form.gain : -risk * +form.loss;
+      peak = Math.max(peak, equity); maxDd = Math.max(maxDd, (peak-equity)/peak*100);
+      curve.push(equity);
+    }
+    return { final: equity, profit: equity-(+form.capital), maxDd, expectancy: (+form.winrate/100)*+form.gain-(1-(+form.winrate/100))*+form.loss, curve };
+  }, [form]);
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  return <div className="p-4 sm:p-7 space-y-5">
+    <div><h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2"><FlaskConical className="text-[#B58BFF]"/>Backtest</h1><p className="text-sm text-[#9CA3AF] mt-1">Simule une stratégie avec un risque composé.</p></div>
+    <div className="grid lg:grid-cols-3 gap-4">
+      <form onSubmit={e=>{e.preventDefault();setRan(true)}} className="card-elev p-6 space-y-4">
+        {[['capital','Capital initial ($)',100],['trades','Nombre de trades',1],['winrate','Win rate (%)',1],['gain','Gain moyen (R)',0.1],['loss','Perte moyenne (R)',0.1],['risk','Risque par trade (%)',0.1]].map(([k,l,s])=><label key={k} className="block text-xs text-[#9CA3AF]">{l}<input type="number" min="0" step={s} value={form[k]} onChange={e=>set(k,e.target.value)} className="mt-1 w-full bg-[#0D1020] border border-white/10 rounded-xl px-3 py-2.5 text-white"/></label>)}
+        <div className="flex gap-2"><button className="btn-primary flex-1 inline-flex justify-center items-center gap-2"><Play className="w-4 h-4"/>Simuler</button><button type="button" onClick={()=>{setForm(initial);setRan(false)}} className="btn-ghost px-3"><RotateCcw className="w-4 h-4"/></button></div>
+      </form>
+      <div className="lg:col-span-2 space-y-4">
+        {!ran ? <div className="card-elev p-12 text-center text-[#9CA3AF]">Renseigne tes hypothèses puis lance la simulation.</div> : <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <Stat l="Capital final" v={`$${result.final.toFixed(0)}`} c="#B58BFF"/><Stat l="Profit net" v={`${result.profit>=0?'+':''}$${result.profit.toFixed(0)}`} c={result.profit>=0?'#00E676':'#FF5252'}/><Stat l="Drawdown max" v={`${result.maxDd.toFixed(1)}%`} c="#FFB855"/><Stat l="Espérance" v={`${result.expectancy.toFixed(2)}R`} c={result.expectancy>=0?'#00E676':'#FF5252'}/>
+          </div>
+          <div className="card-elev p-6"><div className="text-sm font-semibold mb-4">Courbe simulée</div><svg viewBox="0 0 600 180" className="w-full h-64"><polyline points={result.curve.map((v,i)=>`${i/(Math.max(result.curve.length-1,1))*600},${170-(v-Math.min(...result.curve))/(Math.max(...result.curve)-Math.min(...result.curve)||1)*155}`).join(' ')} fill="none" stroke="#B58BFF" strokeWidth="3"/></svg></div>
+        </>}
       </div>
     </div>
-  );
+  </div>;
 }
+const Stat=({l,v,c})=><div className="card-elev p-4"><div className="text-xs text-[#9CA3AF]">{l}</div><div className="text-xl font-bold font-mono mt-2" style={{color:c}}>{v}</div></div>;

@@ -4,6 +4,8 @@ import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknot
 import { useAuth } from "@/context/AuthContext";
 import { LogoMark } from "@/components/Logo";
 import { dashboard } from "@/lib/api";
+import { billing } from "@/lib/api";
+import { toast } from "sonner";
 
 const links = [
   { to: "/app/dashboard", label: "Aperçu", icon: Home, testid: "nav-dashboard" },
@@ -23,6 +25,9 @@ export default function AppShell() {
   const nav = useNavigate();
   const [discipline, setDiscipline] = useState(94);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     dashboard().then(r => setDiscipline(r.data?.kpis?.discipline_score ?? 94)).catch(() => {});
@@ -43,6 +48,10 @@ export default function AppShell() {
   }, [mobileOpen]);
 
   const closeMobile = () => setMobileOpen(false);
+  const upgrade = async () => {
+    try { const { data } = await billing.checkout("pro"); data.checkout_url ? window.location.assign(data.checkout_url) : toast.info(data.message); }
+    catch { toast.error("Paiement indisponible"); }
+  };
 
   return (
     <div className="min-h-screen bg-[#050505] text-white w-full overflow-x-hidden">
@@ -54,6 +63,12 @@ export default function AppShell() {
           data-testid="sidebar-backdrop"
         />
       )}
+      {searchOpen && <div className="fixed inset-0 z-[70] bg-black/70 p-4 flex items-start justify-center pt-[12vh]" onClick={()=>setSearchOpen(false)}>
+        <div className="w-full max-w-lg card-elev p-4" onClick={e=>e.stopPropagation()}>
+          <input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Rechercher une page…" className="w-full bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3" />
+          <div className="mt-3 space-y-1">{links.filter(l=>l.label.toLowerCase().includes(query.toLowerCase())).map(l=><button key={l.to} onClick={()=>{nav(l.to);setSearchOpen(false);setQuery("")}} className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5">{l.label}</button>)}</div>
+        </div>
+      </div>}
 
       {/* SIDEBAR — fixed sur mobile ET desktop, largeur/translation gérées par breakpoint */}
       <aside
@@ -141,7 +156,7 @@ export default function AppShell() {
             <div className="text-sm font-semibold">Passe à Pro</div>
             <div className="text-[10px] text-[#9CA3AF] mt-1">Plus d'analyses. Plus d'insights.<br />Plus de payouts.</div>
             <button
-              onClick={() => { closeMobile(); nav("/app/settings"); }}
+              onClick={() => { closeMobile(); upgrade(); }}
               className="mt-3 w-full text-xs py-2 rounded-lg bg-gradient-to-r from-[#7C4DFF] to-[#5A2DFF] hover:opacity-90 transition font-semibold"
               data-testid="sidebar-upgrade"
             >
@@ -163,14 +178,14 @@ export default function AppShell() {
 
       {/* MAIN — décalé de 256px uniquement à partir de md (768px), pleine largeur sinon */}
       <div className="w-full min-w-0 overflow-x-hidden md:ml-64 md:w-[calc(100%-16rem)]">
-        <TopBar user={user} onMenuClick={() => setMobileOpen(true)} />
+        <TopBar user={user} onMenuClick={() => setMobileOpen(true)} onSearch={()=>setSearchOpen(true)} notificationsOpen={notificationsOpen} onNotifications={()=>setNotificationsOpen(v=>!v)} />
         <Outlet />
       </div>
     </div>
   );
 }
 
-function TopBar({ user, onMenuClick }) {
+function TopBar({ user, onMenuClick, onSearch, notificationsOpen, onNotifications }) {
   return (
     <div className="sticky top-0 z-30 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 px-4 md:px-6 py-3 flex items-center gap-3 w-full min-w-0">
       {/* Hamburger — mobile uniquement */}
@@ -190,20 +205,21 @@ function TopBar({ user, onMenuClick }) {
       </div>
 
       {/* Barre de recherche — desktop uniquement */}
-      <div className="hidden md:block flex-1 min-w-0 max-w-md relative">
+      <button onClick={onSearch} className="hidden md:block flex-1 min-w-0 max-w-md relative text-left">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6B7280]" />
-        <input
+        <input readOnly
           placeholder="Rechercher…"
           data-testid="top-search"
           className="w-full bg-[#0D1020] border border-white/5 rounded-xl pl-10 pr-12 py-2 text-sm placeholder:text-[#6B7280] focus:border-[#7C4DFF]/40"
         />
         <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[#6B7280] border border-white/10 rounded px-1.5 py-0.5">⌘K</kbd>
-      </div>
+      </button>
 
       <div className="flex-1 min-w-0" />
 
       {/* Icône recherche seule — mobile */}
       <button
+        onClick={onSearch}
         className="md:hidden w-9 h-9 shrink-0 rounded-xl hover:bg-white/5 flex items-center justify-center text-[#9CA3AF]"
         aria-label="Rechercher"
         data-testid="top-search-mobile"
@@ -211,10 +227,10 @@ function TopBar({ user, onMenuClick }) {
         <Search className="w-4 h-4" />
       </button>
 
-      <button className="relative w-9 h-9 shrink-0 rounded-xl hover:bg-white/5 flex items-center justify-center" data-testid="top-notifs">
+      <div className="relative"><button onClick={onNotifications} className="relative w-9 h-9 shrink-0 rounded-xl hover:bg-white/5 flex items-center justify-center" data-testid="top-notifs">
         <Bell className="w-4 h-4 text-[#9CA3AF]" />
         <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-[#FF4FD8] rounded-full" />
-      </button>
+      </button>{notificationsOpen && <div className="absolute right-0 top-11 w-72 card-elev p-4 z-50"><div className="text-sm font-semibold">Notifications</div><div className="text-xs text-[#9CA3AF] mt-3">Aucune nouvelle notification.</div></div>}</div>
 
       <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl border border-white/10 bg-[#0D1020] shrink-0">
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] flex items-center justify-center text-xs font-bold shrink-0">

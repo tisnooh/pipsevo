@@ -15,6 +15,7 @@ export const auth = {
   register: (data) => api.post("/auth/register", data),
   login: (data) => api.post("/auth/login", data),
   me: () => api.get("/auth/me"),
+  update: (data) => api.patch("/auth/me", data),
 };
 
 export const accounts = {
@@ -40,4 +41,7 @@ export const onboarding = (data) => api.post("/onboarding", data);
 export const coach = {
   ask: (question, tag) => api.post("/coach/ask", { question, context_tag: tag || "overall" }),
   history: () => api.get("/coach/history"),
+};
+export const billing = {
+  checkout: (plan = "pro") => api.post("/billing/checkout", null, { params: { plan } }),
 };

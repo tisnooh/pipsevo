@@ -10,6 +10,7 @@ const TABS = ["Vue d'ensemble","Performance","Trades","Temps","Risques","Comport
 export default function Analytics() {
   const [d, setD] = useState(null);
   const [tab, setTab] = useState("Vue d'ensemble");
+  const [period, setPeriod] = useState("30");
   useEffect(() => { dashboard().then(r => setD(r.data)).catch(()=>{}); }, []);
 
   const useDemo = !d?.kpis?.total_trades;
@@ -17,6 +18,12 @@ export default function Analytics() {
   const totalProfit = useDemo ? DEMO_KPIS.total_profit : (d?.kpis?.total_profit ?? DEMO_KPIS.total_profit);
   const totalTrades = useDemo ? DEMO_KPIS.total_trades : (d?.kpis?.total_trades || DEMO_KPIS.total_trades);
   const equity = (useDemo || !d?.equity_curve?.length) ? DEMO_EQUITY : d.equity_curve;
+  const download = () => {
+    const rows = [["date","equity"], ...equity.map(x=>[x.date,x.equity])];
+    const blob = new Blob([rows.map(r=>r.join(",")).join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob); const a = document.createElement("a");
+    a.href=url; a.download="pipsevo-statistiques.csv"; a.click(); URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="p-7 space-y-5">
@@ -31,9 +38,9 @@ export default function Analytics() {
           ))}
         </div>
         <div className="flex items-center gap-2 pb-2">
-          <button className="card-flat px-3 py-1.5 text-xs">30 derniers jours</button>
-          <button className="card-flat px-2 py-1.5 text-xs">⬇</button>
-          <button className="card-flat px-2 py-1.5 text-xs">⚙</button>
+          <select value={period} onChange={e=>setPeriod(e.target.value)} className="card-flat bg-[#0D1020] px-3 py-1.5 text-xs"><option value="7">7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option></select>
+          <button onClick={download} title="Exporter en CSV" className="card-flat px-2 py-1.5 text-xs">⬇</button>
+          <Link to="/app/settings" title="Paramètres" className="card-flat px-2 py-1.5 text-xs">⚙</Link>
         </div>
       </div>
 
@@ -56,7 +63,7 @@ export default function Analytics() {
         <div className="card-elev p-5 lg:col-span-2">
           <div className="flex justify-between items-center">
             <div className="text-sm font-semibold">Évolution du capital</div>
-            <button className="card-flat px-2.5 py-1 text-xs">30 derniers jours ▾</button>
+            <select value={period} onChange={e=>setPeriod(e.target.value)} className="card-flat bg-[#0D1020] px-2.5 py-1 text-xs"><option value="7">7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option></select>
           </div>
           <div className="h-72 mt-4">
             <ResponsiveContainer width="100%" height="100%">
