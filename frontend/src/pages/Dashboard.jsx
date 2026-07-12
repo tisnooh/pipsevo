@@ -147,41 +147,54 @@ export default function Dashboard() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
-        <div className="card-elev p-5 lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-sm font-semibold">Trades récents</div>
-            <div className="flex items-center gap-2">
-              <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className="text-xs bg-[#0D1020] text-[#9CA3AF] px-2 py-1 rounded-lg border border-white/5"><option value="">Tous les comptes</option>{accList.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
-              <select value={assetFilter} onChange={e=>setAssetFilter(e.target.value)} className="text-xs bg-[#0D1020] text-[#9CA3AF] px-2 py-1 rounded-lg border border-white/5"><option value="">Tous les actifs</option>{[...new Set(tradeList.map(t=>t.instrument))].filter(Boolean).map(x=><option key={x}>{x}</option>)}</select>
+        <div className="card-elev overflow-hidden lg:col-span-2">
+          <div className="p-4 sm:p-5 border-b border-white/[0.06] bg-gradient-to-r from-white/[0.025] to-transparent">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5"><div className="text-sm font-semibold">Trades récents</div><span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] font-mono text-[#9CA3AF]">{filtered.length} affichés</span></div>
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+                <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className="min-w-0 text-xs bg-[#0D1020] text-[#B5BBC9] px-2.5 py-2 rounded-xl border border-white/[0.08] outline-none focus:border-[#7C4DFF]/60"><option value="">Tous les comptes</option>{accList.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
+                <select value={assetFilter} onChange={e=>setAssetFilter(e.target.value)} className="min-w-0 text-xs bg-[#0D1020] text-[#B5BBC9] px-2.5 py-2 rounded-xl border border-white/[0.08] outline-none focus:border-[#7C4DFF]/60"><option value="">Tous les actifs</option>{[...new Set(tradeList.map(t=>t.instrument))].filter(Boolean).map(x=><option key={x}>{x}</option>)}</select>
+              </div>
             </div>
           </div>
-          <div className="flex gap-5 border-b border-white/5 text-sm">
-            {["Tous","Gagnants","Perdants"].map(t => (
-              <button key={t} onClick={()=>setTab(t)} data-testid={`tab-${t}`} className={`pb-2 ${tab===t ? "text-white border-b-2 border-[#7C4DFF]" : "text-[#9CA3AF]"}`}>{t}</button>
-            ))}
+          <div className="px-4 sm:px-5 pt-4"><div className="inline-flex gap-1 rounded-xl border border-white/[0.06] bg-[#090B13] p-1 text-xs">{["Tous","Gagnants","Perdants"].map(t => <button key={t} onClick={()=>setTab(t)} data-testid={`tab-${t}`} className={`rounded-lg px-3 py-1.5 transition ${tab===t ? "bg-[#7C4DFF]/20 text-white shadow-[inset_0_0_0_1px_rgba(124,77,255,.35)]" : "text-[#7E8798] hover:text-white"}`}>{t}</button>)}</div></div>
+
+          <div className="md:hidden p-4 space-y-2">
+            {filtered.map(t => {
+              const positive = Number(t.pnl) >= 0;
+              const directionLong = String(t.direction).toLowerCase() === "long";
+              const accountName = t.account || accList.find(a=>a.id===t.account_id)?.firm || "Compte";
+              return <div key={t.id} className="rounded-2xl border border-white/[0.07] bg-[#0B0E17] p-4 transition active:border-[#7C4DFF]/40">
+                <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3 min-w-0"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#15182A] text-xs font-bold text-[#B58BFF]">{String(t.instrument || "?").slice(0,2)}</span><div className="min-w-0"><div className="font-semibold truncate">{t.instrument}</div><div className="text-[11px] text-[#6B7280] mt-0.5">{t.date} · {accountName}</div></div></div><div className="text-right"><div className="font-mono font-semibold" style={{color: positive ? "#00E676" : "#FF5252"}}>{positive?"+":"-"}${Math.abs(Number(t.pnl) || 0).toFixed(2)}</div><div className="text-[10px] text-[#6B7280] mt-0.5">{(t.r ?? (Number(t.pnl)/100)).toFixed?.(2) ?? (t.r ?? (Number(t.pnl)/100))}R</div></div></div>
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.05]"><span className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${directionLong ? "bg-[#00E676]/10 text-[#00E676]" : "bg-[#FF5252]/10 text-[#FF7272]"}`}>{directionLong ? "Achat · Long" : "Vente · Short"}</span><span className="text-[11px] text-[#7E8798]">{t.duration || t.session || "—"}</span></div>
+              </div>;
+            })}
+            {!filtered.length && <div className="rounded-2xl border border-dashed border-white/10 py-10 text-center"><BarChart3 className="w-5 h-5 text-[#6B7280] mx-auto"/><p className="text-sm text-[#9CA3AF] mt-2">Aucun trade pour ces filtres.</p></div>}
           </div>
-          <div className="overflow-x-auto -mx-5 px-5 sm:mx-0 sm:px-0 mt-3">
-            <table className="w-full text-sm min-w-[720px]">
-              <thead className="text-[#6B7280] text-[11px] uppercase font-mono">
-                <tr><th className="text-left py-2 font-normal">Date</th><th className="text-left font-normal">Actif</th><th className="text-left font-normal">Direction</th><th className="text-right font-normal">Résultat</th><th className="text-right font-normal">R Multiple</th><th className="text-left pl-4 font-normal">Durée</th><th className="text-left font-normal">Compte</th><th className="text-left font-normal">Tags</th></tr>
-              </thead>
+
+          <div className="hidden md:block m-5 mt-4 overflow-x-auto rounded-2xl border border-white/[0.07] bg-[#090B13]">
+            <table className="w-full text-sm min-w-[820px]">
+              <thead className="bg-white/[0.025] text-[#71798A] text-[10px] uppercase tracking-[.12em] font-mono"><tr><th className="text-left px-4 py-3 font-normal">Date</th><th className="text-left px-3 font-normal">Actif</th><th className="text-left px-3 font-normal">Direction</th><th className="text-right px-3 font-normal">Résultat</th><th className="text-right px-3 font-normal">R Multiple</th><th className="text-left px-3 font-normal">Durée</th><th className="text-left px-3 font-normal">Compte</th><th className="text-left px-4 font-normal">Tags</th></tr></thead>
               <tbody>
-                {filtered.map(t => (
-                  <tr key={t.id} className="border-t border-white/5">
-                    <td className="py-2.5 text-xs text-[#B5BBC9]">{t.date}</td>
-                    <td className="font-medium">{t.instrument}</td>
-                    <td className={t.direction === "long" ? "text-[#00E676]" : "text-[#FF5252]"}>{t.direction === "long" ? "Achat (Long)" : "Vente (Short)"}</td>
-                    <td className="text-right font-mono" style={{ color: t.pnl >= 0 ? "#00E676" : "#FF5252" }}>{t.pnl>=0?"+":""}${Math.abs(t.pnl).toFixed(2)}</td>
-                    <td className="text-right font-mono" style={{ color: t.pnl >= 0 ? "#00E676" : "#FF5252" }}>{(t.r ?? (t.pnl/100)).toFixed?.(2) ?? (t.r ?? (t.pnl/100))}R</td>
-                    <td className="pl-4 text-xs text-[#9CA3AF]">{t.duration || t.session || "—"}</td>
-                    <td className="text-xs text-[#B5BBC9]">{t.account || (accs.find(a=>a.id===t.account_id)?.firm) || "—"}</td>
-                    <td className="space-x-1">{(t.tags || (t.setup ? [t.setup] : [])).map((tag,i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded border border-white/10 text-[#B5BBC9] inline-block">{tag}</span>)}</td>
-                  </tr>
-                ))}
+                {filtered.map(t => {
+                  const positive = Number(t.pnl) >= 0;
+                  const directionLong = String(t.direction).toLowerCase() === "long";
+                  return <tr key={t.id} className="group border-t border-white/[0.055] transition-colors hover:bg-white/[0.025]">
+                    <td className="px-4 py-3.5 text-xs text-[#8B93A3] whitespace-nowrap">{t.date}</td>
+                    <td className="px-3 font-semibold"><span className="inline-flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-[#15182A] text-[9px] text-[#B58BFF] group-hover:bg-[#7C4DFF]/15">{String(t.instrument || "?").slice(0,2)}</span>{t.instrument}</span></td>
+                    <td className="px-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium ${directionLong ? "bg-[#00E676]/10 text-[#00E676]" : "bg-[#FF5252]/10 text-[#FF7272]"}`}>{directionLong ? "Achat · Long" : "Vente · Short"}</span></td>
+                    <td className="px-3 text-right font-mono font-semibold" style={{ color: positive ? "#00E676" : "#FF5252" }}>{positive?"+":"-"}${Math.abs(Number(t.pnl) || 0).toFixed(2)}</td>
+                    <td className="px-3 text-right font-mono text-[#B5BBC9]">{(t.r ?? (Number(t.pnl)/100)).toFixed?.(2) ?? (t.r ?? (Number(t.pnl)/100))}R</td>
+                    <td className="px-3 text-xs text-[#8B93A3]">{t.duration || t.session || "—"}</td>
+                    <td className="px-3 text-xs text-[#B5BBC9]"><span className="rounded-lg border border-white/[0.07] bg-white/[0.025] px-2 py-1">{t.account || (accList.find(a=>a.id===t.account_id)?.firm) || "—"}</span></td>
+                    <td className="px-4 space-x-1">{(t.tags || (t.setup ? [t.setup] : [])).slice(0,2).map((tag,i) => <span key={i} className="text-[9px] px-2 py-1 rounded-md bg-[#7C4DFF]/10 text-[#C8AEFF] inline-block">{tag}</span>)}</td>
+                  </tr>;
+                })}
+                {!filtered.length && <tr><td colSpan="8" className="py-12 text-center text-sm text-[#7E8798]">Aucun trade ne correspond aux filtres sélectionnés.</td></tr>}
               </tbody>
             </table>
           </div>
-          <Link to="/app/journal" className="block text-center mt-4 text-xs text-[#B58BFF]">Voir tous les trades →</Link>
+          <div className="px-5 pb-5"><Link to="/app/journal" className="block rounded-xl border border-white/[0.07] py-2.5 text-center text-xs text-[#B58BFF] transition hover:bg-[#7C4DFF]/10 hover:text-white">Voir tous les trades →</Link></div>
         </div>
 
         <div className="space-y-4">
@@ -190,23 +203,27 @@ export default function Dashboard() {
             <p className="text-xs text-[#B5BBC9] mt-3 leading-relaxed">Tu sur-trades les mardis. Ta win rate ce jour-là est 18% plus basse que la moyenne.</p>
             <Link to="/app/coach" className="block text-center mt-4 text-xs btn-primary py-2" data-testid="dash-insight-link">Voir l'insight →</Link>
           </div>
-          <div className="card-elev p-5">
+          <div className="card-elev p-5 overflow-hidden">
             <div className="flex items-center justify-between mb-3">
-              <div className="text-sm font-semibold">Comptes</div>
+              <div><div className="text-sm font-semibold">Comptes</div><div className="text-[10px] text-[#6B7280] mt-1">Santé et performance</div></div>
               <Link to="/app/accounts" className="text-xs text-[#B58BFF]">Voir tout</Link>
             </div>
-            {accList.map(a => {
-              const pnl = a.balance - a.initial_balance;
+            <div className="space-y-2">
+            {accList.slice(0, 4).map(a => {
+              const pnl = Number(a.balance || 0) - Number(a.initial_balance || 0);
+              const health = Math.max(0, Math.min(100, Number(a.health_score ?? (pnl >= 0 ? 82 : 48))));
               return (
-                <div key={a.id} className="flex items-center justify-between py-2 border-t border-white/5 first:border-0">
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: pnl >= 0 ? "#00E676" : "#FF5252" }} />
-                    <div className="text-xs">{a.firm} {a.name}</div>
+                <div key={a.id} className="rounded-xl border border-white/[0.065] bg-[#0A0D16] p-3 transition hover:border-white/[0.12]">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#15182A] text-[10px] font-bold text-[#B58BFF]">{String(a.firm || a.name || "C").slice(0,2).toUpperCase()}</span><div className="min-w-0"><div className="text-xs font-medium truncate">{a.name || a.firm}</div><div className="text-[9px] text-[#6B7280] truncate mt-0.5">{a.firm || "Compte de trading"}</div></div></div>
+                    <div className="text-right shrink-0"><div className="text-xs font-mono font-semibold" style={{ color: pnl >= 0 ? "#00E676" : "#FF5252" }}>{pnl>=0?"+":"-"}${Math.abs(pnl).toLocaleString()}</div><div className="text-[9px] text-[#6B7280] mt-0.5">P&amp;L</div></div>
                   </div>
-                  <div className="text-xs font-mono" style={{ color: pnl >= 0 ? "#00E676" : "#FF5252" }}>{pnl>=0?"+":""}${pnl.toLocaleString()}</div>
+                  <div className="mt-3 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.05]"><div className="h-full rounded-full bg-gradient-to-r from-[#4F8CFF] to-[#7C4DFF]" style={{width:`${health}%`}}/></div><span className="w-7 text-right text-[9px] font-mono text-[#8B93A3]">{health}%</span></div>
                 </div>
               );
             })}
+            {!accList.length && <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-xs text-[#7E8798]">Aucun compte ajouté.</div>}
+            </div>
             <Link to="/app/accounts" className="block text-center mt-4 text-xs text-[#B58BFF]">Gérer mes comptes →</Link>
           </div>
         </div>
