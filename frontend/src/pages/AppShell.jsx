@@ -34,6 +34,14 @@ export default function AppShell() {
     return () => { document.body.style.overflow = ""; };
   }, [mobileOpen]);
 
+  // Ferme le menu mobile avec la touche Escape
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKeyDown = (e) => { if (e.key === "Escape") setMobileOpen(false); };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobileOpen]);
+
   const closeMobile = () => setMobileOpen(false);
 
   return (
