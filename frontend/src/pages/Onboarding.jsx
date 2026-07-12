@@ -40,12 +40,12 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen px-6 py-12 relative overflow-hidden">
+    <div className="min-h-screen px-4 sm:px-6 py-8 sm:py-12 relative overflow-hidden">
       <div className="absolute inset-0 grid-floor opacity-40" />
       <div className="absolute top-[10%] right-[10%] w-[500px] h-[500px] rounded-full blur-3xl opacity-25" style={{ background: "radial-gradient(circle, #7C4DFF, transparent)" }} />
       <div className="max-w-3xl mx-auto relative z-10">
-        <div className="flex justify-center mb-8"><Logo /></div>
-        <div className="card-elev p-10 glow-purple">
+        <div className="flex justify-center mb-6 sm:mb-8"><Logo /></div>
+        <div className="card-elev p-5 sm:p-8 lg:p-10 glow-purple">
           <div className="flex gap-1.5 mb-6">
             {[1,2,3,4,5].map(s => <div key={s} className={`h-1 flex-1 rounded-full transition-all ${step>=s?"bg-[#7C4DFF]":"bg-white/10"}`} />)}
           </div>
@@ -53,11 +53,11 @@ export default function Onboarding() {
 
           {step === 1 && (
             <div className="mt-3">
-              <h2 className="text-3xl font-bold text-gradient">Que trades-tu ?</h2>
-              <div className="grid grid-cols-3 gap-3 mt-7">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Que trades-tu ?</h2>
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-5 sm:mt-7">
                 {[{k:"futures",l:"Futures"},{k:"cfd",l:"CFD / Forex"},{k:"both",l:"Les deux"}].map(o => (
-                  <button key={o.k} onClick={()=>setTraderType(o.k)} data-testid={`onb-trader-${o.k}`} className={`card-flat p-6 text-left transition-all ${traderType===o.k?"border-[#7C4DFF] glow-purple":"hover:border-white/20"}`}>
-                    <div className="font-semibold text-lg">{o.l}</div>
+                  <button key={o.k} onClick={()=>setTraderType(o.k)} data-testid={`onb-trader-${o.k}`} className={`card-flat p-3 sm:p-6 text-center sm:text-left transition-all ${traderType===o.k?"border-[#7C4DFF] glow-purple":"hover:border-white/20"}`}>
+                    <div className="font-semibold text-xs sm:text-lg leading-snug break-words">{o.l}</div>
                   </button>
                 ))}
               </div>
@@ -66,9 +66,9 @@ export default function Onboarding() {
 
           {step === 2 && (
             <div className="mt-3">
-              <h2 className="text-3xl font-bold text-gradient">Quels actifs trades-tu ?</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Quels actifs trades-tu ?</h2>
               <p className="text-[#9CA3AF] text-sm mt-2">Sélectionne tous ceux qui s'appliquent.</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-7">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-5 sm:mt-7">
                 {ASSETS.map(a => (
                   <button key={a.k} onClick={()=>toggle(assets, setAssets, a.k)} data-testid={`onb-asset-${a.k}`} className={`card-flat p-5 text-center transition-all ${assets.includes(a.k)?"border-[#7C4DFF] glow-purple":"hover:border-white/20"}`}>
                     <a.I />
@@ -81,9 +81,9 @@ export default function Onboarding() {
 
           {step === 3 && (
             <div className="mt-3">
-              <h2 className="text-3xl font-bold text-gradient">Quelles prop firms ?</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Quelles prop firms ?</h2>
               <p className="text-[#9CA3AF] text-sm mt-2">Sélectionne tes prop firms.</p>
-              <div className="grid grid-cols-2 gap-3 mt-7">
+              <div className="grid grid-cols-2 gap-3 mt-5 sm:mt-7">
                 {FIRMS.map(f => (
                   <button key={f} onClick={()=>toggle(firms, setFirms, f)} data-testid={`onb-firm-${f}`} className={`card-flat p-4 text-left transition-all ${firms.includes(f)?"border-[#7C4DFF] glow-purple":"hover:border-white/20"}`}>
                     {f}
@@ -95,15 +95,15 @@ export default function Onboarding() {
 
           {step === 4 && (
             <div className="mt-3">
-              <h2 className="text-3xl font-bold text-gradient">Combien de comptes ?</h2>
-              <input type="number" min="1" max="50" value={numAccounts} onChange={(e)=>setNumAccounts(e.target.value)} data-testid="onb-num-accounts" className="mt-7 w-full bg-[#0D1020] border border-white/10 rounded-xl px-4 py-4 text-3xl font-mono outline-none focus:border-[#7C4DFF]" />
+              <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Combien de comptes ?</h2>
+              <input type="number" min="1" max="50" value={numAccounts} onChange={(e)=>setNumAccounts(e.target.value)} data-testid="onb-num-accounts" className="mt-5 sm:mt-7 w-full bg-[#0D1020] border border-white/10 rounded-xl px-4 py-4 text-2xl sm:text-3xl font-mono outline-none focus:border-[#7C4DFF]" />
             </div>
           )}
 
           {step === 5 && (
             <div className="mt-3">
-              <h2 className="text-3xl font-bold text-gradient">Tes règles de trading</h2>
-              <div className="grid grid-cols-2 gap-4 mt-7">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Tes règles de trading</h2>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 mt-5 sm:mt-7">
                 <Field label="Max trades / jour" value={rules.max_trades} onChange={(v)=>setRules({...rules,max_trades:+v})} testid="rule-max-trades" />
                 <Field label="Daily loss limit ($)" value={rules.daily_loss_limit} onChange={(v)=>setRules({...rules,daily_loss_limit:+v})} testid="rule-dll" />
                 <Field label="Max risque / trade (%)" value={rules.max_risk_pct} onChange={(v)=>setRules({...rules,max_risk_pct:+v})} testid="rule-risk" />
@@ -112,12 +112,12 @@ export default function Onboarding() {
             </div>
           )}
 
-          <div className="flex justify-between mt-9">
-            <button onClick={()=>setStep(s=>Math.max(1,s-1))} disabled={step===1} className="btn-ghost inline-flex items-center gap-2 disabled:opacity-30 text-sm py-2.5"><ArrowLeft className="w-4 h-4"/> Retour</button>
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-3 mt-8 sm:mt-9">
+            <button onClick={()=>setStep(s=>Math.max(1,s-1))} disabled={step===1} className="btn-ghost inline-flex items-center justify-center gap-2 disabled:opacity-30 text-sm py-2.5"><ArrowLeft className="w-4 h-4"/> Retour</button>
             {step < 5 ? (
-              <button onClick={()=>setStep(s=>s+1)} className="btn-primary inline-flex items-center gap-2 text-sm py-2.5" data-testid="onb-next">Continuer <ArrowRight className="w-4 h-4"/></button>
+              <button onClick={()=>setStep(s=>s+1)} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5" data-testid="onb-next">Continuer <ArrowRight className="w-4 h-4"/></button>
             ) : (
-              <button onClick={finish} disabled={loading} className="btn-primary inline-flex items-center gap-2 text-sm py-2.5" data-testid="onb-finish">{loading?"Sauvegarde…":(<>Entrer dans PipsEvo <ArrowRight className="w-4 h-4"/></>)}</button>
+              <button onClick={finish} disabled={loading} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5" data-testid="onb-finish">{loading?"Sauvegarde…":(<>Entrer dans PipsEvo <ArrowRight className="w-4 h-4"/></>)}</button>
             )}
           </div>
         </div>

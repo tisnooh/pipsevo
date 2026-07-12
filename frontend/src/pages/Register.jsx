@@ -27,17 +27,17 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-16 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center px-4 sm:px-6 py-10 sm:py-16 relative overflow-hidden">
       <div className="absolute inset-0 grid-floor opacity-40" />
       <div className="absolute top-[10%] right-[15%] w-[400px] h-[400px] rounded-full blur-3xl opacity-30" style={{ background: "radial-gradient(circle, #7C4DFF, transparent)" }} />
       <div className="absolute bottom-[10%] left-[15%] w-[400px] h-[400px] rounded-full blur-3xl opacity-25" style={{ background: "radial-gradient(circle, #FF4FD8, transparent)" }} />
-      <div className="absolute right-[8%] top-[28%] floaty"><Candle color="purple" height={90} rot={6} /></div>
-      <div className="absolute left-[8%] top-[20%] floaty-slow"><Candle color="green" height={110} rot={-8} /></div>
-      <div className="absolute right-[12%] bottom-[15%] floaty-slow"><Candle color="pink" height={80} rot={-4} /></div>
+      <div className="hidden sm:block absolute right-[8%] top-[28%] floaty"><Candle color="purple" height={90} rot={6} /></div>
+      <div className="hidden sm:block absolute left-[8%] top-[20%] floaty-slow"><Candle color="green" height={110} rot={-8} /></div>
+      <div className="hidden sm:block absolute right-[12%] bottom-[15%] floaty-slow"><Candle color="pink" height={80} rot={-4} /></div>
 
-      <div className="w-full max-w-md card-elev p-9 glow-pink relative z-10">
+      <div className="w-full max-w-md card-elev p-6 sm:p-9 glow-pink relative z-10">
         <div className="mb-6"><Logo /></div>
-        <h1 className="text-3xl font-bold text-gradient">Crée ton compte.</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gradient">Crée ton compte.</h1>
         <p className="text-[#9CA3AF] text-sm mt-2">Protège ta carrière funded dès aujourd'hui.</p>
         <form onSubmit={submit} className="space-y-4 mt-7">
           <div>

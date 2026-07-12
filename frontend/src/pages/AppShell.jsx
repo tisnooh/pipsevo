@@ -22,20 +22,29 @@ export default function AppShell() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
   const [discipline, setDiscipline] = useState(94);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => { dashboard().then(r => setDiscipline(r.data?.kpis?.discipline_score ?? 94)).catch(()=>{}); }, []);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex">
+    <div className="min-h-screen bg-[#050505] text-white lg:flex">
+      {/* Overlay mobile derrière le menu */}
+      {mobileOpen && (
+        <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />
+      )}
+
       {/* SIDEBAR */}
-      <aside className="w-64 border-r border-white/5 flex flex-col sticky top-0 h-screen">
-        <div className="px-5 py-5 flex items-center gap-2.5">
-          <LogoMark />
-          <span className="font-bold text-lg">PipsEvo<span className="text-[#7C4DFF]">.</span></span>
+      <aside className={`fixed lg:sticky top-0 left-0 z-50 lg:z-auto w-72 lg:w-64 h-screen border-r border-white/5 flex flex-col bg-[#050505] transition-transform duration-300 ease-out ${mobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}>
+        <div className="px-5 py-5 flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <LogoMark />
+            <span className="font-bold text-lg">PipsEvo<span className="text-[#7C4DFF]">.</span></span>
+          </div>
+          <button onClick={() => setMobileOpen(false)} className="lg:hidden w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-[#9CA3AF]" aria-label="Fermer le menu">✕</button>
         </div>
         <nav className="flex-1 px-3 flex flex-col gap-0.5 overflow-y-auto">
           {links.map(({ to, label, icon: Icon, testid }) => (
-            <NavLink key={to} to={to} data-testid={testid} end className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition ${isActive?"bg-[#7C4DFF]/20 text-white border border-[#7C4DFF]/30 shadow-[0_0_20px_-6px_rgba(124,77,255,0.5)]":"text-[#9CA3AF] hover:text-white hover:bg-white/[0.04]"}`}>
+            <NavLink key={to} to={to} onClick={() => setMobileOpen(false)} data-testid={testid} end className={({isActive}) => `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition ${isActive?"bg-[#7C4DFF]/20 text-white border border-[#7C4DFF]/30 shadow-[0_0_20px_-6px_rgba(124,77,255,0.5)]":"text-[#9CA3AF] hover:text-white hover:bg-white/[0.04]"}`}>
               <Icon className="w-[18px] h-[18px]" /> {label}
             </NavLink>
           ))}
@@ -79,31 +88,34 @@ export default function AppShell() {
       </aside>
 
       {/* MAIN */}
-      <main className="flex-1 min-w-0">
-        <TopBar user={user} />
+      <main className="flex-1 min-w-0 w-full">
+        <TopBar user={user} onMenuClick={() => setMobileOpen(true)} />
         <Outlet />
       </main>
     </div>
   );
 }
 
-function TopBar({ user }) {
+function TopBar({ user, onMenuClick }) {
   return (
-    <div className="sticky top-0 z-30 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 px-6 py-3 flex items-center gap-4">
-      <div className="flex-1 max-w-md relative">
+    <div className="sticky top-0 z-30 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 px-4 sm:px-6 py-3 flex items-center gap-3 sm:gap-4">
+      <button onClick={onMenuClick} className="lg:hidden w-9 h-9 shrink-0 rounded-xl hover:bg-white/5 flex items-center justify-center text-[#9CA3AF]" aria-label="Ouvrir le menu" data-testid="top-menu-toggle">
+        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div className="flex-1 min-w-0 max-w-md relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6B7280]" />
-        <input placeholder="Rechercher…" data-testid="top-search" className="w-full bg-[#0D1020] border border-white/5 rounded-xl pl-10 pr-12 py-2 text-sm placeholder:text-[#6B7280] focus:border-[#7C4DFF]/40" />
-        <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[#6B7280] border border-white/10 rounded px-1.5 py-0.5">⌘K</kbd>
+        <input placeholder="Rechercher…" data-testid="top-search" className="w-full bg-[#0D1020] border border-white/5 rounded-xl pl-10 pr-3 sm:pr-12 py-2 text-sm placeholder:text-[#6B7280] focus:border-[#7C4DFF]/40" />
+        <kbd className="hidden sm:block absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[#6B7280] border border-white/10 rounded px-1.5 py-0.5">⌘K</kbd>
       </div>
-      <div className="flex-1" />
-      <button className="relative w-9 h-9 rounded-xl hover:bg-white/5 flex items-center justify-center" data-testid="top-notifs">
+      <div className="hidden sm:flex flex-1" />
+      <button className="relative w-9 h-9 shrink-0 rounded-xl hover:bg-white/5 flex items-center justify-center" data-testid="top-notifs">
         <Bell className="w-4 h-4 text-[#9CA3AF]" />
         <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-[#FF4FD8] rounded-full" />
       </button>
-      <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl border border-white/10 bg-[#0D1020]">
+      <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl border border-white/10 bg-[#0D1020] shrink-0">
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] flex items-center justify-center text-xs font-bold">{(user?.name||user?.email||"U")[0].toUpperCase()}</div>
-        <div className="text-sm font-medium" data-testid="top-username">{user?.name || user?.email}</div>
-        <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#7C4DFF]/20 text-[#B58BFF] border border-[#7C4DFF]/30">PRO</span>
+        <div className="hidden sm:block text-sm font-medium" data-testid="top-username">{user?.name || user?.email}</div>
+        <span className="hidden sm:inline text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#7C4DFF]/20 text-[#B58BFF] border border-[#7C4DFF]/30">PRO</span>
       </div>
     </div>
   );
