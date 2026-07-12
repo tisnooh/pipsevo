@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Play, Check, Shield, BookOpen, Activity, Brain, Banknote, User, Building2, TrendingUp, Trophy } from "lucide-react";
+import { ArrowRight, Play, Check, Shield, BookOpen, Activity, Brain, Banknote, User, Building2, TrendingUp, Trophy, FlaskConical, Target } from "lucide-react";
 import { Logo, LogoMark } from "@/components/Logo";
 import { Candle, DashboardMock } from "@/components/CandleArt";
 
@@ -13,6 +13,14 @@ const fade = {
 export default function Landing() {
   const [mx, setMx] = useState(0);
   const [my, setMy] = useState(0);
+  const [activeStory, setActiveStory] = useState(0);
+  const stories = [
+    { icon: BookOpen, label: "Journal", eyebrow: "CHAQUE TRADE COMPTE", title: "Arrête de répéter les mêmes erreurs.", text: "Transforme chaque décision en donnée exploitable. Repère les setups qui te paient, les sessions qui te coûtent et les habitudes qui fragilisent ton compte.", bullets: ["Historique structuré par compte", "Tags, notes et émotions", "Résultats comparables dans le temps"], color: "#B58BFF" },
+    { icon: Shield, label: "Discipline", eyebrow: "PROTÈGE TON CAPITAL", title: "Une mauvaise journée ne doit plus effacer une bonne semaine.", text: "Suis tes limites, ton drawdown restant et le respect de ton plan avant que la pression ne prenne le contrôle.", bullets: ["Score de discipline", "Suivi des règles prop firm", "Alertes sur les comportements à risque"], color: "#00E676" },
+    { icon: FlaskConical, label: "Backtest", eyebrow: "PROUVE TON EDGE", title: "Teste avant de risquer ton compte financé.", text: "Simule ta stratégie, mesure son espérance et son drawdown, puis décide avec des chiffres plutôt qu'avec une impression.", bullets: ["Capital et risque composés", "Espérance en R", "Drawdown maximal simulé"], color: "#4F8CFF" },
+    { icon: Brain, label: "Coach IA", eyebrow: "COMPRENDS TES PATTERNS", title: "Tes données racontent une histoire. L'IA t'aide à la lire.", text: "Le coach analyse ton processus et transforme tes trades en actions concrètes, sans donner de signaux ni prédire le marché.", bullets: ["Analyse comportementale", "Questions sur tes performances", "Plan d'action personnalisé"], color: "#FF4FD8" },
+    { icon: Banknote, label: "Payouts", eyebrow: "PENSE LONG TERME", title: "Ne cherche plus seulement à gagner. Apprends à durer.", text: "Visualise tes étapes vers le prochain payout tout en conservant un coussin de sécurité adapté aux règles de tes comptes.", bullets: ["Suivi des retraits", "Projection du prochain payout", "Vue consolidée multi-comptes"], color: "#FFB855" },
+  ];
   useEffect(() => {
     const h = (e) => { setMx((e.clientX / window.innerWidth - 0.5) * 18); setMy((e.clientY / window.innerHeight - 0.5) * 18); };
     window.addEventListener("mousemove", h);
@@ -57,15 +65,15 @@ export default function Landing() {
               <span className="w-1.5 h-1.5 rounded-full bg-[#00E676] pulse-glow shrink-0" /> Now in Beta · Join 2,400+ funded traders
             </motion.div>
             <motion.h1 custom={1} variants={fade} className="text-4xl sm:text-6xl lg:text-7xl font-bold leading-[1.08] sm:leading-[1.02] tracking-tight">
-              <span className="text-gradient">Protect Funded Accounts.</span><br className="hidden sm:block" />{" "}
-              <span className="text-purple-grad">Maximize Payouts.</span>
+              <span className="text-gradient">Protège tes comptes financés.</span><br className="hidden sm:block" />{" "}
+              <span className="text-purple-grad">Transforme tes trades en progrès.</span>
             </motion.h1>
             <motion.p custom={2} variants={fade} className="text-base sm:text-lg text-[#9CA3AF] max-w-md mx-auto lg:mx-0 leading-relaxed">
-              The Operating System For Funded Traders.
+              PipsEvo révèle ce qui renforce ta performance, ce qui fragilise ta discipline et ce qui te rapproche réellement d'un payout.
             </motion.p>
             <motion.div custom={3} variants={fade} className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
-              <Link to="/register" className="btn-primary inline-flex items-center justify-center gap-2 text-base w-full sm:w-auto" data-testid="hero-cta-start">Start Free <ArrowRight className="w-4 h-4"/></Link>
-              <a href="#how" className="btn-ghost inline-flex items-center justify-center gap-2 text-base w-full sm:w-auto" data-testid="hero-cta-demo"><Play className="w-4 h-4 fill-white"/> Watch Demo</a>
+              <Link to="/register" className="btn-primary inline-flex items-center justify-center gap-2 text-base w-full sm:w-auto" data-testid="hero-cta-start">Commencer gratuitement <ArrowRight className="w-4 h-4"/></Link>
+              <a href="#story" className="btn-ghost inline-flex items-center justify-center gap-2 text-base w-full sm:w-auto" data-testid="hero-cta-demo"><Play className="w-4 h-4 fill-white"/> Découvrir PipsEvo</a>
             </motion.div>
             <motion.div custom={4} variants={fade} className="pt-4 sm:pt-6">
               <div className="text-[11px] font-mono uppercase tracking-widest text-[#6B7280] mb-3">Trusted by traders at</div>
@@ -204,6 +212,45 @@ export default function Landing() {
             <div className="absolute right-10 -top-4 floaty-slow"><Candle color="pink" height={110} rot={8} /></div>
             <div className="absolute right-0 bottom-4 floaty"><Candle color="purple" height={70} rot={-6} /></div>
           </div>
+        </div>
+      </section>
+
+      {/* STORYTELLING PRODUIT */}
+      <section id="story" className="px-5 sm:px-6 lg:px-10 pb-16 sm:pb-24">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center max-w-4xl mx-auto mb-10 sm:mb-14">
+            <div className="text-[11px] font-mono uppercase tracking-[0.3em] text-[#B58BFF] mb-4">DE LA PRESSION À LA MAÎTRISE</div>
+            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold leading-tight text-gradient">Comprends ce qui te fait dévier.<br/><span className="text-purple-grad">Renforce ce qui te fait durer.</span></h2>
+            <p className="text-[#9CA3AF] mt-5 max-w-2xl mx-auto">Un compte financé ne se protège pas avec plus de trades, mais avec de meilleures décisions répétées.</p>
+          </div>
+
+          <div className="flex gap-2 sm:gap-4 overflow-x-auto pb-4 justify-start lg:justify-center scrollbar-thin">
+            {stories.map((story, i) => <button key={story.label} onClick={()=>setActiveStory(i)} className={`min-w-[110px] sm:min-w-[140px] rounded-2xl px-4 py-4 flex flex-col items-center gap-2 border transition-all ${activeStory===i?"bg-white/[0.06] border-[#7C4DFF]/50":"border-transparent text-[#6B7280] hover:text-white"}`}>
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{background:activeStory===i?`${story.color}25`:"rgba(255,255,255,.03)"}}><story.icon className="w-5 h-5" style={{color:activeStory===i?story.color:"#6B7280"}}/></div>
+              <span className="text-xs font-medium whitespace-nowrap">{story.label}</span>
+            </button>)}
+          </div>
+
+          <motion.div key={activeStory} initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:.45}} className="mt-6 card-elev overflow-hidden grid lg:grid-cols-2 min-h-[460px]">
+            <div className="p-7 sm:p-12 lg:p-16 flex flex-col justify-center">
+              <div className="text-[10px] font-mono uppercase tracking-[0.25em]" style={{color:stories[activeStory].color}}>{stories[activeStory].eyebrow}</div>
+              <h3 className="text-3xl sm:text-4xl font-bold leading-tight mt-4">{stories[activeStory].title}</h3>
+              <p className="text-[#9CA3AF] mt-5 leading-relaxed">{stories[activeStory].text}</p>
+              <div className="space-y-3 mt-7">{stories[activeStory].bullets.map(x=><div key={x} className="flex items-center gap-3 text-sm text-[#B5BBC9]"><Check className="w-4 h-4 shrink-0" style={{color:stories[activeStory].color}}/>{x}</div>)}</div>
+              <Link to="/register" className="btn-primary inline-flex self-start items-center gap-2 mt-8">Commencer mon suivi <ArrowRight className="w-4 h-4"/></Link>
+            </div>
+            <div className="relative p-6 sm:p-10 flex items-center justify-center overflow-hidden bg-[#080912]">
+              <div className="absolute inset-0 opacity-30" style={{background:`radial-gradient(circle at 50% 50%, ${stories[activeStory].color}55, transparent 65%)`}}/>
+              <div className="relative w-full max-w-lg card-flat p-5 sm:p-7 shadow-2xl">
+                <div className="flex items-center justify-between"><div className="text-sm font-semibold">PipsEvo · {stories[activeStory].label}</div><span className="w-2 h-2 rounded-full" style={{background:stories[activeStory].color,boxShadow:`0 0 14px ${stories[activeStory].color}`}}/></div>
+                <div className="grid grid-cols-3 gap-3 mt-6">
+                  {["Discipline","Survie","Payout"].map((x,i)=><div key={x} className="bg-[#0A0C14] border border-white/5 rounded-xl p-3"><div className="text-[9px] text-[#6B7280]">{x}</div><div className="text-lg font-bold font-mono mt-1" style={{color:i===activeStory%3?stories[activeStory].color:"white"}}>{[94,87,62][i]}<span className="text-[9px] text-[#6B7280]">%</span></div></div>)}
+                </div>
+                <div className="mt-4 bg-[#0A0C14] border border-white/5 rounded-xl p-4"><div className="text-[10px] text-[#6B7280]">Progression sur 30 jours</div><svg viewBox="0 0 320 100" className="w-full h-32 mt-2"><path d="M0 86 C35 80 48 62 78 69 S120 46 155 52 S205 28 242 34 S286 13 320 8" fill="none" stroke={stories[activeStory].color} strokeWidth="3"/><path d="M0 86 C35 80 48 62 78 69 S120 46 155 52 S205 28 242 34 S286 13 320 8 L320 100 L0 100Z" fill={`${stories[activeStory].color}18`}/></svg></div>
+                <div className="mt-4 flex items-center gap-3 p-3 rounded-xl border border-white/5 bg-white/[0.02]"><Target className="w-5 h-5" style={{color:stories[activeStory].color}}/><div><div className="text-xs font-semibold">Action recommandée</div><div className="text-[10px] text-[#9CA3AF] mt-1">Respecte ton plan sur les 5 prochains trades.</div></div></div>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </section>
 
