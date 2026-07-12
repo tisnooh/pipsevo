@@ -10,6 +10,14 @@ const fade = {
   show: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.7, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] } }),
 };
 
+const propFirmLogos = [
+  { name: "Topstep", src: "https://cdn.prod.website-files.com/69e902b0a74d3d99a517f56d/6a299fdfbdc3a918fdf4b3ff_topstep_logo-white.webp", alt: "Topstep" },
+  { name: "Apex Trader Funding", src: "https://apextraderfunding.com/app/plugins/apex-features/assets/src/images/apex-logo-light.svg", alt: "Apex Trader Funding" },
+  { name: "FTMO", src: "https://ftmo-frontend-prod.storage.googleapis.com/wp-content/uploads/2025/10/03131016/logo-light.png", alt: "FTMO" },
+  { name: "FundedNext", src: "https://fundednext.com/images/fundednext-logo-white.png", alt: "FundedNext" },
+  { name: "The5ers", src: "https://wp.the5ers.com/wp-content/uploads/2026/03/press-kit-logo-1.png", alt: "The5ers" },
+];
+
 export default function Landing() {
   const [mx, setMx] = useState(0);
   const [my, setMy] = useState(0);
@@ -77,12 +85,18 @@ export default function Landing() {
             </motion.div>
             <motion.div custom={4} variants={fade} className="pt-4 sm:pt-6">
               <div className="text-[11px] font-mono uppercase tracking-widest text-[#6B7280] mb-3">Trusted by traders at</div>
-              <div className="flex items-center justify-center lg:justify-start gap-x-5 gap-y-2 flex-wrap opacity-70">
-                <span className="text-xs sm:text-sm font-bold tracking-wider text-[#B5BBC9]">TOPSTEP</span>
-                <span className="text-xs sm:text-sm font-bold tracking-wider text-[#B5BBC9]">▲ APEX</span>
-                <span className="text-xs sm:text-sm font-bold tracking-wider text-[#B5BBC9]">◆ FTMO</span>
-                <span className="text-xs sm:text-sm font-bold tracking-wider text-[#B5BBC9]">◇ FUNDEDNEXT</span>
-                <span className="text-xs sm:text-sm font-bold tracking-wider text-[#B5BBC9]">THE5ERS</span>
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-7 gap-y-5 min-h-7">
+                {propFirmLogos.map((firm) => (
+                  <img
+                    key={firm.name}
+                    src={firm.src}
+                    alt={firm.alt}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                    className="h-[22px] sm:h-6 w-auto max-w-[118px] object-contain grayscale brightness-125 opacity-55 transition-opacity duration-200 hover:opacity-100"
+                  />
+                ))}
               </div>
             </motion.div>
           </motion.div>
