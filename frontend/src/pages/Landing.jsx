@@ -280,7 +280,7 @@ export default function Landing() {
       <footer className="border-t border-white/5 py-8 sm:py-10 px-5 sm:px-6 lg:px-10 text-sm text-[#9CA3AF]">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 text-center sm:text-left">
           <Logo />
-          <div className="flex flex-wrap justify-center gap-4"><Link to="/faq">FAQ</Link><Link to="/contact">Contact</Link><Link to="/pricing">Tarifs</Link><Link to="/privacy">Confidentialité</Link><Link to="/terms">Conditions</Link></div>
+          <div className="flex flex-wrap justify-center gap-4"><Link to="/help">Aide</Link><Link to="/contact">Contact</Link><Link to="/platforms">Plateformes</Link><Link to="/blog">Blog</Link><Link to="/faq">FAQ</Link><Link to="/affiliate">Partenaires</Link><Link to="/privacy">Confidentialité</Link><Link to="/terms">Conditions</Link></div>
           <div>© 2026 PipsEvo · The Operating System for Funded Traders.</div>
         </div>
       </footer>
