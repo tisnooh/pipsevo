@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, Play, Check, Shield, BookOpen, Activity, Brain, Banknote, User, Building2, TrendingUp, Trophy, FlaskConical, Target } from "lucide-react";
@@ -295,6 +295,9 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* TRADINGVIEW CONNECTÉ */}
+      <TradingViewSection />
+
       {/* HISTOIRES PRODUIT ALTERNÉES */}
       <section className="px-5 sm:px-6 lg:px-10 pb-16 sm:pb-24">
         <div className="max-w-7xl mx-auto space-y-20 sm:space-y-28">
@@ -398,6 +401,73 @@ export default function Landing() {
     </div>
   );
 }
+
+const tvMarkets = [
+  { label: "EUR/USD", symbol: "OANDA:EURUSD" },
+  { label: "Or", symbol: "OANDA:XAUUSD" },
+  { label: "Nasdaq", symbol: "NASDAQ:NDX" },
+  { label: "S&P 500", symbol: "SP:SPX" },
+  { label: "Bitcoin", symbol: "BINANCE:BTCUSDT" },
+];
+
+const TradingViewSection = () => {
+  const [market, setMarket] = useState(tvMarkets[0]);
+  const [interval, setInterval] = useState("60");
+  return <section className="px-5 sm:px-6 lg:px-10 pb-16 sm:pb-24">
+    <div className="max-w-7xl mx-auto">
+      <div className="text-center max-w-4xl mx-auto mb-9 sm:mb-12">
+        <div className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#B58BFF]">GRAPHIQUE DE MARCHÉ CONNECTÉ</div>
+        <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold leading-tight mt-4">Analyse le contexte.<br/><span className="text-purple-grad">Documente ensuite ta décision.</span></h2>
+        <p className="text-[#9CA3AF] mt-5 max-w-2xl mx-auto">Consulte un graphique TradingView directement dans PipsEvo, puis transforme ton observation en donnée de journal exploitable.</p>
+      </div>
+      <div className="card-elev p-3 sm:p-5 lg:p-6 glow-purple">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
+          <div className="flex gap-2 overflow-x-auto pb-1">{tvMarkets.map(x=><button key={x.symbol} onClick={()=>setMarket(x)} className={`px-3.5 py-2 rounded-xl text-xs whitespace-nowrap border transition ${market.symbol===x.symbol?"bg-[#7C4DFF]/20 border-[#7C4DFF]/50 text-white":"border-white/5 text-[#9CA3AF] hover:text-white"}`}>{x.label}</button>)}</div>
+          <div className="flex items-center gap-2"><span className="text-[10px] text-[#6B7280] font-mono uppercase">Unité</span>{[["15","15m"],["60","1h"],["240","4h"],["D","1j"]].map(([v,l])=><button key={v} onClick={()=>setInterval(v)} className={`px-3 py-1.5 rounded-lg text-xs ${interval===v?"bg-white/10 text-white":"text-[#6B7280] hover:text-white"}`}>{l}</button>)}</div>
+        </div>
+        <div className="h-[420px] sm:h-[520px] lg:h-[620px] rounded-xl overflow-hidden border border-white/10 bg-[#131722]">
+          <TradingViewChart symbol={market.symbol} interval={interval}/>
+        </div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4 px-1"><p className="text-[10px] text-[#6B7280]">Données et graphique fournis par TradingView. PipsEvo ne fournit aucun signal ni conseil d'investissement.</p><Link to="/register" className="text-xs text-[#B58BFF] whitespace-nowrap">Créer mon journal →</Link></div>
+      </div>
+    </div>
+  </section>;
+};
+
+const TradingViewChart = ({ symbol, interval }) => {
+  const container = useRef(null);
+  useEffect(() => {
+    if (!container.current) return;
+    container.current.innerHTML = '<div class="tradingview-widget-container__widget" style="height:calc(100% - 28px);width:100%"></div><div class="tradingview-widget-copyright" style="height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#6B7280"><a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank" style="color:#8B9DC3">Graphique</a>&nbsp;par TradingView</div>';
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+    script.type = "text/javascript";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      autosize: true,
+      symbol,
+      interval,
+      timezone: "Europe/Paris",
+      theme: "dark",
+      style: "1",
+      locale: "fr",
+      backgroundColor: "#131722",
+      gridColor: "rgba(255,255,255,0.04)",
+      allow_symbol_change: true,
+      hide_side_toolbar: false,
+      hide_top_toolbar: false,
+      hide_legend: false,
+      hide_volume: false,
+      save_image: true,
+      calendar: false,
+      withdateranges: true,
+      support_host: "https://www.tradingview.com",
+    });
+    container.current.appendChild(script);
+    return () => { if (container.current) container.current.innerHTML = ""; };
+  }, [symbol, interval]);
+  return <div ref={container} className="tradingview-widget-container h-full w-full" />;
+};
 
 const StoryChapter = ({ side, eyebrow, title, text, bullets, color }) => (
   <motion.div initial={{opacity:0,y:35}} whileInView={{opacity:1,y:0}} viewport={{once:true,amount:.2}} transition={{duration:.7}} className="grid lg:grid-cols-2 gap-8 lg:gap-14 items-center">
