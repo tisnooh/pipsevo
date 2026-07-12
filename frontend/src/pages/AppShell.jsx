@@ -162,7 +162,7 @@ export default function AppShell() {
       </aside>
 
       {/* MAIN — décalé de 256px uniquement à partir de md (768px), pleine largeur sinon */}
-      <div className="md:ml-64 w-full min-w-0 overflow-x-hidden">
+      <div className="w-full min-w-0 overflow-x-hidden md:ml-64 md:w-[calc(100%-16rem)]">
         <TopBar user={user} onMenuClick={() => setMobileOpen(true)} />
         <Outlet />
       </div>
