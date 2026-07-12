@@ -4,16 +4,31 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { onboarding } from "@/lib/api";
 import { Logo } from "@/components/Logo";
-import { TrendingUp, Bitcoin, BarChart3, LineChart, Fuel, Zap, ArrowRight, ArrowLeft } from "lucide-react";
+import { TrendingUp, Bitcoin, BarChart3, LineChart, Fuel, ArrowRight, ArrowLeft, Check } from "lucide-react";
 
-const FIRMS = ["Topstep", "Apex", "FTMO", "FundedNext", "The5ers", "Take Profit Trader"];
-const ASSETS = [
-  { k: "forex", l: "Forex", I: () => <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center font-bold text-white" style={{ background: "linear-gradient(135deg,#7C4DFF,#4F8CFF)" }}>$€</div> },
-  { k: "crypto", l: "Crypto", I: () => <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center font-bold text-white" style={{ background: "linear-gradient(135deg,#F7931A,#FFB855)" }}>₿</div> },
-  { k: "stocks", l: "Actions", I: () => <div className="w-12 h-12 rounded-xl mx-auto flex items-center justify-center bg-black/40 border border-[#00E676]/40"><TrendingUp className="w-5 h-5 text-[#00E676]" /></div> },
-  { k: "indices", l: "Indices", I: () => <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center text-[10px] font-bold text-white text-center leading-tight" style={{ background: "linear-gradient(135deg,#7C4DFF,#5A2DFF)" }}>S&P<br/>500</div> },
-  { k: "commodities", l: "Matières premières", I: () => <div className="w-12 h-12 rounded-xl mx-auto flex items-center justify-center bg-[#3A4250]"><Fuel className="w-5 h-5 text-[#FFB855]" /></div> },
-  { k: "futures", l: "Futures", I: () => <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center font-bold text-white text-lg" style={{ background: "linear-gradient(135deg,#7C4DFF,#4F8CFF)" }}>X</div> },
+const ASSET_GROUPS = {
+  cfd: [
+    { id: "forex", name: "Forex", description: "Paires de devises", icon: LineChart, color: "#7C4DFF" },
+    { id: "indices_cfd", name: "Indices CFD", description: "DAX, Nasdaq, S&P 500…", icon: BarChart3, color: "#4F8CFF" },
+    { id: "commodities_cfd", name: "Matières premières CFD", description: "Or, argent, pétrole…", icon: Fuel, color: "#FFB855" },
+    { id: "stocks_cfd", name: "Actions CFD", description: "Actions internationales", icon: TrendingUp, color: "#00E676" },
+    { id: "crypto_cfd", name: "Crypto CFD", description: "Bitcoin, Ether et autres", icon: Bitcoin, color: "#F7931A" },
+  ],
+  futures: [
+    { id: "indices_futures", name: "Indices Futures", description: "ES, NQ, YM, RTY…", icon: BarChart3, color: "#4F8CFF" },
+    { id: "commodities_futures", name: "Matières premières Futures", description: "CL, GC, SI, NG…", icon: Fuel, color: "#FFB855" },
+    { id: "fx_futures", name: "Devises Futures", description: "6E, 6B, 6J, micro FX…", icon: LineChart, color: "#B58BFF" },
+    { id: "crypto_futures", name: "Crypto Futures", description: "Micro Bitcoin et Micro Ether", icon: Bitcoin, color: "#F7931A" },
+  ],
+};
+
+const PROP_FIRMS = [
+  { id: "topstep", name: "Topstep", markets: ["futures"] },
+  { id: "apex", name: "Apex Trader Funding", markets: ["futures"] },
+  { id: "take-profit-trader", name: "Take Profit Trader", markets: ["futures"] },
+  { id: "ftmo", name: "FTMO", markets: ["cfd"] },
+  { id: "the5ers", name: "The5ers", markets: ["cfd"] },
+  { id: "fundednext", name: "FundedNext", markets: ["futures", "cfd"] },
 ];
 
 export default function Onboarding() {
@@ -28,6 +43,16 @@ export default function Onboarding() {
   const [loading, setLoading] = useState(false);
 
   const toggle = (arr, set, v) => set(arr.includes(v) ? arr.filter(x=>x!==v) : [...arr, v]);
+  const marketKeys = (type) => type === "both" ? ["cfd", "futures"] : [type];
+  const selectTraderType = (type) => {
+    const allowedMarkets = marketKeys(type);
+    const allowedAssets = allowedMarkets.flatMap(m => ASSET_GROUPS[m].map(a => a.id));
+    const allowedFirms = PROP_FIRMS.filter(f => f.markets.some(m => allowedMarkets.includes(m))).map(f => f.name);
+    setTraderType(type);
+    setAssets(current => current.filter(id => allowedAssets.includes(id)));
+    setFirms(current => current.filter(name => allowedFirms.includes(name)));
+  };
+  const canContinue = step === 1 || (step === 2 && assets.length > 0) || (step === 3 && firms.length > 0) || (step === 4 && Number(numAccounts) >= 1);
 
   const finish = async () => {
     setLoading(true);
@@ -59,7 +84,7 @@ export default function Onboarding() {
               <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Que trades-tu ?</h2>
               <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-5 sm:mt-7">
                 {[{k:"futures",l:"Futures"},{k:"cfd",l:"CFD / Forex"},{k:"both",l:"Les deux"}].map(o => (
-                  <button key={o.k} onClick={()=>setTraderType(o.k)} data-testid={`onb-trader-${o.k}`} className={`card-flat p-3 sm:p-6 text-center sm:text-left transition-all ${traderType===o.k?"border-[#7C4DFF] glow-purple":"hover:border-white/20"}`}>
+                  <button key={o.k} onClick={()=>selectTraderType(o.k)} data-testid={`onb-trader-${o.k}`} className={`card-flat p-3 sm:p-6 text-center sm:text-left transition-all ${traderType===o.k?"border-[#7C4DFF] glow-purple":"hover:border-white/20"}`}>
                     <div className="font-semibold text-xs sm:text-lg leading-snug break-words">{o.l}</div>
                   </button>
                 ))}
@@ -70,14 +95,9 @@ export default function Onboarding() {
           {step === 2 && (
             <div className="mt-3">
               <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Quels actifs trades-tu ?</h2>
-              <p className="text-[#9CA3AF] text-sm mt-2">Sélectionne tous ceux qui s'appliquent.</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-5 sm:mt-7">
-                {ASSETS.map(a => (
-                  <button key={a.k} onClick={()=>toggle(assets, setAssets, a.k)} data-testid={`onb-asset-${a.k}`} className={`card-flat p-5 text-center transition-all ${assets.includes(a.k)?"border-[#7C4DFF] glow-purple":"hover:border-white/20"}`}>
-                    <a.I />
-                    <div className="text-sm mt-3">{a.l}</div>
-                  </button>
-                ))}
+              <p className="text-[#9CA3AF] text-sm mt-2">Les produits affichés correspondent à ton choix de marché.</p>
+              <div className="space-y-7 mt-6">
+                {marketKeys(traderType).map(market => <AssetSection key={market} market={market} assets={assets} onToggle={(id)=>toggle(assets,setAssets,id)} showTitle={traderType === "both"}/>) }
               </div>
             </div>
           )}
@@ -85,13 +105,9 @@ export default function Onboarding() {
           {step === 3 && (
             <div className="mt-3">
               <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Quelles prop firms ?</h2>
-              <p className="text-[#9CA3AF] text-sm mt-2">Sélectionne tes prop firms.</p>
-              <div className="grid grid-cols-2 gap-3 mt-5 sm:mt-7">
-                {FIRMS.map(f => (
-                  <button key={f} onClick={()=>toggle(firms, setFirms, f)} data-testid={`onb-firm-${f}`} className={`card-flat p-4 text-left transition-all ${firms.includes(f)?"border-[#7C4DFF] glow-purple":"hover:border-white/20"}`}>
-                    {f}
-                  </button>
-                ))}
+              <p className="text-[#9CA3AF] text-sm mt-2">Seules les firmes compatibles avec {traderType === "both" ? "tes deux marchés" : traderType === "futures" ? "les Futures" : "les CFD / Forex"} sont proposées.</p>
+              <div className="space-y-7 mt-6">
+                {marketKeys(traderType).map(market => <FirmSection key={market} market={market} selected={firms} onToggle={(name)=>toggle(firms,setFirms,name)} showTitle={traderType === "both"}/>) }
               </div>
             </div>
           )}
@@ -118,7 +134,7 @@ export default function Onboarding() {
           <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-3 mt-8 sm:mt-10 pt-6 border-t border-white/[0.06]">
             <button onClick={()=>setStep(s=>Math.max(1,s-1))} disabled={step===1} className="btn-ghost inline-flex items-center justify-center gap-2 disabled:opacity-30 text-sm py-2.5"><ArrowLeft className="w-4 h-4"/> Retour</button>
             {step < 5 ? (
-              <button onClick={()=>setStep(s=>s+1)} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5" data-testid="onb-next">Continuer <ArrowRight className="w-4 h-4"/></button>
+              <button onClick={()=>setStep(s=>s+1)} disabled={!canContinue} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed" data-testid="onb-next">Continuer <ArrowRight className="w-4 h-4"/></button>
             ) : (
               <button onClick={finish} disabled={loading} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5" data-testid="onb-finish">{loading?"Sauvegarde…":(<>Entrer dans PipsEvo <ArrowRight className="w-4 h-4"/></>)}</button>
             )}
@@ -129,6 +145,43 @@ export default function Onboarding() {
     </div>
   );
 }
+
+const SectionTitle = ({ market }) => (
+  <div className="flex items-center gap-3 mb-3">
+    <span className={`w-2 h-2 rounded-full ${market === "futures" ? "bg-[#4F8CFF]" : "bg-[#B58BFF]"}`} />
+    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#B5BBC9]">{market === "futures" ? "Futures" : "CFD / Forex"}</div>
+    <div className="h-px flex-1 bg-white/[0.07]" />
+  </div>
+);
+
+const AssetSection = ({ market, assets, onToggle, showTitle }) => (
+  <section>
+    {showTitle && <SectionTitle market={market}/>} 
+    <div className="grid sm:grid-cols-2 gap-3">
+      {ASSET_GROUPS[market].map(asset => {
+        const selected = assets.includes(asset.id); const Icon = asset.icon;
+        return <button key={asset.id} onClick={()=>onToggle(asset.id)} data-testid={`onb-asset-${asset.id}`} className={`relative text-left rounded-2xl border p-4 transition-all ${selected ? "border-[#7C4DFF]/70 bg-[#7C4DFF]/10 shadow-[0_10px_35px_rgba(124,77,255,.12)]" : "border-white/[0.07] bg-white/[0.025] hover:border-white/20"}`}>
+          <div className="flex items-center gap-3"><span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{background:`${asset.color}18`}}><Icon className="w-5 h-5" style={{color:asset.color}}/></span><div className="min-w-0"><div className="font-semibold text-sm">{asset.name}</div><div className="text-[10px] text-[#6B7280] mt-1">{asset.description}</div></div></div>
+          {selected && <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#7C4DFF] flex items-center justify-center"><Check className="w-3 h-3"/></span>}
+        </button>;
+      })}
+    </div>
+  </section>
+);
+
+const FirmSection = ({ market, selected, onToggle, showTitle }) => {
+  const firms = PROP_FIRMS.filter(f => f.markets.includes(market));
+  return <section>
+    {showTitle && <SectionTitle market={market}/>} 
+    <div className="grid sm:grid-cols-2 gap-3">{firms.map(firm => {
+      const active = selected.includes(firm.name);
+      return <button key={`${market}-${firm.id}`} onClick={()=>onToggle(firm.name)} data-testid={`onb-firm-${firm.id}-${market}`} className={`relative text-left rounded-2xl border p-4 transition-all ${active ? "border-[#7C4DFF]/70 bg-[#7C4DFF]/10" : "border-white/[0.07] bg-white/[0.025] hover:border-white/20"}`}>
+        <div className="font-semibold text-sm pr-8">{firm.name}</div><div className="flex gap-1.5 mt-2">{firm.markets.map(m=><span key={m} className={`text-[9px] px-2 py-0.5 rounded-full border ${m === "futures" ? "text-[#8FB4FF] border-[#4F8CFF]/30 bg-[#4F8CFF]/10" : "text-[#B58BFF] border-[#7C4DFF]/30 bg-[#7C4DFF]/10"}`}>{m === "futures" ? "Futures" : "CFD / Forex"}</span>)}</div>
+        {active && <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#7C4DFF] flex items-center justify-center"><Check className="w-3 h-3"/></span>}
+      </button>;
+    })}</div>
+  </section>;
+};
 
 const Field = ({ label, value, onChange, testid }) => (
   <div>
