@@ -193,6 +193,12 @@ input:focus, select:focus, textarea:focus { outline: none; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
+html, body, #root {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
 /* Logo bracket icon */
 .logo-mark {
   display: inline-flex;

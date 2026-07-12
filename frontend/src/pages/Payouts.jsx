@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { payouts, accounts as accAPI, dashboard } from "@/lib/api";
 import { toast } from "sonner";
 import { Plus, Banknote, Calendar, TrendingUp } from "lucide-react";
@@ -12,12 +12,14 @@ export default function Payouts() {
   const [form, setForm] = useState({ account_id: "", amount: 1000, date: today, note: "" });
   const [sim, setSim] = useState({ daily: 200, days: 20, target: 5000 });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const [p, a, d] = await Promise.all([payouts.list(), accAPI.list(), dashboard()]);
     setList(p.data); setAccs(a.data); setKpi(d.data.kpis);
-    if (!form.account_id && a.data.length > 0) setForm(f => ({ ...f, account_id: a.data[0].id }));
-  };
-  useEffect(() => { load(); }, []);
+    if (a.data.length > 0) {
+      setForm(f => f.account_id ? f : ({ ...f, account_id: a.data[0].id }));
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
 
   const create = async (e) => {
     e.preventDefault();

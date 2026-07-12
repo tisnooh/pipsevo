@@ -6,7 +6,7 @@ import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Onboarding from "@/pages/Onboarding";
-import { AppLayout } from "@/components/app/AppLayout";
+import AppShell from "@/pages/AppShell";
 import Dashboard from "@/pages/Dashboard";
 import Accounts from "@/pages/Accounts";
 import { JournalPage } from "@/pages/Journal";
@@ -24,7 +24,7 @@ function Protected() {
   if (loading) return <div className="min-h-screen flex items-center justify-center text-white">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (!user.onboarded) return <Navigate to="/onboarding" replace />;
-  return <AppLayout><Outlet /></AppLayout>;
+  return <AppShell />;
 }
 
 function OnboardingGate({ children }) {
