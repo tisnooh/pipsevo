@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { auth } from "@/lib/api";
+import { toast } from "sonner";
 
 const AuthCtx = createContext(null);
 
@@ -11,6 +12,12 @@ export function AuthProvider({ children }) {
     const t = localStorage.getItem("pipsevo_token");
     if (!t) { setLoading(false); return; }
     auth.me().then(r => setUser(r.data)).catch(() => localStorage.removeItem("pipsevo_token")).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const expire = () => { setUser(null); toast.error("Ta session a expiré. Reconnecte-toi pour continuer."); };
+    window.addEventListener("pipsevo:session-expired", expire);
+    return () => window.removeEventListener("pipsevo:session-expired", expire);
   }, []);
 
   const login = async (email, password) => {

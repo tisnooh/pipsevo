@@ -1,238 +1,49 @@
-import React, { useEffect, useState } from "react";
-import { dashboard } from "@/lib/api";
-import { AreaChart, Area, BarChart, Bar, Cell, PieChart, Pie, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
-import { Sparkles, Crown } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { accounts as accountsAPI, dashboard, trades as tradesAPI } from "@/lib/api";
+import { Area, AreaChart, Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { BarChart3, Download, RefreshCw, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
-import { DEMO_KPIS, DEMO_METRICS, DEMO_EQUITY, DEMO_BEST_ASSETS } from "@/lib/demo";
 
 const TABS = ["Vue d'ensemble","Performance","Trades","Temps","Risques","Comportement"];
+const EMPTY_METRICS = { winrate:0,profit_factor:0,avg_win:0,avg_loss:0,plan_respect_rate:0 };
+const card = "card-elev p-5";
 
 export default function Analytics() {
-  const [d, setD] = useState(null);
-  const [tab, setTab] = useState("Vue d'ensemble");
-  const [period, setPeriod] = useState("30");
-  useEffect(() => { dashboard().then(r => setD(r.data)).catch(()=>{}); }, []);
+  const [data,setData]=useState(null); const [trades,setTrades]=useState([]); const [accounts,setAccounts]=useState([]);
+  const [tab,setTab]=useState(TABS[0]); const [period,setPeriod]=useState("30"); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
+  const load=async()=>{setLoading(true);setError("");try{const[d,t,a]=await Promise.all([dashboard(),tradesAPI.list(),accountsAPI.list()]);setData(d.data);setTrades(t.data);setAccounts(a.data)}catch(e){setError(e.response?.data?.detail||"Impossible de charger les statistiques.")}finally{setLoading(false)}};
+  useEffect(()=>{load()},[]);
+  const filtered=useMemo(()=>{const min=Date.now()-Number(period)*86400000;return trades.filter(t=>!t.date||new Date(t.date).getTime()>=min)},[trades,period]);
+  const stats=useMemo(()=>calculate(filtered,accounts),[filtered,accounts]);
+  const equity=useMemo(()=>{let value=0;return [...filtered].sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(t=>({date:t.date,equity:+(value+=Number(t.pnl||0)).toFixed(2)}))},[filtered]);
+  const download=()=>{if(!filtered.length)return;const keys=["date","instrument","direction","pnl","r","session","setup","plan_respected","account_id"];const esc=v=>`"${String(v??"").replaceAll('"','""')}"`;const csv=[keys.join(","),...filtered.map(t=>keys.map(k=>esc(t[k])).join(","))].join("\n");const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download=`pipsevo-trades-${period}j.csv`;a.click();URL.revokeObjectURL(url)};
+  const metrics=data?.metrics||EMPTY_METRICS;
 
-  const useDemo = !d?.kpis?.total_trades;
-  const m = useDemo ? DEMO_METRICS : (d?.metrics || DEMO_METRICS);
-  const totalProfit = useDemo ? DEMO_KPIS.total_profit : (d?.kpis?.total_profit ?? DEMO_KPIS.total_profit);
-  const totalTrades = useDemo ? DEMO_KPIS.total_trades : (d?.kpis?.total_trades || DEMO_KPIS.total_trades);
-  const equity = (useDemo || !d?.equity_curve?.length) ? DEMO_EQUITY : d.equity_curve;
-  const download = () => {
-    const rows = [["date","equity"], ...equity.map(x=>[x.date,x.equity])];
-    const blob = new Blob([rows.map(r=>r.join(",")).join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob); const a = document.createElement("a");
-    a.href=url; a.download="pipsevo-statistiques.csv"; a.click(); URL.revokeObjectURL(url);
-  };
-
-  return (
-    <div className="p-7 space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Statistiques</h1>
-      </div>
-
-      <div className="flex items-center justify-between border-b border-white/5">
-        <div className="flex gap-6">
-          {TABS.map(t => (
-            <button key={t} onClick={()=>setTab(t)} data-testid={`stat-tab-${t}`} className={`pb-3 text-sm ${tab===t?"text-white border-b-2 border-[#7C4DFF]":"text-[#9CA3AF]"}`}>{t}</button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 pb-2">
-          <select value={period} onChange={e=>setPeriod(e.target.value)} className="card-flat bg-[#0D1020] px-3 py-1.5 text-xs"><option value="7">7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option></select>
-          <button onClick={download} title="Exporter en CSV" className="card-flat px-2 py-1.5 text-xs">⬇</button>
-          <Link to="/app/settings" title="Paramètres" className="card-flat px-2 py-1.5 text-xs">⚙</Link>
-        </div>
-      </div>
-
-      {/* KPI ROW */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <SparkCard label="Profit net" value={`+$${totalProfit.toLocaleString()}`} sub="+ 12.4% vs période précédente" color="#00E676" />
-        <SparkCard label="Taux de réussite" value={`${m.winrate}%`} sub="+ 8% vs période précédente" color="#00E676" />
-        <SparkCard label="Facteur de profit" value={m.profit_factor} sub="Bon" color="#B58BFF" subColor="#B58BFF" />
-        <SparkCard label="Gain moyen" value={`+$${m.avg_win.toFixed(2)}`} sub="" color="#00E676" />
-        <SparkCard label="Perte moyenne" value={`${m.avg_loss.toFixed(2)}`} sub="" color="#FF5252" down />
-        <div className="card-elev p-5 glow-purple">
-          <div className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="w-4 h-4 text-[#B58BFF]"/> Insight IA</div>
-          <p className="text-xs text-[#B5BBC9] mt-3 leading-relaxed">Tu sur-trades les mardis. Ton win rate ce jour-là est 18% plus basse que la moyenne.</p>
-          <Link to="/app/coach" className="block text-center mt-3 text-xs btn-primary py-1.5" data-testid="stat-insight-link">Voir l'analyse complète →</Link>
-        </div>
-      </div>
-
-      {/* Charts row 1 */}
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="card-elev p-5 lg:col-span-2">
-          <div className="flex justify-between items-center">
-            <div className="text-sm font-semibold">Évolution du capital</div>
-            <select value={period} onChange={e=>setPeriod(e.target.value)} className="card-flat bg-[#0D1020] px-2.5 py-1 text-xs"><option value="7">7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option></select>
-          </div>
-          <div className="h-72 mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={equity}>
-                <defs><linearGradient id="cap-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7C4DFF" stopOpacity="0.55"/><stop offset="100%" stopColor="#7C4DFF" stopOpacity="0"/></linearGradient></defs>
-                <XAxis dataKey="date" stroke="#6B7280" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#6B7280" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v)=>`$${(v/1000).toFixed(0)}K`} />
-                <Tooltip contentStyle={{ background: "#0F1117", border: "1px solid #1E2430", borderRadius: 12, fontSize: 12 }} />
-                <Area type="monotone" dataKey="equity" stroke="#B58BFF" strokeWidth={2.2} fill="url(#cap-grad)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="card-elev p-5">
-            <div className="text-sm font-semibold mb-4">Répartition des résultats</div>
-            <div className="flex items-center gap-4">
-              <ResponsiveContainer width={130} height={130}>
-                <PieChart>
-                  <Pie data={[{name:"W",value:m.winrate},{name:"L",value:100-m.winrate}]} dataKey="value" innerRadius={42} outerRadius={60} strokeWidth={0}>
-                    <Cell fill="#00E676"/><Cell fill="#FF5252"/>
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="text-sm space-y-2">
-                <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#00E676]"/>Gagnants <span className="text-[#9CA3AF] ml-2">{Math.round(m.winrate/100*totalTrades)} ({m.winrate}%)</span></div>
-                <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#FF5252]"/>Perdants <span className="text-[#9CA3AF] ml-2">{Math.round((100-m.winrate)/100*totalTrades)} ({100-m.winrate}%)</span></div>
-                <div className="text-2xl font-bold font-mono pt-2">{totalTrades}<div className="text-xs text-[#9CA3AF] font-sans font-normal">Trades</div></div>
-              </div>
-            </div>
-          </div>
-          <div className="card-elev p-5">
-            <div className="text-sm font-semibold mb-3">Meilleurs actifs</div>
-            {DEMO_BEST_ASSETS.map(x => (
-              <div key={x.s} className="flex justify-between py-1.5 text-xs">
-                <span className="text-[#B5BBC9]">{x.s}</span>
-                <span className="font-mono" style={{ color: x.v >= 0 ? "#00E676" : "#FF5252" }}>{x.v>=0?"+":""}${x.v.toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Charts row 2 */}
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="card-elev p-5">
-          <div className="text-sm font-semibold mb-3">Performance par jour <span className="text-[10px] text-[#6B7280]">($)</span></div>
-          <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dayPerf()}>
-                <XAxis dataKey="d" stroke="#6B7280" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#6B7280" fontSize={10} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ background: "#0F1117", border: "1px solid #1E2430", borderRadius: 12 }} />
-                <Bar dataKey="v" radius={[4,4,0,0]}>{dayPerf().map((e,i)=><Cell key={i} fill={e.v >= 0 ? "#00E676" : "#FF5252"}/>)}</Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="card-elev p-5">
-          <div className="text-sm font-semibold">Durée moyenne des trades</div>
-          <div className="text-2xl font-bold font-mono mt-2">1h 42m</div>
-          <div className="text-xs text-[#00E676] mt-1">+8m vs période précédente</div>
-          <div className="h-44 mt-3">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={[{n:"&lt; 5m",v:8},{n:"5m-15m",v:18},{n:"15m-1h",v:28},{n:"1h-4h",v:20},{n:"4h-1j",v:10},{n:"&gt; 1j",v:4}]}>
-                <XAxis dataKey="n" stroke="#6B7280" fontSize={9} tickLine={false} axisLine={false} />
-                <YAxis stroke="#6B7280" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v)=>`${v}%`} />
-                <Bar dataKey="v" radius={[6,6,0,0]} fill="#7C4DFF" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="card-elev p-5">
-          <div className="text-sm font-semibold mb-3">Heures les plus rentables</div>
-          <Heatmap />
-        </div>
-      </div>
-
-      {/* Bottom row */}
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="card-elev p-5 lg:col-span-2">
-          <div className="text-sm font-semibold mb-3">Performance par compte</div>
-          {[
-            { n: "Topstep Combine $100K", v: 8450 },
-            { n: "Apex Trader Funding $50K", v: 3210 },
-            { n: "FTMO $100K", v: 1870 },
-            { n: "FundedNext $25K", v: 980 },
-            { n: "The5ers $50K", v: -270 },
-          ].map(a => (
-            <div key={a.n} className="flex items-center justify-between py-2 border-t border-white/5 first:border-0">
-              <div className="flex items-center gap-2 text-sm"><span className="w-1.5 h-1.5 rounded-full" style={{ background: a.v >= 0 ? "#00E676" : "#FF5252" }} />{a.n}</div>
-              <span className="font-mono text-sm" style={{ color: a.v >= 0 ? "#00E676" : "#FF5252" }}>{a.v>=0?"+":""}${a.v.toLocaleString()}</span>
-            </div>
-          ))}
-        </div>
-        <div className="card-elev p-5 relative overflow-hidden" style={{ background: "linear-gradient(135deg,#7C4DFF22,#4F8CFF15)" }}>
-          <Crown className="absolute -bottom-4 -right-4 w-32 h-32 text-[#7C4DFF]/30" />
-          <div className="text-sm font-semibold">Débloque tout le potentiel</div>
-          <p className="text-xs text-[#B5BBC9] mt-2">Passe à Pro pour accéder à des statistiques avancées et des rapports personnalisés.</p>
-          <Link to="/app/settings" className="btn-primary inline-block mt-4 text-xs py-2" data-testid="stat-pro-cta">Découvrir Pro →</Link>
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="max-w-[1600px] mx-auto p-4 sm:p-7 space-y-5">
+    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4"><div><div className="text-[10px] font-mono uppercase tracking-[.18em] text-[#B58BFF]">Analyse des données réelles</div><h1 className="mt-2 text-2xl sm:text-3xl font-bold">Statistiques</h1><p className="mt-1 text-sm text-[#8B93A3]">Explore uniquement les trades enregistrés dans ton journal.</p></div><div className="flex gap-2"><select value={period} onChange={e=>setPeriod(e.target.value)} className="card-flat bg-[#0D1020] px-3 py-2 text-xs"><option value="7">7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option><option value="3650">Toute la période</option></select><button disabled={!filtered.length} onClick={download} title="Exporter les trades en CSV" className="card-flat px-3 py-2 text-xs disabled:opacity-40"><Download className="w-4 h-4"/></button></div></div>
+    <div className="overflow-x-auto border-b border-white/[0.06]"><div className="flex min-w-max gap-1">{TABS.map(t=><button key={t} onClick={()=>setTab(t)} className={`px-4 py-3 text-sm transition ${tab===t?"text-white border-b-2 border-[#7C4DFF]":"text-[#7E8798] hover:text-white"}`}>{t}</button>)}</div></div>
+    {error&&<div className="rounded-2xl border border-[#FF5252]/25 bg-[#FF5252]/10 p-4 text-sm text-[#FF8A8A] flex justify-between"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 text-xs"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
+    {loading?<div className="grid md:grid-cols-3 gap-4">{Array.from({length:6}).map((_,i)=><div key={i} className="h-36 card-elev animate-pulse"/>)}</div>:!filtered.length?<Empty/>:<>
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3"><Kpi l="Profit net" v={`${stats.pnl>=0?"+":"-"}$${Math.abs(stats.pnl).toLocaleString()}`} c={stats.pnl>=0?"#00E676":"#FF5252"}/><Kpi l="Win rate" v={`${stats.winrate}%`} c="#00E676"/><Kpi l="Profit factor" v={stats.profitFactor.toFixed(2)} c="#B58BFF"/><Kpi l="Gain moyen" v={`$${stats.avgWin.toFixed(2)}`} c="#00E676"/><Kpi l="Perte moyenne" v={`-$${Math.abs(stats.avgLoss).toFixed(2)}`} c="#FF5252"/><Kpi l="Plan respecté" v={`${stats.planRate}%`} c="#4F8CFF"/></div>
+      {tab==="Vue d'ensemble"&&<Overview equity={equity} stats={stats}/>}
+      {tab==="Performance"&&<Performance stats={stats}/>}
+      {tab==="Trades"&&<TradesView trades={filtered}/>}
+      {tab==="Temps"&&<TimeView stats={stats}/>}
+      {tab==="Risques"&&<RiskView stats={stats} dashboardData={data}/>}
+      {tab==="Comportement"&&<BehaviorView stats={stats} metrics={metrics}/>}
+    </>}
+  </div>;
 }
 
-const SparkCard = ({ label, value, sub, color, subColor, down }) => (
-  <div className="card-elev p-5 relative overflow-hidden">
-    <div className="text-sm text-[#9CA3AF]">{label}</div>
-    <div className="text-2xl font-bold font-mono mt-2" style={{ color }}>{value}</div>
-    {sub && <div className="text-xs mt-1" style={{ color: subColor || color }}>{sub}</div>}
-    <svg viewBox="0 0 100 30" className="w-full h-10 mt-2">
-      <defs><linearGradient id={`sk-${label.replace(/\s/g,"")}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity="0.35"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs>
-      {down ? (
-        <>
-          <path d="M0,5 L10,8 L20,6 L30,10 L40,13 L50,11 L60,17 L70,15 L80,20 L90,18 L100,25 L100,30 L0,30 Z" fill={`url(#sk-${label.replace(/\s/g,"")})`}/>
-          <path d="M0,5 L10,8 L20,6 L30,10 L40,13 L50,11 L60,17 L70,15 L80,20 L90,18 L100,25" stroke={color} strokeWidth="1.5" fill="none"/>
-        </>
-      ) : (
-        <>
-          <path d="M0,25 L10,22 L20,24 L30,18 L40,20 L50,14 L60,16 L70,10 L80,12 L90,7 L100,5 L100,30 L0,30 Z" fill={`url(#sk-${label.replace(/\s/g,"")})`}/>
-          <path d="M0,25 L10,22 L20,24 L30,18 L40,20 L50,14 L60,16 L70,10 L80,12 L90,7 L100,5" stroke={color} strokeWidth="1.5" fill="none"/>
-        </>
-      )}
-    </svg>
-  </div>
-);
-
-const Heatmap = () => {
-  const days = ["Lun","Mar","Mer","Jeu","Ven"];
-  const hours = ["00-04h","04-08h","08-12h","12-16h","16-20h","20-00h"];
-  // Predictable demo data
-  const data = hours.map((_, r) => days.map((_, c) => (Math.sin(r*1.7+c*2.3)+1)/2));
-  return (
-    <div>
-      <div className="grid grid-cols-[60px_1fr] gap-1 text-[10px] text-[#6B7280]">
-        <div></div>
-        <div className="grid grid-cols-5 gap-1 text-center mb-1">{days.map(d => <div key={d}>{d}</div>)}</div>
-        {hours.map((h, r) => (
-          <React.Fragment key={h}>
-            <div className="self-center">{h}</div>
-            <div className="grid grid-cols-5 gap-1">
-              {days.map((_, c) => (
-                <div key={c} className="aspect-square rounded" style={{ background: `rgba(124,77,255,${0.15 + data[r][c]*0.8})` }} />
-              ))}
-            </div>
-          </React.Fragment>
-        ))}
-      </div>
-      <div className="h-1.5 mt-3 rounded-full" style={{ background: "linear-gradient(90deg, #1E2430, #7C4DFF)" }} />
-      <div className="flex justify-between text-[9px] text-[#6B7280] mt-1"><span>Moins rentable</span><span>Plus rentable</span></div>
-    </div>
-  );
-};
-
-const dayPerf = () => {
-  const arr = [];
-  const vals = [200,600,300,-400,1100,-200,800,-700,400,900,500,-300,200,-500,700,300,600,-400,500,-100];
-  vals.forEach((v,i) => arr.push({ d: 10+Math.floor(i/3)+" mai", v }));
-  return arr;
-};
-
-const sampleEquity = () => {
-  const arr = [];
-  let v = 1000;
-  const labels = ["10 mai","13 mai","17 mai","20 mai","24 mai","27 mai","31 mai","3 juin","7 juin"];
-  for (let i = 0; i < 30; i++) { v += Math.random()*900+200; arr.push({ date: labels[Math.floor(i/4)] || "", equity: Math.round(v) }); }
-  return arr;
-};
+function calculate(trades,accounts){const wins=trades.filter(t=>Number(t.pnl)>0),losses=trades.filter(t=>Number(t.pnl)<0);const sum=a=>a.reduce((s,t)=>s+Number(t.pnl||0),0);const group=(key)=>Object.values(trades.reduce((o,t)=>{const n=t[key]||"Non renseigné";o[n]??={name:n,pnl:0,trades:0,wins:0};o[n].pnl+=Number(t.pnl||0);o[n].trades++;if(Number(t.pnl)>0)o[n].wins++;return o},{})).sort((a,b)=>b.pnl-a.pnl);const accountPerf=accounts.map(a=>({name:`${a.firm} · ${a.name}`,pnl:Number(a.balance)-Number(a.initial_balance)})).sort((a,b)=>b.pnl-a.pnl);const grossWin=sum(wins),grossLoss=Math.abs(sum(losses));return{pnl:sum(trades),winrate:trades.length?Math.round(wins.length/trades.length*100):0,profitFactor:grossLoss?grossWin/grossLoss:grossWin?grossWin:0,avgWin:wins.length?grossWin/wins.length:0,avgLoss:losses.length?sum(losses)/losses.length:0,planRate:trades.length?Math.round(trades.filter(t=>t.plan_respected).length/trades.length*100):0,avgR:trades.length?trades.reduce((s,t)=>s+Number(t.r||0),0)/trades.length:0,total:trades.length,wins:wins.length,losses:losses.length,assets:group("instrument"),sessions:group("session"),setups:group("setup"),accounts:accountPerf,days:groupByDay(trades)}}
+function groupByDay(trades){const names=["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];return names.map((name,index)=>({name,pnl:trades.filter(t=>new Date(t.date).getDay()===index).reduce((s,t)=>s+Number(t.pnl||0),0)}))}
+const ChartTip={background:"#0F1117",border:"1px solid #252A38",borderRadius:12,fontSize:12};
+const Kpi=({l,v,c})=><div className={card}><div className="text-xs text-[#7E8798]">{l}</div><div className="mt-2 text-xl sm:text-2xl font-bold font-mono" style={{color:c}}>{v}</div></div>;
+const Empty=()=> <div className="card-elev py-16 px-5 text-center"><BarChart3 className="w-8 h-8 mx-auto text-[#6B7280]"/><h2 className="mt-4 font-semibold">Pas encore de statistiques</h2><p className="mt-2 text-sm text-[#7E8798]">Ajoute des trades au journal pour générer des analyses fiables.</p><Link to="/app/journal" className="btn-primary inline-block mt-5">Ouvrir le journal</Link></div>;
+const Overview=({equity,stats})=><div className="grid lg:grid-cols-3 gap-4"><div className={`${card} lg:col-span-2`}><h2 className="text-sm font-semibold">Évolution du P&amp;L</h2><div className="h-72 mt-4"><ResponsiveContainer width="100%" height="100%"><AreaChart data={equity}><defs><linearGradient id="analytics-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#7C4DFF" stopOpacity=".55"/><stop offset="1" stopColor="#7C4DFF" stopOpacity="0"/></linearGradient></defs><XAxis dataKey="date" stroke="#6B7280" fontSize={10}/><YAxis stroke="#6B7280" fontSize={10}/><Tooltip contentStyle={ChartTip}/><Area dataKey="equity" type="monotone" stroke="#B58BFF" fill="url(#analytics-fill)" strokeWidth={2.4}/></AreaChart></ResponsiveContainer></div></div><div className={card}><h2 className="text-sm font-semibold">Résultats</h2><div className="h-48"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{name:"Gagnants",value:stats.wins},{name:"Perdants",value:stats.losses}]} dataKey="value" innerRadius={50} outerRadius={72} strokeWidth={0}><Cell fill="#00E676"/><Cell fill="#FF5252"/></Pie><Tooltip contentStyle={ChartTip}/></PieChart></ResponsiveContainer></div><div className="flex justify-center gap-5 text-xs"><span className="text-[#00E676]">● {stats.wins} gagnants</span><span className="text-[#FF5252]">● {stats.losses} perdants</span></div></div></div>;
+const Performance=({stats})=><div className="grid lg:grid-cols-2 gap-4"><Ranking title="Performance par actif" rows={stats.assets}/><Ranking title="Performance par compte" rows={stats.accounts}/><div className={`${card} lg:col-span-2`}><h2 className="text-sm font-semibold mb-4">Performance par jour de la semaine</h2><div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={stats.days}><XAxis dataKey="name" stroke="#6B7280"/><YAxis stroke="#6B7280"/><Tooltip contentStyle={ChartTip}/><Bar dataKey="pnl" radius={[6,6,0,0]}>{stats.days.map((x,i)=><Cell key={i} fill={x.pnl>=0?"#00E676":"#FF5252"}/>)}</Bar></BarChart></ResponsiveContainer></div></div></div>;
+const Ranking=({title,rows})=><div className={card}><h2 className="text-sm font-semibold mb-3">{title}</h2>{rows.length?rows.slice(0,8).map(x=><div key={x.name} className="flex justify-between gap-3 border-t border-white/[0.05] py-3 first:border-0"><span className="text-sm truncate">{x.name}</span><span className="font-mono text-sm" style={{color:x.pnl>=0?"#00E676":"#FF5252"}}>{x.pnl>=0?"+":"-"}${Math.abs(x.pnl).toLocaleString()}</span></div>):<p className="py-8 text-center text-xs text-[#7E8798]">Aucune donnée</p>}</div>;
+const TradesView=({trades})=><div className={card}><h2 className="text-sm font-semibold mb-3">Trades de la période</h2><div className="overflow-x-auto"><table className="w-full min-w-[620px] text-sm"><thead className="text-[10px] uppercase text-[#6B7280]"><tr><th className="text-left py-3">Date</th><th className="text-left">Instrument</th><th className="text-left">Direction</th><th className="text-right">P&amp;L</th><th className="text-right">R</th><th className="text-left pl-5">Setup</th></tr></thead><tbody>{trades.map(t=><tr key={t.id} className="border-t border-white/[0.06]"><td className="py-3 text-[#8B93A3]">{t.date}</td><td className="font-medium">{t.instrument}</td><td>{t.direction==="long"?"Achat":"Vente"}</td><td className="text-right font-mono" style={{color:t.pnl>=0?"#00E676":"#FF5252"}}>{t.pnl>=0?"+":""}${Number(t.pnl).toFixed(2)}</td><td className="text-right font-mono">{Number(t.r||0).toFixed(2)}R</td><td className="pl-5 text-[#8B93A3]">{t.setup||"—"}</td></tr>)}</tbody></table></div></div>;
+const TimeView=({stats})=><div className="grid lg:grid-cols-2 gap-4"><Ranking title="Performance par session" rows={stats.sessions}/><div className={card}><h2 className="text-sm font-semibold">Lecture de la période</h2><p className="mt-3 text-sm leading-relaxed text-[#8B93A3]">Ta meilleure session est <strong className="text-white">{stats.sessions[0]?.name||"non déterminée"}</strong>. Cette conclusion utilise uniquement les trades de la période sélectionnée.</p></div></div>;
+const RiskView=({stats,dashboardData})=><div className="grid md:grid-cols-3 gap-4"><Kpi l="R moyen" v={`${stats.avgR.toFixed(2)}R`} c={stats.avgR>=0?"#00E676":"#FF5252"}/><Kpi l="Drawdown disponible" v={`$${Number(dashboardData?.kpis?.remaining_drawdown||0).toLocaleString()}`} c="#FFB855"/><Kpi l="Respect du plan" v={`${stats.planRate}%`} c="#B58BFF"/></div>;
+const BehaviorView=({stats})=><div className="grid lg:grid-cols-3 gap-4"><div className="lg:col-span-2"><Ranking title="Performance par setup" rows={stats.setups}/></div><div className={`${card} glow-purple`}><div className="flex gap-2 items-center font-semibold"><Sparkles className="w-4 h-4 text-[#B58BFF]"/>Analyse IA</div><p className="mt-3 text-xs leading-relaxed text-[#8B93A3]">Demande à Atlas d’analyser ces résultats et de proposer un plan comportemental.</p><Link to="/app/coach" className="btn-primary block text-center mt-5 text-xs">Ouvrir l’analyse IA</Link></div></div>;

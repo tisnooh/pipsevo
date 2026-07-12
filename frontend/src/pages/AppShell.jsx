@@ -4,8 +4,6 @@ import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknot
 import { useAuth } from "@/context/AuthContext";
 import { LogoMark } from "@/components/Logo";
 import { dashboard } from "@/lib/api";
-import { billing } from "@/lib/api";
-import { toast } from "sonner";
 
 const links = [
   { to: "/app/dashboard", label: "Aperçu", icon: Home, testid: "nav-dashboard" },
@@ -24,15 +22,24 @@ const links = [
 export default function AppShell() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
-  const [discipline, setDiscipline] = useState(94);
+  const [discipline, setDiscipline] = useState(0);
+  const [summary, setSummary] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    dashboard().then(r => setDiscipline(r.data?.kpis?.discipline_score ?? 94)).catch(() => {});
+    dashboard().then(r => { setDiscipline(r.data?.kpis?.discipline_score ?? 0); setSummary(r.data); }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const applyPreferences = () => { try { const s=JSON.parse(localStorage.getItem("pipsevo_settings"))||{}; document.documentElement.dataset.density=s.compactMode?"compact":"comfortable"; } catch {} };
+    applyPreferences(); window.addEventListener("pipsevo:settings-updated", applyPreferences);
+    return () => window.removeEventListener("pipsevo:settings-updated", applyPreferences);
+  }, []);
+
+  useEffect(() => { const shortcut=e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();setSearchOpen(true)}}; window.addEventListener("keydown",shortcut); return()=>window.removeEventListener("keydown",shortcut); }, []);
 
   // Bloque le scroll du body quand le menu mobile est ouvert
   useEffect(() => {
@@ -49,11 +56,6 @@ export default function AppShell() {
   }, [mobileOpen]);
 
   const closeMobile = () => setMobileOpen(false);
-  const upgrade = async () => {
-    try { const { data } = await billing.checkout("pro"); data.checkout_url ? window.location.assign(data.checkout_url) : toast.info(data.message); }
-    catch { toast.error("Paiement indisponible"); }
-  };
-
   return (
     <div className="min-h-screen bg-[#050505] text-white w-full overflow-x-hidden">
       {/* Backdrop — mobile uniquement, sous la sidebar mais au-dessus du contenu */}
@@ -67,7 +69,7 @@ export default function AppShell() {
       {searchOpen && <div className="fixed inset-0 z-[70] bg-black/70 p-4 flex items-start justify-center pt-[12vh]" onClick={()=>setSearchOpen(false)}>
         <div className="w-full max-w-lg card-elev p-4" onClick={e=>e.stopPropagation()}>
           <input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Rechercher une page…" className="w-full bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3" />
-          <div className="mt-3 space-y-1">{links.filter(l=>l.label.toLowerCase().includes(query.toLowerCase())).map(l=><button key={l.to} onClick={()=>{nav(l.to);setSearchOpen(false);setQuery("")}} className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5">{l.label}</button>)}</div>
+          <div className="mt-3 space-y-1">{links.filter(l=>l.label.toLowerCase().includes(query.toLowerCase())).map(l=><button key={l.to} onClick={()=>{nav(l.to);setSearchOpen(false);setQuery("")}} className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5">{l.label}</button>)}{!links.some(l=>l.label.toLowerCase().includes(query.toLowerCase()))&&<div className="py-8 text-center text-xs text-[#7E8798]">Aucune page trouvée.</div>}</div>
         </div>
       </div>}
 
@@ -144,7 +146,7 @@ export default function AppShell() {
                 </div>
               </div>
             </div>
-            <div className="text-[10px] text-[#00E676]">Excellent</div>
+            <div className={`text-[10px] ${discipline>=80?"text-[#00E676]":discipline>=60?"text-[#FFB855]":"text-[#FF7272]"}`}>{discipline>=80?"Excellent":discipline>=60?"À consolider":discipline?"À améliorer":"En attente"}</div>
             <svg viewBox="0 0 80 18" className="w-full h-4 mt-2">
               <path d="M0,15 L10,12 L20,13 L30,9 L40,10 L50,6 L60,7 L70,3 L80,4" stroke="#7C4DFF" strokeWidth="1.5" fill="none" />
             </svg>
@@ -157,7 +159,7 @@ export default function AppShell() {
             <div className="text-sm font-semibold">Passe à Pro</div>
             <div className="text-[10px] text-[#9CA3AF] mt-1">Plus d'analyses. Plus d'insights.<br />Plus de payouts.</div>
             <button
-              onClick={() => { closeMobile(); upgrade(); }}
+              onClick={() => { closeMobile(); nav("/app/settings"); }}
               className="mt-3 w-full text-xs py-2 rounded-lg bg-gradient-to-r from-[#7C4DFF] to-[#5A2DFF] hover:opacity-90 transition font-semibold"
               data-testid="sidebar-upgrade"
             >
@@ -184,6 +186,7 @@ export default function AppShell() {
           onMenuClick={() => setMobileOpen(true)}
           onSearch={()=>setSearchOpen(true)}
           notificationsOpen={notificationsOpen}
+          notifications={buildNotifications(summary)}
           onNotifications={()=>setNotificationsOpen(v=>!v)}
           onNavigate={(to)=>nav(to)}
           onLogout={()=>{ logout(); window.location.href = "/"; }}
@@ -194,7 +197,7 @@ export default function AppShell() {
   );
 }
 
-function TopBar({ user, onMenuClick, onSearch, notificationsOpen, onNotifications, onNavigate, onLogout }) {
+function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications, onNotifications, onNavigate, onLogout }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
 
@@ -249,8 +252,8 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, onNotification
 
       <div className="relative"><button onClick={onNotifications} className="relative w-9 h-9 shrink-0 rounded-xl hover:bg-white/5 flex items-center justify-center" data-testid="top-notifs">
         <Bell className="w-4 h-4 text-[#9CA3AF]" />
-        <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-[#FF4FD8] rounded-full" />
-      </button>{notificationsOpen && <div className="absolute right-0 top-11 w-72 card-elev p-4 z-50"><div className="text-sm font-semibold">Notifications</div><div className="text-xs text-[#9CA3AF] mt-3">Aucune nouvelle notification.</div></div>}</div>
+        {!!notifications.length && <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-[#FF4FD8] rounded-full" />}
+      </button>{notificationsOpen && <div className="absolute right-0 top-11 w-72 card-elev p-4 z-50"><div className="text-sm font-semibold">Notifications</div>{notifications.length?<div className="mt-3 space-y-2">{notifications.map(n=><button key={n.to+n.text} onClick={()=>{onNavigate(n.to);onNotifications()}} className="w-full rounded-xl border border-white/[0.06] p-3 text-left text-xs text-[#B5BBC9] hover:bg-white/[0.04]">{n.text}</button>)}</div>:<div className="text-xs text-[#9CA3AF] mt-3">Tout est à jour. Aucune alerte active.</div>}</div>}</div>
 
       <div ref={profileRef} className="relative shrink-0">
       <button onClick={()=>setProfileOpen(v=>!v)} aria-expanded={profileOpen} aria-label="Ouvrir le menu du profil" className="flex items-center gap-2 px-2 py-1.5 rounded-xl border border-white/10 bg-[#0D1020] hover:border-[#7C4DFF]/40 transition">
@@ -279,4 +282,13 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, onNotification
       </div>
     </div>
   );
+}
+
+function buildNotifications(summary) {
+  if (!summary) return [];
+  const out = [];
+  if (!summary.kpis?.active_accounts) out.push({ text: "Ajoute ton premier compte pour commencer le suivi.", to: "/app/accounts" });
+  else if (!summary.kpis?.total_trades) out.push({ text: "Journalise ton premier trade pour activer les analyses.", to: "/app/journal" });
+  if (summary.metrics?.plan_respect_rate < 80 && summary.kpis?.total_trades) out.push({ text: `Plan respecté sur ${summary.metrics.plan_respect_rate}% des trades. Consulte ta discipline.`, to: "/app/discipline" });
+  return out;
 }

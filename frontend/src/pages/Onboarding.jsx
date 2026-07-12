@@ -52,7 +52,8 @@ export default function Onboarding() {
     setAssets(current => current.filter(id => allowedAssets.includes(id)));
     setFirms(current => current.filter(name => allowedFirms.includes(name)));
   };
-  const canContinue = step === 1 || (step === 2 && assets.length > 0) || (step === 3 && firms.length > 0) || (step === 4 && Number(numAccounts) >= 1);
+  const canContinue = step === 1 || (step === 2 && assets.length > 0) || (step === 3 && firms.length > 0) || (step === 4 && Number(numAccounts) >= 1 && Number(numAccounts) <= 50);
+  const canFinish = Number(rules.max_trades) >= 1 && Number(rules.daily_loss_limit) > 0 && Number(rules.max_risk_pct) > 0 && Number(rules.max_risk_pct) <= 10 && Number(rules.stop_after_loss) >= 1;
 
   const finish = async () => {
     setLoading(true);
@@ -123,10 +124,10 @@ export default function Onboarding() {
             <div className="mt-3">
               <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Tes règles de trading</h2>
               <div className="grid grid-cols-2 gap-3 sm:gap-4 mt-5 sm:mt-7">
-                <Field label="Max trades / jour" value={rules.max_trades} onChange={(v)=>setRules({...rules,max_trades:+v})} testid="rule-max-trades" />
-                <Field label="Daily loss limit ($)" value={rules.daily_loss_limit} onChange={(v)=>setRules({...rules,daily_loss_limit:+v})} testid="rule-dll" />
-                <Field label="Max risque / trade (%)" value={rules.max_risk_pct} onChange={(v)=>setRules({...rules,max_risk_pct:+v})} testid="rule-risk" />
-                <Field label="Stop après N pertes" value={rules.stop_after_loss} onChange={(v)=>setRules({...rules,stop_after_loss:+v})} testid="rule-stop-loss" />
+                <Field label="Max trades / jour" min="1" max="100" value={rules.max_trades} onChange={(v)=>setRules({...rules,max_trades:+v})} testid="rule-max-trades" />
+                <Field label="Daily loss limit ($)" min="1" value={rules.daily_loss_limit} onChange={(v)=>setRules({...rules,daily_loss_limit:+v})} testid="rule-dll" />
+                <Field label="Max risque / trade (%)" min="0.1" max="10" step="0.1" value={rules.max_risk_pct} onChange={(v)=>setRules({...rules,max_risk_pct:+v})} testid="rule-risk" />
+                <Field label="Stop après N pertes" min="1" max="20" value={rules.stop_after_loss} onChange={(v)=>setRules({...rules,stop_after_loss:+v})} testid="rule-stop-loss" />
               </div>
             </div>
           )}
@@ -136,7 +137,7 @@ export default function Onboarding() {
             {step < 5 ? (
               <button onClick={()=>setStep(s=>s+1)} disabled={!canContinue} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed" data-testid="onb-next">Continuer <ArrowRight className="w-4 h-4"/></button>
             ) : (
-              <button onClick={finish} disabled={loading} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5" data-testid="onb-finish">{loading?"Sauvegarde…":(<>Entrer dans PipsEvo <ArrowRight className="w-4 h-4"/></>)}</button>
+              <button onClick={finish} disabled={loading || !canFinish} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed" data-testid="onb-finish">{loading?"Sauvegarde…":(<>Entrer dans PipsEvo <ArrowRight className="w-4 h-4"/></>)}</button>
             )}
           </div>
           </div>
@@ -183,9 +184,9 @@ const FirmSection = ({ market, selected, onToggle, showTitle }) => {
   </section>;
 };
 
-const Field = ({ label, value, onChange, testid }) => (
+const Field = ({ label, value, onChange, testid, min, max, step }) => (
   <div>
     <label className="text-xs font-mono uppercase text-[#9CA3AF]">{label}</label>
-    <input type="number" value={value} onChange={(e)=>onChange(e.target.value)} data-testid={testid} className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 font-mono outline-none focus:border-[#7C4DFF]" />
+    <input type="number" min={min} max={max} step={step} value={value} onChange={(e)=>onChange(e.target.value)} data-testid={testid} className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 font-mono outline-none focus:border-[#7C4DFF]" />
   </div>
 );

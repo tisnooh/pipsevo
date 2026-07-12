@@ -1,118 +1,72 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { accounts } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Plus, Trash2, Shield, Activity, TrendingUp, Target } from "lucide-react";
+import { Activity, Edit3, Plus, RefreshCw, Shield, Trash2, X } from "lucide-react";
 
-const FIRMS = ["Topstep", "Apex", "FTMO", "FundedNext", "The5ers", "Take Profit Trader"];
+const PROP_FIRMS = [
+  { name: "Topstep", markets: ["futures"] }, { name: "Apex Trader Funding", markets: ["futures"] },
+  { name: "Take Profit Trader", markets: ["futures"] }, { name: "FTMO", markets: ["cfd"] },
+  { name: "The5ers", markets: ["cfd"] }, { name: "FundedNext", markets: ["futures", "cfd"] },
+];
+const blank = { name: "Combine", firm: "", balance: 50000, initial_balance: 50000, profit_target: 3000, max_drawdown: 2000, daily_loss_limit: 1000, status: "active" };
 
 export default function Accounts() {
+  const { user } = useAuth();
   const [list, setList] = useState([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "Combine", firm: "Topstep", balance: 50000, initial_balance: 50000, profit_target: 3000, max_drawdown: 2000 });
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(blank);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState("");
+  const [error, setError] = useState("");
+  const traderType = user?.trader_type || "futures";
+  const availableFirms = useMemo(() => { const markets = traderType === "both" ? ["futures","cfd"] : [traderType]; return PROP_FIRMS.filter(f => f.markets.some(m=>markets.includes(m))); }, [traderType]);
 
-  const load = () => accounts.list().then(r => setList(r.data));
-  useEffect(() => { load(); }, []);
+  const load = useCallback(async () => {
+    setLoading(true); setError("");
+    try { const { data } = await accounts.list(); setList(data); if (new URLSearchParams(window.location.search).get("new")==="1") { setEditing(null); setForm({...blank,firm:availableFirms[0]?.name||""}); setOpen(true); window.history.replaceState({},"","/app/accounts"); } }
+    catch (e) { setError(e.response?.data?.detail || "Impossible de charger les comptes."); }
+    finally { setLoading(false); }
+  }, [availableFirms]);
+  useEffect(() => { load(); }, [load]);
 
-  const create = async (e) => {
-    e.preventDefault();
+  const showCreate = () => {
+    setEditing(null); setForm({...blank, firm: availableFirms[0]?.name || ""}); setOpen(true);
+  };
+  const showEdit = (account) => { setEditing(account); setForm({...account}); setOpen(true); };
+  const close = () => { if (!saving) { setOpen(false); setEditing(null); } };
+  const save = async (e) => {
+    e.preventDefault(); setSaving(true);
+    const payload = Object.fromEntries(Object.entries(form).map(([k,v])=>[["balance","initial_balance","profit_target","max_drawdown","daily_loss_limit"].includes(k) ? k : k, ["balance","initial_balance","profit_target","max_drawdown","daily_loss_limit"].includes(k) ? Number(v) : v]));
+    if (payload.initial_balance <= 0 || payload.max_drawdown <= 0 || payload.profit_target <= 0) { toast.error("Les montants doivent être supérieurs à zéro"); setSaving(false); return; }
     try {
-      await accounts.create({ ...form, balance: +form.balance, initial_balance: +form.initial_balance, profit_target: +form.profit_target, max_drawdown: +form.max_drawdown });
-      toast.success("Compte ajouté");
-      setOpen(false); load();
-    } catch { toast.error("Erreur"); }
+      if (editing) await accounts.update(editing.id, payload); else await accounts.create(payload);
+      toast.success(editing ? "Compte mis à jour" : "Compte ajouté"); setOpen(false); setEditing(null); await load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Impossible d’enregistrer le compte"); }
+    finally { setSaving(false); }
+  };
+  const remove = async (account) => {
+    if (!window.confirm(`Supprimer « ${account.name} » et tous ses trades ? Cette action est définitive.`)) return;
+    setDeleting(account.id);
+    try { await accounts.delete(account.id); toast.success("Compte supprimé"); await load(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Suppression impossible"); }
+    finally { setDeleting(""); }
   };
 
-  const del = async (id) => {
-    if (!window.confirm("Supprimer le compte et ses trades ?")) return;
-    await accounts.delete(id); toast.success("Supprimé"); load();
-  };
-
-  return (
-    <div className="p-4 sm:p-7 space-y-5">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Comptes</h1>
-          <p className="text-sm text-[#9CA3AF] mt-1">Gère tous tes comptes funded en un seul endroit.</p>
-        </div>
-        <button onClick={() => setOpen(true)} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 w-full sm:w-auto" data-testid="add-account-btn"><Plus className="w-4 h-4"/> Ajouter un compte</button>
-      </div>
-
-      {list.length === 0 ? (
-        <div className="card-elev p-16 text-center">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-[#7C4DFF]/20 border border-[#7C4DFF]/30 flex items-center justify-center mb-4"><Plus className="w-6 h-6 text-[#B58BFF]"/></div>
-          <div className="text-lg font-semibold">Ajoute ton premier compte funded</div>
-          <div className="text-sm text-[#9CA3AF] mt-2">Topstep, Apex, FTMO, FundedNext et plus.</div>
-        </div>
-      ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {list.map(a => {
-            const pnl = a.balance - a.initial_balance;
-            const targetPct = Math.min(100, Math.max(0, pnl / a.profit_target * 100));
-            return (
-              <div key={a.id} className="card-elev p-5" data-testid={`account-${a.id}`}>
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <div className="text-[10px] font-mono uppercase tracking-widest text-[#B58BFF]">{a.firm}</div>
-                    <div className="text-lg font-semibold mt-1">{a.name}</div>
-                  </div>
-                  <button onClick={() => del(a.id)} className="text-[#6B7280] hover:text-[#FF5252]"><Trash2 className="w-4 h-4"/></button>
-                </div>
-                <div className="text-3xl font-bold font-mono">${a.balance.toLocaleString()}</div>
-                <div className={`text-xs mt-1 ${pnl>=0?"text-[#00E676]":"text-[#FF5252]"}`}>{pnl>=0?"+":""}${pnl.toLocaleString()} P&L</div>
-
-                <div className="mt-4">
-                  <div className="flex justify-between text-[10px] text-[#9CA3AF] mb-1"><span>Objectif: ${a.profit_target.toLocaleString()}</span><span>{targetPct.toFixed(0)}%</span></div>
-                  <div className="h-1.5 rounded-full bg-white/5 overflow-hidden"><div className="h-full bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF]" style={{ width: `${targetPct}%` }} /></div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 mt-4">
-                  <div className="rounded-lg bg-black/30 border border-white/5 p-3">
-                    <div className="text-[10px] text-[#9CA3AF] flex items-center gap-1 font-mono uppercase"><Shield className="w-3 h-3 text-[#00E676]"/>Health</div>
-                    <div className="font-mono font-bold mt-1">{a.health_score}<span className="text-[10px] text-[#9CA3AF]">/100</span></div>
-                  </div>
-                  <div className="rounded-lg bg-black/30 border border-white/5 p-3">
-                    <div className="text-[10px] text-[#9CA3AF] flex items-center gap-1 font-mono uppercase"><Activity className="w-3 h-3 text-[#4F8CFF]"/>Survival</div>
-                    <div className="font-mono font-bold mt-1">{a.survival_score}<span className="text-[10px] text-[#9CA3AF]">%</span></div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 mt-2 text-[11px]">
-                  <div className="text-[#9CA3AF]">Max DD: <span className="font-mono text-white">${a.max_drawdown.toLocaleString()}</span></div>
-                  <div className="text-[#9CA3AF]">Initial: <span className="font-mono text-white">${a.initial_balance.toLocaleString()}</span></div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {open && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setOpen(false)}>
-          <form onClick={(e) => e.stopPropagation()} onSubmit={create} className="card-elev p-5 sm:p-8 w-full max-w-md space-y-4 glow-purple max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold">Nouveau compte</h2>
-            <Fld label="Nom du compte" value={form.name} onChange={(v)=>setForm({...form,name:v})} testid="acc-name" />
-            <div>
-              <label className="text-xs font-mono uppercase text-[#9CA3AF]">Prop firm</label>
-              <select value={form.firm} onChange={(e)=>setForm({...form,firm:e.target.value})} data-testid="acc-firm" className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#7C4DFF]">
-                {FIRMS.map(f => <option key={f}>{f}</option>)}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Fld label="Solde ($)" type="number" value={form.balance} onChange={(v)=>setForm({...form,balance:v})} testid="acc-balance" />
-              <Fld label="Solde initial ($)" type="number" value={form.initial_balance} onChange={(v)=>setForm({...form,initial_balance:v})} testid="acc-initial" />
-              <Fld label="Profit target" type="number" value={form.profit_target} onChange={(v)=>setForm({...form,profit_target:v})} testid="acc-target" />
-              <Fld label="Max drawdown" type="number" value={form.max_drawdown} onChange={(v)=>setForm({...form,max_drawdown:v})} testid="acc-dd" />
-            </div>
-            <button className="btn-primary w-full" data-testid="acc-submit">Créer le compte</button>
-          </form>
-        </div>
-      )}
-    </div>
-  );
+  return <div className="max-w-[1500px] mx-auto p-4 sm:p-7 space-y-5">
+    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3"><div><div className="text-[10px] font-mono uppercase tracking-[.18em] text-[#B58BFF]">Portefeuille funded</div><h1 className="mt-2 text-2xl sm:text-3xl font-bold">Comptes</h1><p className="text-sm text-[#9CA3AF] mt-1">Gère tes objectifs, ton drawdown et la santé de chaque compte.</p></div><button onClick={showCreate} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 w-full sm:w-auto" data-testid="add-account-btn"><Plus className="w-4 h-4"/>Ajouter un compte</button></div>
+    {error && <div className="rounded-2xl border border-[#FF5252]/25 bg-[#FF5252]/10 p-4 text-sm text-[#FF8A8A] flex justify-between items-center gap-3"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 rounded-lg border border-[#FF5252]/20 px-3 py-2 text-xs"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
+    {loading ? <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">{Array.from({length:3}).map((_,i)=><div key={i} className="h-64 card-elev animate-pulse"/>)}</div> : list.length === 0 ? <div className="card-elev px-5 py-16 text-center"><div className="w-14 h-14 mx-auto rounded-2xl bg-[#7C4DFF]/20 border border-[#7C4DFF]/30 flex items-center justify-center mb-4"><Plus className="w-6 h-6 text-[#B58BFF]"/></div><div className="text-lg font-semibold">Ajoute ton premier compte funded</div><div className="text-sm text-[#9CA3AF] mt-2">La liste proposée correspond à ton profil {user?.trader_type === "cfd" ? "CFD / Forex" : user?.trader_type === "both" ? "Futures et CFD / Forex" : "Futures"}.</div><button onClick={showCreate} className="btn-primary mt-5">Configurer un compte</button></div> :
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{list.map(a => { const pnl=Number(a.balance)-Number(a.initial_balance); const targetPct=Math.min(100,Math.max(0,pnl/Math.max(Number(a.profit_target),1)*100)); const ddUsed=Math.max(0,Number(a.initial_balance)-Number(a.balance)); return <article key={a.id} className="card-elev p-5" data-testid={`account-${a.id}`}>
+        <div className="flex justify-between items-start gap-3"><div><div className="text-[10px] font-mono uppercase tracking-widest text-[#B58BFF]">{a.firm}</div><div className="text-lg font-semibold mt-1">{a.name}</div><span className="inline-flex mt-2 rounded-full bg-[#00E676]/10 px-2 py-1 text-[9px] text-[#00E676]">{a.status === "active" ? "Actif" : a.status}</span></div><div className="flex gap-1"><button onClick={()=>showEdit(a)} aria-label={`Modifier ${a.name}`} className="grid w-8 h-8 place-items-center rounded-lg text-[#7E8798] hover:bg-white/5 hover:text-white"><Edit3 className="w-4 h-4"/></button><button disabled={deleting===a.id} onClick={()=>remove(a)} aria-label={`Supprimer ${a.name}`} className="grid w-8 h-8 place-items-center rounded-lg text-[#7E8798] hover:bg-[#FF5252]/10 hover:text-[#FF5252] disabled:opacity-40"><Trash2 className="w-4 h-4"/></button></div></div>
+        <div className="mt-5 text-3xl font-bold font-mono">${Number(a.balance).toLocaleString()}</div><div className={`text-xs mt-1 ${pnl>=0?"text-[#00E676]":"text-[#FF5252]"}`}>{pnl>=0?"+":"-"}${Math.abs(pnl).toLocaleString()} P&amp;L</div>
+        <div className="mt-5"><div className="flex justify-between text-[10px] text-[#9CA3AF] mb-1.5"><span>Objectif ${Number(a.profit_target).toLocaleString()}</span><span>{targetPct.toFixed(0)}%</span></div><div className="h-2 rounded-full bg-white/5 overflow-hidden"><div className="h-full bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF]" style={{width:`${targetPct}%`}}/></div></div>
+        <div className="grid grid-cols-2 gap-2 mt-4"><Metric icon={Shield} label="Santé" value={`${a.health_score ?? 0}/100`} color="#00E676"/><Metric icon={Activity} label="Survie" value={`${a.survival_score ?? 0}%`} color="#4F8CFF"/></div><div className="mt-3 flex justify-between text-[10px] text-[#7E8798]"><span>Drawdown utilisé</span><span className="font-mono text-white">${ddUsed.toLocaleString()} / ${Number(a.max_drawdown).toLocaleString()}</span></div>
+      </article>})}</div>}
+    {open && <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={close}><form onClick={e=>e.stopPropagation()} onSubmit={save} className="card-elev p-5 sm:p-7 w-full max-w-lg space-y-4 max-h-[92vh] overflow-y-auto"><div className="flex justify-between items-center"><div><h2 className="text-xl font-bold">{editing ? "Modifier le compte" : "Nouveau compte"}</h2><p className="text-xs text-[#7E8798] mt-1">Les montants servent au calcul du risque et des objectifs.</p></div><button type="button" onClick={close} aria-label="Fermer" className="grid w-9 h-9 place-items-center rounded-xl hover:bg-white/5"><X className="w-4 h-4"/></button></div><Fld label="Nom du compte" value={form.name} onChange={v=>setForm({...form,name:v})}/><label className="block text-xs text-[#9CA3AF]">Prop firm<select required value={form.firm} onChange={e=>setForm({...form,firm:e.target.value})} className="w-full mt-2 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#7C4DFF]">{availableFirms.map(f=><option key={f.name} value={f.name}>{f.name}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><Fld label="Solde actuel ($)" type="number" min="0" value={form.balance} onChange={v=>setForm({...form,balance:v})}/><Fld label="Solde initial ($)" type="number" min="1" value={form.initial_balance} onChange={v=>setForm({...form,initial_balance:v})}/><Fld label="Profit target ($)" type="number" min="1" value={form.profit_target} onChange={v=>setForm({...form,profit_target:v})}/><Fld label="Max drawdown ($)" type="number" min="1" value={form.max_drawdown} onChange={v=>setForm({...form,max_drawdown:v})}/><div className="col-span-2"><Fld label="Limite de perte quotidienne ($)" type="number" min="0" value={form.daily_loss_limit || 0} onChange={v=>setForm({...form,daily_loss_limit:v})}/></div></div><div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2"><button type="button" onClick={close} className="btn-ghost">Annuler</button><button disabled={saving} className="btn-primary disabled:opacity-50">{saving ? "Enregistrement…" : editing ? "Enregistrer les modifications" : "Créer le compte"}</button></div></form></div>}
+  </div>;
 }
-
-const Fld = ({ label, value, onChange, type="text", testid }) => (
-  <div>
-    <label className="text-xs font-mono uppercase text-[#9CA3AF]">{label}</label>
-    <input type={type} required value={value} onChange={(e)=>onChange(e.target.value)} data-testid={testid} className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-2.5 font-mono outline-none focus:border-[#7C4DFF]" />
-  </div>
-);
+const Metric=({icon:Icon,label,value,color})=><div className="rounded-xl bg-black/25 border border-white/[0.06] p-3"><div className="text-[9px] text-[#7E8798] uppercase flex items-center gap-1"><Icon className="w-3 h-3" style={{color}}/>{label}</div><div className="font-mono font-bold mt-1">{value}</div></div>;
+const Fld=({label,value,onChange,type="text",min})=><label className="block text-xs text-[#9CA3AF]">{label}<input type={type} min={min} required value={value} onChange={e=>onChange(e.target.value)} className="w-full mt-2 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 font-mono outline-none focus:border-[#7C4DFF]"/></label>;

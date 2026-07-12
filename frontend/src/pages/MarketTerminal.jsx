@@ -1,12 +1,16 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { BarChart3, Calculator, CheckCircle2, ExternalLink, ShieldCheck } from "lucide-react";
 import TradingViewChart from "@/components/TradingViewChart";
+import { useAuth } from "@/context/AuthContext";
 
-const markets=[{label:"EUR/USD",symbol:"OANDA:EURUSD"},{label:"Or",symbol:"OANDA:XAUUSD"},{label:"Nasdaq",symbol:"NASDAQ:NDX"},{label:"S&P 500",symbol:"SP:SPX"},{label:"Bitcoin",symbol:"BINANCE:BTCUSDT"}];
+const MARKET_GROUPS={cfd:[{label:"EUR/USD",symbol:"OANDA:EURUSD"},{label:"Or CFD",symbol:"OANDA:XAUUSD"},{label:"Nasdaq CFD",symbol:"NASDAQ:NDX"},{label:"Bitcoin CFD",symbol:"BINANCE:BTCUSDT"}],futures:[{label:"Nasdaq Futures",symbol:"CME_MINI:NQ1!"},{label:"S&P Futures",symbol:"CME_MINI:ES1!"},{label:"Or Futures",symbol:"COMEX:GC1!"},{label:"Pétrole Futures",symbol:"NYMEX:CL1!"}]};
 export default function MarketTerminal(){
+  const {user}=useAuth(); const markets=useMemo(()=>user?.trader_type==="both"?[...MARKET_GROUPS.futures,...MARKET_GROUPS.cfd]:MARKET_GROUPS[user?.trader_type]||MARKET_GROUPS.futures,[user?.trader_type]);
   const [market,setMarket]=useState(markets[0]); const [interval,setInterval]=useState("60");
   const [calc,setCalc]=useState({capital:50000,risk:1,stop:20,value:10});
-  const [checks,setChecks]=useState([false,false,false,false]);
+  const [checks,setChecks]=useState(()=>{try{return JSON.parse(localStorage.getItem("pipsevo_pretrade_checks"))||[false,false,false,false]}catch{return[false,false,false,false]}});
+  useEffect(()=>{if(!markets.some(m=>m.symbol===market.symbol))setMarket(markets[0])},[markets,market.symbol]);
+  useEffect(()=>{localStorage.setItem("pipsevo_pretrade_checks",JSON.stringify(checks))},[checks]);
   const riskAmount=useMemo(()=>+calc.capital*(+calc.risk/100),[calc]);
   const lots=useMemo(()=>riskAmount/Math.max(0.01,+calc.stop*+calc.value),[riskAmount,calc]);
   const toggle=i=>setChecks(c=>c.map((x,n)=>n===i?!x:x));

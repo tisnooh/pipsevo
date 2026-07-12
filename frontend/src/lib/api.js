@@ -11,6 +11,17 @@ api.interceptors.request.use((cfg) => {
   return cfg;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && localStorage.getItem("pipsevo_token")) {
+      localStorage.removeItem("pipsevo_token");
+      window.dispatchEvent(new Event("pipsevo:session-expired"));
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const auth = {
   register: (data) => api.post("/auth/register", data),
   login: (data) => api.post("/auth/login", data),
@@ -21,18 +32,21 @@ export const auth = {
 export const accounts = {
   list: () => api.get("/accounts"),
   create: (data) => api.post("/accounts", data),
+  update: (id, data) => api.patch(`/accounts/${id}`, data),
   delete: (id) => api.delete(`/accounts/${id}`),
 };
 
 export const trades = {
   list: (account_id) => api.get("/trades", { params: account_id ? { account_id } : {} }),
   create: (data) => api.post("/trades", data),
+  update: (id, data) => api.patch(`/trades/${id}`, data),
   delete: (id) => api.delete(`/trades/${id}`),
 };
 
 export const payouts = {
   list: () => api.get("/payouts"),
   create: (data) => api.post("/payouts", data),
+  delete: (id) => api.delete(`/payouts/${id}`),
 };
 
 export const dashboard = () => api.get("/dashboard");

@@ -66,6 +66,9 @@ html, body, #root {
 }
 
 body { background: radial-gradient(ellipse at top, #0A0A1A 0%, #050505 60%); font-size: 16px; }
+html[data-density="compact"] table th,
+html[data-density="compact"] table td { padding-top: .55rem; padding-bottom: .55rem; }
+html[data-density="compact"] .card-elev { --pipsevo-density: compact; }
 button, input, select, textarea { font: inherit; letter-spacing: inherit; }
 h1, h2, h3, h4 { letter-spacing: -0.03em; text-wrap: balance; }
 p { text-wrap: pretty; }

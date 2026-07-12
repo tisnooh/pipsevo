@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Star, MoreHorizontal, Edit2, Trash2, Camera, Plus } from "lucide-react"
+import { Star, Edit2, Trash2, Camera, Plus } from "lucide-react"
 import { AreaChart, Area, ResponsiveContainer } from "recharts"
 import { trades as tradesAPI, accounts as accAPI } from "@/lib/api"
 import { toast } from "sonner"
@@ -11,8 +11,6 @@ const miniChartData = [
   { t: 7, v: 1.0815 }, { t: 8, v: 1.0812 },
 ]
 
-const FIRMS = ["Topstep", "Apex", "FTMO", "FundedNext", "The5ers", "Take Profit Trader"]
-
 export function JournalPage() {
   const [tradeList, setTradeList] = useState([])
   const [accounts, setAccounts] = useState([])
@@ -21,13 +19,15 @@ export function JournalPage() {
   const [activeFilter, setActiveFilter] = useState("Tous les trades")
   const [loading, setLoading] = useState(true)
   const [openForm, setOpenForm] = useState(false)
+  const [editingTrade, setEditingTrade] = useState(null)
+  const [saving, setSaving] = useState(false)
   const [accountFilter, setAccountFilter] = useState("")
   const [days, setDays] = useState("30")
   const [form, setForm] = useState({
     instrument: "", direction: "long", pnl: "", r: "",
     account_id: "", date: new Date().toISOString().slice(0, 10),
     session: "", setup: "", emotion: "", plan_respected: true,
-    entry: "", exit: "", stop_loss: "", take_profit: "", size: "1",
+    entry: "", exit_price: "", stop: "", take_profit: "", size: "1",
     notes: "", duration: ""
   })
 
@@ -47,22 +47,43 @@ export function JournalPage() {
 
   const createTrade = async (e) => {
     e.preventDefault()
+    setSaving(true)
+    const nullableNumber = (value) => value === "" || value === null || value === undefined ? null : Number(value)
     try {
-      await tradesAPI.create({
+      const payload = {
         ...form,
-        pnl: parseFloat(form.pnl),
-        r: parseFloat(form.r) || 0,
-        entry: parseFloat(form.entry) || 0,
-        exit: parseFloat(form.exit) || 0,
-        stop_loss: parseFloat(form.stop_loss) || 0,
-        take_profit: parseFloat(form.take_profit) || 0,
-        size: parseFloat(form.size) || 1,
+        pnl: Number(form.pnl), r: nullableNumber(form.r) || 0,
+        entry: nullableNumber(form.entry) || 0, exit_price: nullableNumber(form.exit_price),
+        stop: nullableNumber(form.stop), take_profit: nullableNumber(form.take_profit),
+        size: nullableNumber(form.size) || 1,
         tags: form.setup ? [form.setup] : [],
-      })
-      toast.success("Trade ajouté")
+      }
+      if (editingTrade) await tradesAPI.update(editingTrade.id, payload); else await tradesAPI.create(payload)
+      toast.success(editingTrade ? "Trade mis à jour" : "Trade ajouté")
       setOpenForm(false)
+      setEditingTrade(null)
       load()
-    } catch { toast.error("Erreur") }
+    } catch (e) { toast.error(e.response?.data?.detail || "Impossible d’enregistrer le trade") }
+    finally { setSaving(false) }
+  }
+
+  const openNewTrade = () => {
+    if (!accounts.length) { toast.error("Ajoute d’abord un compte de trading"); return }
+    setEditingTrade(null)
+    setForm({ instrument:"",direction:"long",pnl:"",r:"",account_id:accounts[0].id,date:new Date().toISOString().slice(0,10),session:"",setup:"",emotion:"",plan_respected:true,entry:"",exit_price:"",stop:"",take_profit:"",size:"1",notes:"",duration:"" })
+    setOpenForm(true)
+  }
+
+  const openEditTrade = (trade) => {
+    setEditingTrade(trade)
+    setForm({ instrument:trade.instrument||"",direction:trade.direction||"long",pnl:trade.pnl??"",r:trade.r??"",account_id:trade.account_id||accounts[0]?.id||"",date:trade.date||new Date().toISOString().slice(0,10),session:trade.session||"",setup:trade.setup||"",emotion:trade.emotion||"",plan_respected:trade.plan_respected!==false,entry:trade.entry??"",exit_price:trade.exit_price??"",stop:trade.stop??"",take_profit:trade.take_profit??"",size:trade.size??"1",notes:trade.notes||"",duration:trade.duration||"" })
+    setOpenForm(true)
+  }
+
+  const toggleFavorite = async (trade, e) => {
+    e?.stopPropagation()
+    try { const { data } = await tradesAPI.update(trade.id, { starred: !trade.starred }); setTradeList(list=>list.map(t=>t.id===trade.id?data:t)); if (selectedTrade?.id===trade.id) setSelectedTrade(data) }
+    catch { toast.error("Impossible de modifier le favori") }
   }
 
   const deleteTrade = async (id) => {
@@ -99,20 +120,20 @@ export function JournalPage() {
   const filtered = activeFilter === "Tous les trades" || activeFilter === "Tous"
     ? byAccountAndDate
     : activeFilter === "Positions ouvertes"
-    ? byAccountAndDate.filter(t => !t.exit)
+    ? byAccountAndDate.filter(t => t.exit_price === null || t.exit_price === undefined)
     : byAccountAndDate.filter(t => t.starred)
 
   // KPIs calculés depuis les vraies données
-  const wins = normalized.filter(t => t.win)
-  const losses = normalized.filter(t => !t.win)
-  const totalPnl = normalized.reduce((s, t) => s + (t.pnl || 0), 0)
-  const winRate = normalized.length ? Math.round((wins.length / normalized.length) * 100) : 0
+  const wins = filtered.filter(t => t.win)
+  const losses = filtered.filter(t => !t.win)
+  const totalPnl = filtered.reduce((s, t) => s + (t.pnl || 0), 0)
+  const winRate = filtered.length ? Math.round((wins.length / filtered.length) * 100) : 0
   const avgWin = wins.length ? wins.reduce((s, t) => s + (t.pnl || 0), 0) / wins.length : 0
   const avgLoss = losses.length ? losses.reduce((s, t) => s + (t.pnl || 0), 0) / losses.length : 0
-  const avgR = normalized.length ? normalized.reduce((s, t) => s + (t.r || 0), 0) / normalized.length : 0
+  const avgR = filtered.length ? filtered.reduce((s, t) => s + (t.r || 0), 0) / filtered.length : 0
 
   const kpis = [
-    { label: "Trades", value: normalized.length.toString(), sub: "", icon: "📊", color: "#4F8CFF" },
+    { label: "Trades", value: filtered.length.toString(), sub: "", icon: "📊", color: "#4F8CFF" },
     { label: "Win Rate", value: `${winRate}%`, sub: "", icon: "🎯", color: "#00E676" },
     { label: "Profit net", value: `${totalPnl >= 0 ? "+" : ""}$${Math.abs(totalPnl).toFixed(2)}`, sub: "", icon: "📈", color: totalPnl >= 0 ? "#00E676" : "#FF5252" },
     { label: "Gain moyen", value: `+$${avgWin.toFixed(2)}`, sub: "", icon: "⬆️", color: "#00E676" },
@@ -137,7 +158,7 @@ export function JournalPage() {
             <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF]"><option value="">Tous les comptes</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
             <select value={days} onChange={e=>setDays(e.target.value)} className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF]"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option><option value="3650">Toute la période</option></select>
             <button
-              onClick={() => setOpenForm(true)}
+              onClick={openNewTrade}
               className="px-4 py-1.5 rounded-lg text-xs font-medium text-white flex items-center gap-1.5"
               style={{ background: "linear-gradient(135deg, #7C4DFF, #4F8CFF)" }}
             >
@@ -182,7 +203,7 @@ export function JournalPage() {
           <div className="rounded-xl border border-[#1E2430] bg-[#0F1117] p-8 sm:p-16 text-center">
             <div className="text-[#9CA3AF] text-sm mb-4">Pas encore de trades — ajoute ton premier trade !</div>
             <button
-              onClick={() => setOpenForm(true)}
+              onClick={openNewTrade}
               className="px-6 py-2.5 rounded-xl text-sm font-medium text-white"
               style={{ background: "linear-gradient(135deg, #7C4DFF, #4F8CFF)" }}
             >
@@ -220,7 +241,7 @@ export function JournalPage() {
                 }`}
                 style={{ gridTemplateColumns: "2rem 2fr 1fr 1.5fr 1fr 0.8fr 1fr 1.5fr 1fr 2rem" }}
               >
-                <Star className="w-3.5 h-3.5 text-[#1E2430] hover:text-yellow-400 transition-colors" />
+                <button aria-label={trade.starred?"Retirer des favoris":"Ajouter aux favoris"} onClick={(e)=>toggleFavorite(trade,e)}><Star className={`w-3.5 h-3.5 transition-colors ${trade.starred ? "text-yellow-400 fill-yellow-400" : "text-[#374151] hover:text-yellow-400"}`}/></button>
                 <span className="text-[#9CA3AF] text-[10px]">{trade.dateLabel}</span>
                 <span className="text-white font-medium">{trade.asset}</span>
                 <span className={trade.win ? "text-[#00E676]" : "text-[#FF5252]"}>{trade.direction}</span>
@@ -267,10 +288,10 @@ export function JournalPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button className="p-1 text-[#9CA3AF] hover:text-[#FF5252]" onClick={() => deleteTrade(selectedTrade.id)}>
+                  <button className="p-1 text-[#9CA3AF] hover:text-white" aria-label="Modifier ce trade" onClick={() => openEditTrade(selectedTrade)}><Edit2 className="w-3.5 h-3.5"/></button>
+                  <button className="p-1 text-[#9CA3AF] hover:text-[#FF5252]" aria-label="Supprimer ce trade" onClick={() => deleteTrade(selectedTrade.id)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={()=>toast.info("Toutes les informations du trade sont affichées ci-dessous")} className="p-1 text-[#9CA3AF] hover:text-white"><MoreHorizontal className="w-3.5 h-3.5" /></button>
                 </div>
               </div>
 
@@ -309,8 +330,8 @@ export function JournalPage() {
                       ["Actif", t.asset],
                       ["Compte", t.account],
                       ["Entrée", selectedTrade.entry || "—"],
-                      ["Sortie", selectedTrade.exit || "—"],
-                      ["Stop Loss", selectedTrade.stop_loss || "—"],
+                      ["Sortie", selectedTrade.exit_price ?? "—"],
+                      ["Stop Loss", selectedTrade.stop ?? "—"],
                       ["Take Profit", selectedTrade.take_profit || "—"],
                       ["R Multiple", t.rLabel],
                       ["Résultat", t.result],
@@ -351,21 +372,7 @@ export function JournalPage() {
                     </div>
                   </div>
 
-                  {/* Screenshots */}
-                  <div className="mb-4">
-                    <p className="text-[10px] font-medium text-[#9CA3AF] mb-2">Captures d'écran</p>
-                    <div className="grid grid-cols-4 gap-1">
-                      {["Before Entry", "During Trade", "After Exit"].map((label) => (
-                        <div key={label} className="aspect-square bg-[#0F1117] rounded-lg border border-[#1E2430] flex flex-col items-center justify-center text-center p-1 cursor-pointer hover:border-[#7C4DFF]/50 transition-all">
-                          <Camera className="w-3 h-3 text-[#9CA3AF]" />
-                          <span className="text-[7px] text-[#9CA3AF] mt-0.5">{label}</span>
-                        </div>
-                      ))}
-                      <div className="aspect-square bg-[#0F1117] rounded-lg border border-dashed border-[#1E2430] flex items-center justify-center cursor-pointer hover:border-[#7C4DFF]/50 transition-all">
-                        <Plus className="w-4 h-4 text-[#9CA3AF]" />
-                      </div>
-                    </div>
-                  </div>
+                  <div className="mb-4"><p className="text-[10px] font-medium text-[#9CA3AF] mb-2">Captures d'écran</p>{selectedTrade.screenshots?.length?<div className="grid grid-cols-3 gap-2">{selectedTrade.screenshots.map((src,i)=><img key={src+i} src={src} alt={`Capture ${i+1}`} className="aspect-square rounded-lg border border-[#1E2430] object-cover"/>)}</div>:<div className="rounded-lg border border-dashed border-[#1E2430] p-3 text-center text-[10px] text-[#6B7280]"><Camera className="w-4 h-4 mx-auto mb-1"/>Aucune capture jointe. L’import d’images n’est pas disponible dans cette version.</div>}</div>
                 </div>
               )}
 
@@ -413,7 +420,7 @@ export function JournalPage() {
             onSubmit={createTrade}
             className="rounded-xl border border-[#1E2430] bg-[#0A0C14] p-4 sm:p-6 w-full max-w-lg space-y-4 max-h-[90vh] overflow-y-auto"
           >
-            <h2 className="text-xl font-bold text-white">Nouveau trade</h2>
+            <h2 className="text-xl font-bold text-white">{editingTrade ? "Modifier le trade" : "Nouveau trade"}</h2>
 
             <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
               <Fld label="Instrument" value={form.instrument} onChange={(v) => setForm({ ...form, instrument: v })} placeholder="EURUSD" required />
@@ -430,8 +437,8 @@ export function JournalPage() {
               <Fld label="Date" type="date" value={form.date} onChange={(v) => setForm({ ...form, date: v })} required />
               <Fld label="Durée" value={form.duration} onChange={(v) => setForm({ ...form, duration: v })} placeholder="2h 15m" />
               <Fld label="Entrée" type="number" value={form.entry} onChange={(v) => setForm({ ...form, entry: v })} placeholder="1.07845" />
-              <Fld label="Sortie" type="number" value={form.exit} onChange={(v) => setForm({ ...form, exit: v })} placeholder="1.08123" />
-              <Fld label="Stop Loss" type="number" value={form.stop_loss} onChange={(v) => setForm({ ...form, stop_loss: v })} placeholder="1.07610" />
+              <Fld label="Sortie" type="number" value={form.exit_price} onChange={(v) => setForm({ ...form, exit_price: v })} placeholder="1.08123" />
+              <Fld label="Stop Loss" type="number" value={form.stop} onChange={(v) => setForm({ ...form, stop: v })} placeholder="1.07610" />
               <Fld label="Take Profit" type="number" value={form.take_profit} onChange={(v) => setForm({ ...form, take_profit: v })} placeholder="1.08250" />
             </div>
 
@@ -462,14 +469,14 @@ export function JournalPage() {
             </div>
 
             <div className="flex gap-3">
-              <button type="button" onClick={() => setOpenForm(false)}
+              <button type="button" disabled={saving} onClick={() => {setOpenForm(false);setEditingTrade(null)}}
                 className="flex-1 py-2.5 rounded-xl text-xs font-medium border border-[#1E2430] text-[#9CA3AF] hover:border-[#7C4DFF]/50 transition-all">
                 Annuler
               </button>
-              <button type="submit"
+              <button type="submit" disabled={saving || !form.account_id}
                 className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-white transition-all"
                 style={{ background: "linear-gradient(135deg, #7C4DFF, #4F8CFF)" }}>
-                Ajouter le trade
+                {saving ? "Enregistrement…" : editingTrade ? "Enregistrer" : "Ajouter le trade"}
               </button>
             </div>
           </form>

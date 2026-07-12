@@ -106,6 +106,17 @@ class PropAccountIn(BaseModel):
     status: Optional[str] = "active"
 
 
+class PropAccountUpdate(BaseModel):
+    name: Optional[str] = None
+    firm: Optional[str] = None
+    balance: Optional[float] = None
+    initial_balance: Optional[float] = None
+    profit_target: Optional[float] = None
+    max_drawdown: Optional[float] = None
+    daily_loss_limit: Optional[float] = None
+    status: Optional[str] = None
+
+
 class TradeIn(BaseModel):
     account_id: str
     date: str
@@ -126,6 +137,29 @@ class TradeIn(BaseModel):
     size: float = 1
     duration: Optional[str] = None
     tags: List[str] = []
+
+
+class TradeUpdate(BaseModel):
+    account_id: Optional[str] = None
+    date: Optional[str] = None
+    instrument: Optional[str] = None
+    direction: Optional[str] = None
+    entry: Optional[float] = None
+    stop: Optional[float] = None
+    take_profit: Optional[float] = None
+    exit_price: Optional[float] = None
+    pnl: Optional[float] = None
+    setup: Optional[str] = None
+    session: Optional[str] = None
+    emotion: Optional[str] = None
+    notes: Optional[str] = None
+    plan_respected: Optional[bool] = None
+    screenshots: Optional[List[str]] = None
+    r: Optional[float] = None
+    size: Optional[float] = None
+    duration: Optional[str] = None
+    tags: Optional[List[str]] = None
+    starred: Optional[bool] = None
 
 
 class PayoutIn(BaseModel):
@@ -256,6 +290,21 @@ async def delete_account(aid: str, user=Depends(get_current_user)):
     return {"ok": True}
 
 
+@api.patch("/accounts/{aid}")
+async def update_account(aid: str, body: PropAccountUpdate, user=Depends(get_current_user)):
+    account = await db.accounts.find_one({"id": aid, "user_id": user["id"]})
+    if not account:
+        raise HTTPException(404, "Account not found")
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(400, "No changes supplied")
+    await db.accounts.update_one({"id": aid, "user_id": user["id"]}, {"$set": updates})
+    updated = await db.accounts.find_one({"id": aid, "user_id": user["id"]}, {"_id": 0})
+    updated["health_score"] = compute_health(updated)
+    updated["survival_score"] = compute_survival(updated)
+    return updated
+
+
 def compute_health(acc: Dict[str, Any]) -> int:
     ib = max(acc.get("initial_balance", 1), 1)
     bal = acc.get("balance", ib)
@@ -312,6 +361,32 @@ async def delete_trade(tid: str, user=Depends(get_current_user)):
         )
         await db.trades.delete_one({"id": tid, "user_id": user["id"]})
     return {"ok": True}
+
+
+@api.patch("/trades/{tid}")
+async def update_trade(tid: str, body: TradeUpdate, user=Depends(get_current_user)):
+    trade = await db.trades.find_one({"id": tid, "user_id": user["id"]})
+    if not trade:
+        raise HTTPException(404, "Trade not found")
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(400, "No changes supplied")
+    new_account_id = updates.get("account_id", trade["account_id"])
+    if new_account_id != trade["account_id"]:
+        target = await db.accounts.find_one({"id": new_account_id, "user_id": user["id"]})
+        if not target:
+            raise HTTPException(404, "Target account not found")
+    old_pnl = float(trade.get("pnl", 0))
+    new_pnl = float(updates.get("pnl", old_pnl))
+    if new_account_id == trade["account_id"]:
+        delta = new_pnl - old_pnl
+        if delta:
+            await db.accounts.update_one({"id": trade["account_id"], "user_id": user["id"]}, {"$inc": {"balance": delta}})
+    else:
+        await db.accounts.update_one({"id": trade["account_id"], "user_id": user["id"]}, {"$inc": {"balance": -old_pnl}})
+        await db.accounts.update_one({"id": new_account_id, "user_id": user["id"]}, {"$inc": {"balance": new_pnl}})
+    await db.trades.update_one({"id": tid, "user_id": user["id"]}, {"$set": updates})
+    return await db.trades.find_one({"id": tid, "user_id": user["id"]}, {"_id": 0})
 
 
 # ============= ANALYTICS / DASHBOARD =============
@@ -423,6 +498,14 @@ async def create_payout(body: PayoutIn, user=Depends(get_current_user)):
     await db.payouts.insert_one(p)
     p.pop("_id", None)
     return p
+
+
+@api.delete("/payouts/{pid}")
+async def delete_payout(pid: str, user=Depends(get_current_user)):
+    result = await db.payouts.delete_one({"id": pid, "user_id": user["id"]})
+    if not result.deleted_count:
+        raise HTTPException(404, "Payout not found")
+    return {"ok": True}
 
 
 # ============= AI COACH (Claude Sonnet 4.5) =============

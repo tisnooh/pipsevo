@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { coach } from "@/lib/api";
+import { coach, dashboard } from "@/lib/api";
 import { toast } from "sonner";
 import { Sparkles, Send, Brain, AlertTriangle, Target, Clock, Shield, Trophy } from "lucide-react";
 
@@ -12,20 +12,21 @@ const PRESETS = [
   "Quel est mon coût d'overtrading ?",
 ];
 
-const INSIGHTS = [
-  { I: AlertTriangle, t: "Biggest mistake", d: "Overtrading sur news days", c: "#FF5252" },
-  { I: Trophy, t: "Best setup", d: "London FVG — 71% WR", c: "#00E676" },
-  { I: Clock, t: "Worst session", d: "Asia — -0.3R en moyenne", c: "#FF5252" },
-  { I: Shield, t: "Discipline warning", d: "3 violations cette semaine", c: "#FFB855" },
-  { I: Target, t: "Payout recommendation", d: "Cap trades à 3/jour", c: "#B58BFF" },
-];
-
 export default function AICoach() {
   const [q, setQ] = useState("");
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const [initialLoading, setInitialLoading] = useState(true);
 
-  useEffect(() => { coach.history().then(r => setHistory(r.data)).catch(()=>{}); }, []);
+  useEffect(() => { Promise.all([coach.history(),dashboard()]).then(([h,d])=>{setHistory(h.data);setSummary(d.data)}).catch(()=>toast.error("Impossible de charger l’analyse")).finally(()=>setInitialLoading(false)); }, []);
+  const insights = summary?.kpis?.total_trades ? [
+    { I: AlertTriangle, t: "Respect du plan", d: `${summary.metrics.plan_respect_rate}% des trades respectent le plan`, c: summary.metrics.plan_respect_rate>=80?"#00E676":"#FFB855" },
+    { I: Trophy, t: "Meilleur setup", d: summary.best_setup || "Pas encore déterminé", c: "#00E676" },
+    { I: Clock, t: "Setup à surveiller", d: summary.worst_setup || "Pas encore déterminé", c: "#FF5252" },
+    { I: Shield, t: "Score discipline", d: `${summary.kpis.discipline_score}/100`, c: "#FFB855" },
+    { I: Target, t: "Trades analysés", d: `${summary.kpis.total_trades} trades réels`, c: "#B58BFF" },
+  ] : [];
 
   const ask = async (text) => {
     const question = text || q;
@@ -45,7 +46,7 @@ export default function AICoach() {
         <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] flex items-center justify-center glow-purple"><Brain className="w-5 h-5"/></div>
         <div>
           <h1 className="text-3xl font-bold">Analyse IA</h1>
-          <p className="text-sm text-[#9CA3AF] mt-0.5">Discute avec Atlas — Claude Sonnet 4.5, analyse comportementale uniquement.</p>
+          <p className="text-sm text-[#9CA3AF] mt-0.5">Discute avec Atlas, ton coach d’analyse comportementale. Aucun signal de trading.</p>
         </div>
       </div>
 
@@ -59,15 +60,15 @@ export default function AICoach() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-3">
-        {INSIGHTS.map(i => (
+      {initialLoading ? <div className="grid md:grid-cols-5 gap-3">{Array.from({length:5}).map((_,i)=><div key={i} className="h-28 card-flat animate-pulse"/>)}</div> : insights.length ? <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-3">
+        {insights.map(i => (
           <div key={i.t} className="card-flat p-4">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: `${i.c}22` }}><i.I className="w-4 h-4" style={{ color: i.c }}/></div>
             <div className="text-xs font-semibold">{i.t}</div>
             <div className="text-xs text-[#9CA3AF] mt-1">{i.d}</div>
           </div>
         ))}
-      </div>
+      </div> : <div className="rounded-2xl border border-dashed border-white/10 p-5 text-center text-xs text-[#7E8798]">Les cartes d’insight apparaîtront après l’ajout de tes premiers trades.</div>}
 
       <div className="space-y-3">
         {history.length === 0 && !loading && (

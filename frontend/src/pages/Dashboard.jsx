@@ -2,10 +2,12 @@ import React, { useEffect, useState } from "react";
 import { dashboard, trades, accounts as accAPI } from "@/lib/api";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Plus, TrendingUp, Shield, Wallet, Target, ArrowDownRight, Sparkles, Calendar, BarChart3 } from "lucide-react";
+import { Plus, TrendingUp, Shield, Target, ArrowDownRight, Sparkles, Calendar, BarChart3, RefreshCw } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
-import { DEMO_TRADES, DEMO_ACCOUNTS, DEMO_KPIS, DEMO_METRICS, DEMO_EQUITY, isEmpty } from "@/lib/demo";
 import { useAuth } from "@/context/AuthContext";
+
+const EMPTY_KPIS = { funded_capital: 0, total_profit: 0, remaining_drawdown: 0, estimated_payout: 0, discipline_score: 0, trader_score: 0, total_payouts: 0, active_accounts: 0, total_trades: 0 };
+const EMPTY_METRICS = { winrate: 0, profit_factor: 0, avg_win: 0, avg_loss: 0, plan_respect_rate: 0 };
 
 const kpiColors = {
   green: { stroke: "#00E676", id: "g-green" },
@@ -57,26 +59,39 @@ export default function Dashboard() {
   const [period, setPeriod] = useState("30");
   const [accountFilter, setAccountFilter] = useState("");
   const [assetFilter, setAssetFilter] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    dashboard().then(r => setD(r.data)).catch(()=>{});
-    trades.list().then(r => setRecent(r.data)).catch(()=>{});
-    accAPI.list().then(r => setAccs(r.data)).catch(()=>{});
-  }, []);
+  const load = async () => {
+    setLoading(true); setError("");
+    try {
+      const [dashResponse, tradeResponse, accountResponse] = await Promise.all([dashboard(), trades.list(), accAPI.list()]);
+      setD(dashResponse.data); setRecent(tradeResponse.data); setAccs(accountResponse.data);
+    } catch (e) { setError(e.response?.data?.detail || "Impossible de charger le tableau de bord."); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
 
-  // Fallback to demo data if real data is empty
-  const useDemo = isEmpty(recent) && isEmpty(accs);
-  const k = useDemo ? DEMO_KPIS : (d?.kpis || DEMO_KPIS);
-  const m = useDemo ? DEMO_METRICS : (d?.metrics || DEMO_METRICS);
-  const equityData = (useDemo || !d?.equity_curve?.length) ? DEMO_EQUITY : d.equity_curve;
-  const tradeList = useDemo ? DEMO_TRADES : recent;
-  const accList = useDemo ? DEMO_ACCOUNTS : accs;
+  const k = d?.kpis || EMPTY_KPIS;
+  const m = d?.metrics || EMPTY_METRICS;
+  const cutoff = Date.now() - Number(period) * 86400000;
+  const inPeriod = (item) => !item?.date || new Date(item.date).getTime() >= cutoff;
+  const equityData = (d?.equity_curve || []).filter(inPeriod);
+  const tradeList = recent.filter(inPeriod);
+  const accList = accs;
 
   const filtered = tradeList.filter(t =>
     (!accountFilter || t.account_id === accountFilter) &&
     (!assetFilter || t.instrument === assetFilter) &&
     (tab === "Tous" || (tab === "Gagnants" ? t.pnl > 0 : t.pnl < 0))
   ).slice(0, 5);
+  const isEmptyAccount = !loading && !accList.length && !recent.length;
+  const payoutGoal = Number(accList[0]?.profit_target || Math.max(k.estimated_payout, 1000));
+  const payoutProgress = Math.min(100, Math.round((Number(k.total_payouts || 0) / payoutGoal) * 100));
+  const periodProfit = tradeList.reduce((sum,t)=>sum+Number(t.pnl||0),0);
+  const periodWins = tradeList.filter(t=>Number(t.pnl)>0).length;
+  const periodWinrate = tradeList.length ? Math.round(periodWins/tradeList.length*100) : 0;
+  const insight = !k.total_trades ? "Ajoute tes premiers trades pour obtenir un insight personnalisé." : m.plan_respect_rate < 80 ? `Ton plan est respecté sur ${m.plan_respect_rate}% des trades. Priorité : réduire les prises hors plan.` : `Ton plan est respecté sur ${m.plan_respect_rate}% des trades. Continue à documenter chaque décision.`;
 
   return (
     <div className="p-4 sm:p-7 space-y-5 max-w-[1800px] mx-auto">
@@ -87,22 +102,25 @@ export default function Dashboard() {
           <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-0 xl:min-w-[420px]">{[["Capital suivi",`$${k.funded_capital?.toLocaleString?.() || "0"}`,"#4F8CFF"],["Score trader",`${k.trader_score || k.discipline_score}/100`,"#B58BFF"],["Payouts",`$${k.total_payouts?.toLocaleString?.() || "0"}`,"#00E676"]].map(([l,v,c])=><div key={l} className="rounded-2xl border border-white/[0.07] bg-black/20 p-3 sm:p-4 backdrop-blur"><div className="text-[9px] text-[#6B7280] uppercase tracking-wider">{l}</div><div className="text-sm sm:text-xl font-bold font-mono mt-2 truncate" style={{color:c}}>{v}</div></div>)}</div>
         </div>
         <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 pt-5 border-t border-white/[0.06]">
-          {useDemo ? <div className="text-[11px] text-[#B58BFF] inline-flex items-center gap-2" data-testid="demo-banner"><span className="w-1.5 h-1.5 rounded-full bg-[#B58BFF]"/>Mode démonstration : ajoute un compte et des trades pour afficher tes chiffres.</div> : <div className="text-[11px] text-[#00E676] inline-flex items-center gap-2"><Shield className="w-3.5 h-3.5"/>Données synchronisées avec ton journal.</div>}
+          {isEmptyAccount ? <div className="text-[11px] text-[#B58BFF] inline-flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[#B58BFF]"/>Ton espace est prêt : ajoute un compte puis journalise ton premier trade.</div> : <div className="text-[11px] text-[#00E676] inline-flex items-center gap-2"><Shield className="w-3.5 h-3.5"/>Données réelles synchronisées avec ton journal.</div>}
           <div className="flex items-center gap-2 flex-wrap">
           <label className="card-flat px-3 py-2 text-sm flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-[#9CA3AF]"/><select value={period} onChange={e=>setPeriod(e.target.value)} className="bg-transparent"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select></label>
           <Link to="/app/markets" className="card-flat px-3 py-2 text-sm inline-flex items-center gap-2 hover:border-[#7C4DFF]/40"><BarChart3 className="w-4 h-4 text-[#B58BFF]"/> Marchés</Link>
-          <Link to="/app/accounts" className="btn-primary inline-flex items-center gap-2 text-sm py-2.5" data-testid="dash-add-account"><Plus className="w-4 h-4"/> Ajouter un compte</Link>
+          <Link to="/app/accounts?new=1" className="btn-primary inline-flex items-center gap-2 text-sm py-2.5" data-testid="dash-add-account"><Plus className="w-4 h-4"/> Ajouter un compte</Link>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        <KPICard label="Profit net" value={`+$${k.total_profit.toLocaleString()}`} sub="+ 12.4% vs période précédente" sparkColor="green" icon={TrendingUp} testid="kpi-profit" />
-        <KPICard label="Score de discipline" value={<><span>{k.discipline_score}</span><span className="text-[#9CA3AF] text-base"> /100</span></>} sub="Excellent" sparkColor="purple" icon={BarChart3} testid="kpi-discipline" />
-        <KPICard label="Comptes actifs" value={k.active_accounts} sub="Tous sains" sparkColor="blue" icon={Shield} testid="kpi-accounts" />
-        <KPICard label="Win Rate" value={`${m.winrate}%`} sub="+ 8%" sparkColor="green" icon={Target} testid="kpi-winrate" />
-        <KPICard label="Drawdown restant" value={`$${k.remaining_drawdown.toLocaleString()}`} sub="24.6% restant" sparkColor="red" icon={ArrowDownRight} testid="kpi-dd" />
-      </div>
+      {error && <div className="rounded-2xl border border-[#FF5252]/25 bg-[#FF5252]/10 p-4 text-sm text-[#FF8A8A] flex flex-col sm:flex-row sm:items-center justify-between gap-3"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 rounded-lg border border-[#FF5252]/20 px-3 py-2 text-xs hover:bg-[#FF5252]/10"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
+      {loading && <div className="grid grid-cols-2 md:grid-cols-5 gap-3">{Array.from({length:5}).map((_,i)=><div key={i} className="h-40 rounded-2xl bg-white/[0.035] animate-pulse"/>)}</div>}
+
+      {!loading && <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        <KPICard label="Profit net" value={`${periodProfit>=0?"+":"-"}$${Math.abs(periodProfit).toLocaleString()}`} sub={`Sur les ${period} derniers jours`} sparkColor={periodProfit < 0 ? "red" : "green"} icon={TrendingUp} testid="kpi-profit" />
+        <KPICard label="Score de discipline" value={<><span>{k.discipline_score}</span><span className="text-[#9CA3AF] text-base"> /100</span></>} sub={`${m.plan_respect_rate}% du plan respecté`} sparkColor="purple" icon={BarChart3} testid="kpi-discipline" />
+        <KPICard label="Comptes actifs" value={k.active_accounts} sub={`${k.active_accounts} compte${k.active_accounts>1?"s":""} suivi${k.active_accounts>1?"s":""}`} sparkColor="blue" icon={Shield} testid="kpi-accounts" />
+        <KPICard label="Win Rate" value={`${periodWinrate}%`} sub={`${tradeList.length} trades sur la période`} sparkColor="green" icon={Target} testid="kpi-winrate" />
+        <KPICard label="Drawdown restant" value={`$${k.remaining_drawdown.toLocaleString()}`} sub="Marge de risque disponible" sparkColor="red" icon={ArrowDownRight} testid="kpi-dd" />
+      </div>}
 
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="card-elev p-5 lg:col-span-2">
@@ -126,16 +144,16 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 gap-4">
           <div className="card-elev p-5">
             <div className="text-sm font-semibold mb-3">Progression des payouts</div>
-            <div className="text-xs text-[#9CA3AF]">Topstep Combine</div>
+            <div className="text-xs text-[#9CA3AF]">{accList[0] ? `${accList[0].firm} · ${accList[0].name}` : "Aucun compte configuré"}</div>
             <div className="flex items-baseline gap-2 mt-2">
-              <div className="text-2xl font-bold font-mono">$6,240</div>
-              <div className="text-xs text-[#9CA3AF]">/ $10,000</div>
-              <div className="ml-auto text-xs font-mono">62%</div>
+              <div className="text-2xl font-bold font-mono">${Number(k.total_payouts || 0).toLocaleString()}</div>
+              <div className="text-xs text-[#9CA3AF]">/ ${payoutGoal.toLocaleString()}</div>
+              <div className="ml-auto text-xs font-mono">{payoutProgress}%</div>
             </div>
-            <div className="h-2 rounded-full bg-white/5 mt-2 overflow-hidden"><div className="h-full bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF] rounded-full" style={{ width: "62%" }} /></div>
+            <div className="h-2 rounded-full bg-white/5 mt-2 overflow-hidden"><div className="h-full bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF] rounded-full" style={{ width: `${payoutProgress}%` }} /></div>
             <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
               <div><div className="text-xs text-[#9CA3AF]">Prochain payout estimé</div><div className="text-xl font-bold font-mono mt-1">${k.estimated_payout.toLocaleString()}</div></div>
-              <div className="text-xs text-[#9CA3AF] flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/5"><Calendar className="w-3 h-3"/>Dans 18 jours</div>
+              <Link to="/app/payouts" className="text-xs text-[#B58BFF] flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/5 hover:border-[#7C4DFF]/40"><Calendar className="w-3 h-3"/>Simuler</Link>
             </div>
           </div>
           <div className="card-elev p-5">
@@ -200,7 +218,7 @@ export default function Dashboard() {
         <div className="space-y-4">
           <div className="card-elev p-5 glow-purple">
             <div className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="w-4 h-4 text-[#B58BFF]"/> AI Coach Insight</div>
-            <p className="text-xs text-[#B5BBC9] mt-3 leading-relaxed">Tu sur-trades les mardis. Ta win rate ce jour-là est 18% plus basse que la moyenne.</p>
+            <p className="text-xs text-[#B5BBC9] mt-3 leading-relaxed">{insight}</p>
             <Link to="/app/coach" className="block text-center mt-4 text-xs btn-primary py-2" data-testid="dash-insight-link">Voir l'insight →</Link>
           </div>
           <div className="card-elev p-5 overflow-hidden">
@@ -243,7 +261,7 @@ function BigGauge({ value }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-end pb-2">
         <div className="text-3xl font-bold font-mono">{value}<span className="text-sm text-[#9CA3AF]">/100</span></div>
-        <div className="text-[10px] text-[#9CA3AF] mt-0.5">Excellent</div>
+        <div className="text-[10px] text-[#9CA3AF] mt-0.5">{value>=80?"Excellent":value>=60?"À consolider":value?"À améliorer":"En attente"}</div>
       </div>
     </div>
   );

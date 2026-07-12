@@ -1,79 +1,22 @@
-import React, { useEffect, useState } from "react";
-import { dashboard } from "@/lib/api";
-import { Shield, CheckCircle2, XCircle, AlertTriangle, TrendingUp } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { dashboard, trades as tradesAPI } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { AlertTriangle, CheckCircle2, RefreshCw, XCircle } from "lucide-react";
 
 export default function Discipline() {
-  const [d, setD] = useState(null);
-  useEffect(() => { dashboard().then(r => setD(r.data)).catch(()=>setD({})); }, []);
-  const k = d?.kpis || { discipline_score: 94 };
-  const m = d?.metrics || { plan_respect_rate: 94, winrate: 62 };
-  const violations = Math.max(0, Math.round((d?.kpis?.total_trades || 0) * (100 - m.plan_respect_rate) / 100));
-  const streak = violations === 0 ? Math.min(30, d?.kpis?.total_trades || 0) : Math.max(0, Math.round(m.plan_respect_rate / 10));
-  return (
-    <div className="p-4 sm:p-7 space-y-5">
-      <h1 className="text-2xl sm:text-3xl font-bold">Discipline Engine</h1>
-
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="card-elev p-8 text-center glow-purple lg:col-span-1">
-          <div className="text-[11px] font-mono uppercase tracking-widest text-[#9CA3AF]">Score de discipline</div>
-          <div className="my-5"><BigGauge value={k.discipline_score} /></div>
-          <div className="text-sm text-[#B58BFF]">Excellent</div>
-        </div>
-
-        <div className="card-elev p-6 lg:col-span-2">
-          <div className="text-sm font-semibold mb-4">Règles du jour</div>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <RuleCard ok={true} label="Risque respecté" sub="Max 1% par trade — toujours respecté" />
-            <RuleCard ok={true} label="Session respectée" sub="London + NY uniquement" />
-            <RuleCard ok={m.plan_respect_rate >= 80} label="Plan respecté" sub={`${m.plan_respect_rate}% des trades`} />
-            <RuleCard ok={true} label="Max trades respecté" sub="3 trades / jour" />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="card-elev p-6">
-          <div className="text-sm font-semibold mb-3">Streak de consistance</div>
-          <div className="text-5xl font-bold font-mono text-[#00E676]">{streak}<span className="text-base text-[#9CA3AF]">j</span></div>
-          <div className="text-xs text-[#9CA3AF] mt-2">Jours consécutifs sans violation</div>
-        </div>
-        <div className="card-elev p-6">
-          <div className="text-sm font-semibold mb-3">Violations ce mois</div>
-          <div className="text-5xl font-bold font-mono">{violations}</div>
-          <div className="text-xs text-[#FF5252] mt-2 flex items-center gap-1"><AlertTriangle className="w-3 h-3"/>{violations ? "Trades hors plan détectés" : "Aucune violation détectée"}</div>
-        </div>
-        <div className="card-elev p-6">
-          <div className="text-sm font-semibold mb-3">Plan respect rate</div>
-          <div className="text-5xl font-bold font-mono text-[#B58BFF]">{m.plan_respect_rate}<span className="text-base text-[#9CA3AF]">%</span></div>
-          <div className="h-2 rounded-full bg-white/5 mt-3 overflow-hidden"><div className="h-full bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF]" style={{ width: `${m.plan_respect_rate}%` }} /></div>
-        </div>
-      </div>
-    </div>
-  );
+  const { user }=useAuth(); const [d,setD]=useState(null); const [trades,setTrades]=useState([]); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
+  const load=async()=>{setLoading(true);setError("");try{const[a,b]=await Promise.all([dashboard(),tradesAPI.list()]);setD(a.data);setTrades(b.data)}catch(e){setError(e.response?.data?.detail||"Impossible de charger la discipline.")}finally{setLoading(false)}};
+  useEffect(()=>{load()},[]);
+  const rules=user?.rules||{}; const k=d?.kpis||{discipline_score:0,total_trades:0}; const m=d?.metrics||{plan_respect_rate:0};
+  const insight=useMemo(()=>{const today=new Date().toISOString().slice(0,10);const todays=trades.filter(t=>t.date===today);const todayPnl=todays.reduce((s,t)=>s+Number(t.pnl||0),0);let consecutive=0;for(const t of [...trades].sort((a,b)=>String(b.date).localeCompare(String(a.date)))){if(Number(t.pnl)<0)consecutive++;else break}const violations=trades.filter(t=>t.plan_respected===false).length;return{todayCount:todays.length,todayPnl,consecutive,violations}},[trades]);
+  const maxTrades=Number(rules.max_trades||3),dailyLimit=Number(rules.daily_loss_limit||0),stopAfter=Number(rules.stop_after_loss||2);
+  const ruleCards=[{ok:insight.todayCount<=maxTrades,label:"Nombre de trades",sub:`${insight.todayCount}/${maxTrades} trades aujourd’hui`},{ok:dailyLimit<=0||insight.todayPnl>=-dailyLimit,label:"Limite de perte quotidienne",sub:dailyLimit>0?`P&L du jour ${insight.todayPnl>=0?"+":"-"}$${Math.abs(insight.todayPnl).toLocaleString()} · limite -$${dailyLimit.toLocaleString()}`:"Aucune limite configurée"},{ok:insight.consecutive<stopAfter,label:"Stop après pertes",sub:`${insight.consecutive} perte${insight.consecutive>1?"s":""} consécutive${insight.consecutive>1?"s":""} · limite ${stopAfter}`},{ok:Number(m.plan_respect_rate)>=80,label:"Plan respecté",sub:`${Number(m.plan_respect_rate||0).toFixed(0)}% des trades`}];
+  if(loading)return <div className="p-7 grid md:grid-cols-3 gap-4">{Array.from({length:6}).map((_,i)=><div key={i} className="h-40 card-elev animate-pulse"/>)}</div>;
+  return <div className="max-w-[1500px] mx-auto p-4 sm:p-7 space-y-5"><div><div className="text-[10px] font-mono uppercase tracking-[.18em] text-[#B58BFF]">Règles personnalisées</div><h1 className="mt-2 text-2xl sm:text-3xl font-bold">Discipline Engine</h1><p className="mt-1 text-sm text-[#8B93A3]">Calculé depuis tes règles d’onboarding et tes trades réels.</p></div>
+    {error&&<div className="rounded-2xl border border-[#FF5252]/25 bg-[#FF5252]/10 p-4 text-sm text-[#FF8A8A] flex justify-between"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 text-xs"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
+    {!trades.length?<div className="card-elev py-16 px-5 text-center"><AlertTriangle className="w-8 h-8 mx-auto text-[#FFB855]"/><h2 className="mt-4 font-semibold">Discipline non mesurable</h2><p className="mt-2 text-sm text-[#7E8798]">Journalise au moins un trade pour calculer ton score.</p></div>:<><div className="grid lg:grid-cols-3 gap-4"><div className="card-elev p-8 text-center glow-purple"><div className="text-[11px] font-mono uppercase tracking-widest text-[#9CA3AF]">Score de discipline</div><div className="my-5"><BigGauge value={Number(k.discipline_score||0)}/></div><div className="text-sm text-[#B58BFF]">{k.discipline_score>=80?"Excellent":k.discipline_score>=60?"À consolider":"Priorité discipline"}</div></div><div className="card-elev p-6 lg:col-span-2"><div className="text-sm font-semibold mb-4">Règles du jour</div><div className="grid sm:grid-cols-2 gap-3">{ruleCards.map(r=><RuleCard key={r.label}{...r}/>)}</div></div></div><div className="grid md:grid-cols-3 gap-4"><Metric label="Trades hors plan" value={insight.violations} sub="Sur tout l’historique" color={insight.violations?"#FF5252":"#00E676"}/><Metric label="Pertes consécutives" value={insight.consecutive} sub={`Arrêt recommandé à ${stopAfter}`} color={insight.consecutive>=stopAfter?"#FF5252":"#FFB855"}/><Metric label="Plan respecté" value={`${Number(m.plan_respect_rate||0).toFixed(0)}%`} sub={`${k.total_trades||trades.length} trades analysés`} color="#B58BFF"/></div></>}
+  </div>;
 }
-
-const RuleCard = ({ ok, label, sub }) => (
-  <div className="card-flat p-4 flex items-start gap-3">
-    {ok ? <CheckCircle2 className="w-5 h-5 text-[#00E676] mt-0.5"/> : <XCircle className="w-5 h-5 text-[#FF5252] mt-0.5"/>}
-    <div>
-      <div className="text-sm font-semibold">{label}</div>
-      <div className="text-xs text-[#9CA3AF] mt-1">{sub}</div>
-    </div>
-  </div>
-);
-
-function BigGauge({ value }) {
-  const pct = value / 100;
-  return (
-    <div className="relative w-52 h-32 mx-auto">
-      <svg viewBox="0 0 200 110" className="w-full h-full">
-        <defs><linearGradient id="dg-grad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#7C4DFF"/><stop offset="100%" stopColor="#B58BFF"/></linearGradient></defs>
-        <path d="M20 95 A75 75 0 0 1 180 95" stroke="#1E2430" strokeWidth="14" fill="none" strokeLinecap="round" />
-        <path d="M20 95 A75 75 0 0 1 180 95" stroke="url(#dg-grad)" strokeWidth="14" fill="none" strokeLinecap="round" strokeDasharray="236" strokeDashoffset={236 - 236*pct} />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-end pb-2">
-        <div className="text-4xl font-bold font-mono">{value}<span className="text-sm text-[#9CA3AF]">/100</span></div>
-      </div>
-    </div>
-  );
-}
+const RuleCard=({ok,label,sub})=><div className="card-flat p-4 flex items-start gap-3">{ok?<CheckCircle2 className="w-5 h-5 text-[#00E676] mt-0.5"/>:<XCircle className="w-5 h-5 text-[#FF5252] mt-0.5"/>}<div><div className="text-sm font-semibold">{label}</div><div className="text-xs text-[#9CA3AF] mt-1">{sub}</div></div></div>;
+const Metric=({label,value,sub,color})=><div className="card-elev p-6"><div className="text-sm font-semibold">{label}</div><div className="mt-3 text-4xl font-bold font-mono" style={{color}}>{value}</div><div className="mt-2 text-xs text-[#7E8798]">{sub}</div></div>;
+function BigGauge({value}){const pct=Math.max(0,Math.min(1,value/100));return <div className="relative w-52 h-32 mx-auto"><svg viewBox="0 0 200 110" className="w-full h-full"><defs><linearGradient id="dg-grad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#7C4DFF"/><stop offset="100%" stopColor="#B58BFF"/></linearGradient></defs><path d="M20 95 A75 75 0 0 1 180 95" stroke="#1E2430" strokeWidth="14" fill="none" strokeLinecap="round"/><path d="M20 95 A75 75 0 0 1 180 95" stroke="url(#dg-grad)" strokeWidth="14" fill="none" strokeLinecap="round" strokeDasharray="236" strokeDashoffset={236-236*pct}/></svg><div className="absolute inset-0 flex items-end justify-center pb-2 text-4xl font-bold font-mono">{value}<span className="text-sm text-[#9CA3AF]">/100</span></div></div>}
