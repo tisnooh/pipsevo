@@ -11,6 +11,7 @@ const links = [
   { to: "/app/dashboard", label: "Aperçu", icon: Home, testid: "nav-dashboard" },
   { to: "/app/accounts", label: "Comptes", icon: Wallet, testid: "nav-accounts" },
   { to: "/app/journal", label: "Journal", icon: BookOpen, testid: "nav-journal" },
+  { to: "/app/markets", label: "Marchés", icon: BarChart3, testid: "nav-markets" },
   { to: "/app/backtest", label: "Backtest", icon: FlaskConical, testid: "nav-backtest" },
   { to: "/app/analytics", label: "Statistiques", icon: BarChart3, testid: "nav-analytics" },
   { to: "/app/coach", label: "Analyse IA", icon: Brain, testid: "nav-coach" },

@@ -17,6 +17,7 @@ import AICoach from "@/pages/AICoach";
 import TradingDNA from "@/pages/TradingDNA";
 import Settings from "@/pages/Settings";
 import Backtest from "@/pages/Backtest";
+import MarketTerminal from "@/pages/MarketTerminal";
 import { FAQPage, ContactPage, PricingPage, LegalPage, PlatformsPage, BlogPage, HelpPage, AffiliatePage } from "@/pages/SupportPages";
 import "@/index.css";
 
@@ -63,6 +64,7 @@ export default function App() {
             <Route path="accounts" element={<Accounts />} />
             <Route path="journal" element={<JournalPage />} />
             <Route path="backtest" element={<Backtest />} />
+            <Route path="markets" element={<MarketTerminal />} />
             <Route path="discipline" element={<Discipline />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="payouts" element={<Payouts />} />

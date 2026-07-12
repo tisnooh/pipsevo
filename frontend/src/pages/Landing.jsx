@@ -437,8 +437,9 @@ const TradingViewSection = () => {
 const TradingViewChart = ({ symbol, interval }) => {
   const container = useRef(null);
   useEffect(() => {
-    if (!container.current) return;
-    container.current.innerHTML = '<div class="tradingview-widget-container__widget" style="height:calc(100% - 28px);width:100%"></div><div class="tradingview-widget-copyright" style="height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#6B7280"><a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank" style="color:#8B9DC3">Graphique</a>&nbsp;par TradingView</div>';
+    const node = container.current;
+    if (!node) return;
+    node.innerHTML = '<div class="tradingview-widget-container__widget" style="height:calc(100% - 28px);width:100%"></div><div class="tradingview-widget-copyright" style="height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#6B7280"><a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank" style="color:#8B9DC3">Graphique</a>&nbsp;par TradingView</div>';
     const script = document.createElement("script");
     script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
     script.type = "text/javascript";
@@ -463,8 +464,8 @@ const TradingViewChart = ({ symbol, interval }) => {
       withdateranges: true,
       support_host: "https://www.tradingview.com",
     });
-    container.current.appendChild(script);
-    return () => { if (container.current) container.current.innerHTML = ""; };
+    node.appendChild(script);
+    return () => { node.innerHTML = ""; };
   }, [symbol, interval]);
   return <div ref={container} className="tradingview-widget-container h-full w-full" />;
 };
