@@ -22,7 +22,7 @@ export default function Landing() {
   return (
     <div className="bg-[#050505] text-white overflow-hidden">
       {/* NAV */}
-      <nav className="fixed top-0 left-0 right-0 z-50 px-6 lg:px-10 py-4">
+      <nav className="fixed top-0 left-0 right-0 z-50 px-5 sm:px-6 lg:px-10 py-3.5 sm:py-4 bg-[#050505]/85 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Logo size="lg" />
           <div className="hidden md:flex items-center gap-9 text-sm text-[#B5BBC9]">
@@ -32,15 +32,15 @@ export default function Landing() {
             <a href="#reviews" className="hover:text-white transition">Reviews</a>
             <a href="#faq" className="hover:text-white transition">FAQ</a>
           </div>
-          <div className="flex items-center gap-3">
-            <Link to="/login" className="text-sm px-4 py-2 text-[#9CA3AF] hover:text-white" data-testid="nav-login">Log in</Link>
-            <Link to="/register" className="btn-primary text-sm" data-testid="nav-register">Start Free</Link>
+          <div className="flex items-center gap-1.5 sm:gap-3">
+            <Link to="/login" className="text-xs sm:text-sm px-2.5 sm:px-4 py-2 text-[#9CA3AF] hover:text-white" data-testid="nav-login">Log in</Link>
+            <Link to="/register" className="btn-primary text-xs sm:text-sm px-3.5 sm:px-5" data-testid="nav-register">Start Free</Link>
           </div>
         </div>
       </nav>
 
       {/* HERO */}
-      <section className="relative pt-36 pb-24 px-6 lg:px-10">
+      <section className="relative pt-28 sm:pt-32 lg:pt-36 pb-16 sm:pb-20 lg:pb-24 px-5 sm:px-6 lg:px-10">
         {/* background atmospherics */}
         <div className="absolute inset-0 grid-floor opacity-60 pointer-events-none" />
         <div className="absolute inset-0 pointer-events-none">
@@ -49,37 +49,37 @@ export default function Landing() {
           <div className="absolute top-[40%] right-[30%] w-[400px] h-[400px] rounded-full blur-3xl opacity-15" style={{ background: "radial-gradient(circle, #FF4FD8, transparent 70%)" }} />
         </div>
 
-        <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-10 items-center relative z-10">
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-12 sm:gap-14 lg:gap-10 items-center relative z-10">
           {/* LEFT */}
-          <motion.div initial="hidden" animate="show" variants={fade} className="lg:col-span-5 space-y-7">
-            <motion.div custom={0} variants={fade} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass text-[11px] font-mono uppercase tracking-widest text-[#B5BBC9]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00E676] pulse-glow" /> Now in Beta · Join 2,400+ funded traders
+          <motion.div initial="hidden" animate="show" variants={fade} className="lg:col-span-5 space-y-6 sm:space-y-7 text-center lg:text-left">
+            <motion.div custom={0} variants={fade} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass text-[10px] sm:text-[11px] font-mono uppercase tracking-widest text-[#B5BBC9]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#00E676] pulse-glow shrink-0" /> Now in Beta · Join 2,400+ funded traders
             </motion.div>
-            <motion.h1 custom={1} variants={fade} className="text-5xl sm:text-6xl lg:text-7xl font-bold leading-[1.02] tracking-tight">
-              <span className="text-gradient">Protect Funded<br/>Accounts.</span><br />
+            <motion.h1 custom={1} variants={fade} className="text-4xl sm:text-6xl lg:text-7xl font-bold leading-[1.08] sm:leading-[1.02] tracking-tight">
+              <span className="text-gradient">Protect Funded Accounts.</span><br className="hidden sm:block" />{" "}
               <span className="text-purple-grad">Maximize Payouts.</span>
             </motion.h1>
-            <motion.p custom={2} variants={fade} className="text-lg text-[#9CA3AF] max-w-md leading-relaxed">
+            <motion.p custom={2} variants={fade} className="text-base sm:text-lg text-[#9CA3AF] max-w-md mx-auto lg:mx-0 leading-relaxed">
               The Operating System For Funded Traders.
             </motion.p>
-            <motion.div custom={3} variants={fade} className="flex items-center gap-3">
-              <Link to="/register" className="btn-primary inline-flex items-center gap-2 text-base" data-testid="hero-cta-start">Start Free <ArrowRight className="w-4 h-4"/></Link>
-              <a href="#how" className="btn-ghost inline-flex items-center gap-2 text-base" data-testid="hero-cta-demo"><Play className="w-4 h-4 fill-white"/> Watch Demo</a>
+            <motion.div custom={3} variants={fade} className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
+              <Link to="/register" className="btn-primary inline-flex items-center justify-center gap-2 text-base w-full sm:w-auto" data-testid="hero-cta-start">Start Free <ArrowRight className="w-4 h-4"/></Link>
+              <a href="#how" className="btn-ghost inline-flex items-center justify-center gap-2 text-base w-full sm:w-auto" data-testid="hero-cta-demo"><Play className="w-4 h-4 fill-white"/> Watch Demo</a>
             </motion.div>
-            <motion.div custom={4} variants={fade} className="pt-6">
+            <motion.div custom={4} variants={fade} className="pt-4 sm:pt-6">
               <div className="text-[11px] font-mono uppercase tracking-widest text-[#6B7280] mb-3">Trusted by traders at</div>
-              <div className="flex items-center gap-7 flex-wrap opacity-70">
-                <span className="text-sm font-bold tracking-wider text-[#B5BBC9]">TOPSTEP</span>
-                <span className="text-sm font-bold tracking-wider text-[#B5BBC9]">▲ APEX</span>
-                <span className="text-sm font-bold tracking-wider text-[#B5BBC9]">◆ FTMO</span>
-                <span className="text-sm font-bold tracking-wider text-[#B5BBC9]">◇ FUNDEDNEXT</span>
-                <span className="text-sm font-bold tracking-wider text-[#B5BBC9]">THE5ERS</span>
+              <div className="flex items-center justify-center lg:justify-start gap-x-5 gap-y-2 flex-wrap opacity-70">
+                <span className="text-xs sm:text-sm font-bold tracking-wider text-[#B5BBC9]">TOPSTEP</span>
+                <span className="text-xs sm:text-sm font-bold tracking-wider text-[#B5BBC9]">▲ APEX</span>
+                <span className="text-xs sm:text-sm font-bold tracking-wider text-[#B5BBC9]">◆ FTMO</span>
+                <span className="text-xs sm:text-sm font-bold tracking-wider text-[#B5BBC9]">◇ FUNDEDNEXT</span>
+                <span className="text-xs sm:text-sm font-bold tracking-wider text-[#B5BBC9]">THE5ERS</span>
               </div>
             </motion.div>
           </motion.div>
 
-          {/* RIGHT — Tilted 3D dashboard mockup with floating candles */}
-          <motion.div initial={{ opacity: 0, scale: 0.92, y: 40 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 1.2, ease: [0.22,1,0.36,1] }} className="lg:col-span-7 relative">
+          {/* RIGHT — Tilted 3D dashboard mockup with floating candles (desktop/tablet only — too dense to stay legible on phones) */}
+          <motion.div initial={{ opacity: 0, scale: 0.92, y: 40 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 1.2, ease: [0.22,1,0.36,1] }} className="hidden lg:block lg:col-span-7 relative">
             <div style={{ transform: `translate(${-mx * 0.6}px, ${-my * 0.6}px)` }}>
               <DashboardMock />
             </div>
@@ -91,17 +91,24 @@ export default function Landing() {
             <div className="absolute -right-2 bottom-[18%] floaty" style={{ animationDelay: "1.6s" }}><Candle color="pink" height={120} rot={-6} /></div>
             <div className="absolute right-[18%] -bottom-2 floaty-slow" style={{ animationDelay: "0.9s" }}><Candle color="green" height={70} rot={4} /></div>
           </motion.div>
+
+          {/* Mobile-only: lightweight candle accent instead of the full dashboard mockup */}
+          <div className="lg:hidden flex justify-center gap-4 pt-2">
+            <div className="floaty"><Candle color="purple" height={70} rot={-6} /></div>
+            <div className="floaty-slow" style={{ animationDelay: "0.6s" }}><Candle color="green" height={90} rot={5} /></div>
+            <div className="floaty" style={{ animationDelay: "1.1s" }}><Candle color="pink" height={60} rot={-3} /></div>
+          </div>
         </div>
       </section>
 
       {/* 4 STEPS */}
-      <section id="how" className="px-6 lg:px-10 pb-20">
-        <div className="max-w-7xl mx-auto card-elev p-10 lg:p-14">
-          <div className="grid lg:grid-cols-5 gap-8 items-center">
-            <div className="lg:col-span-1">
-              <div className="text-3xl font-bold leading-tight text-gradient">Get Started<br/>in 4 Simple Steps</div>
+      <section id="how" className="px-5 sm:px-6 lg:px-10 pb-14 sm:pb-16 lg:pb-20">
+        <div className="max-w-7xl mx-auto card-elev p-6 sm:p-10 lg:p-14">
+          <div className="grid lg:grid-cols-5 gap-6 sm:gap-8 items-center">
+            <div className="lg:col-span-1 text-center lg:text-left">
+              <div className="text-2xl sm:text-3xl font-bold leading-tight text-gradient">Get Started<br/>in 4 Simple Steps</div>
             </div>
-            <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 relative">
+            <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 relative">
               {[
                 { n: 1, t: "Create Account", d: "Sign up in seconds.", I: User },
                 { n: 2, t: "Connect Prop Firms", d: "Link your prop firm accounts.", I: Building2 },
@@ -130,8 +137,8 @@ export default function Landing() {
       </section>
 
       {/* 5 FEATURE CARDS */}
-      <section id="features" className="px-6 lg:px-10 pb-20">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <section id="features" className="px-5 sm:px-6 lg:px-10 pb-14 sm:pb-16 lg:pb-20">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {[
             { I: LayersIcon, t: "Multi-Account", d: "Manage all funded accounts in one place.", c: "purple" },
             { I: JournalIcon, t: "Smart Journal", d: "Capture every trade with screenshots and notes.", c: "blue" },
@@ -149,14 +156,14 @@ export default function Landing() {
       </section>
 
       {/* ASSET CLASSES */}
-      <section className="px-6 lg:px-10 pb-20">
-        <div className="max-w-7xl mx-auto card-elev p-10 lg:p-14">
-          <div className="grid lg:grid-cols-12 gap-10 items-center">
-            <div className="lg:col-span-3">
+      <section className="px-5 sm:px-6 lg:px-10 pb-14 sm:pb-16 lg:pb-20">
+        <div className="max-w-7xl mx-auto card-elev p-6 sm:p-10 lg:p-14">
+          <div className="grid lg:grid-cols-12 gap-8 lg:gap-10 items-center">
+            <div className="lg:col-span-3 text-center lg:text-left">
               <div className="text-[11px] font-mono uppercase tracking-widest text-[#B58BFF] mb-3 px-3 py-1 rounded-full inline-block border border-[#7C4DFF]/40">SUPPORTED ASSETS</div>
-              <div className="text-4xl font-bold leading-tight">Trade <span className="text-purple-grad">all.</span><br/>Analyze <span className="text-purple-grad">all.</span></div>
+              <div className="text-3xl sm:text-4xl font-bold leading-tight">Trade <span className="text-purple-grad">all.</span><br/>Analyze <span className="text-purple-grad">all.</span></div>
             </div>
-            <div className="lg:col-span-9 grid grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="lg:col-span-9 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
                 { l: "Forex", I: ForexIcon },
                 { l: "Crypto", I: CryptoIcon },
@@ -177,19 +184,20 @@ export default function Landing() {
       </section>
 
       {/* ALL-IN-ONE */}
-      <section className="px-6 lg:px-10 pb-20">
-        <div className="max-w-7xl mx-auto card-elev p-10 lg:p-14 grid lg:grid-cols-2 gap-12 items-center relative overflow-hidden">
-          <div className="relative z-10">
+      <section className="px-5 sm:px-6 lg:px-10 pb-14 sm:pb-16 lg:pb-20">
+        <div className="max-w-7xl mx-auto card-elev p-6 sm:p-10 lg:p-14 grid lg:grid-cols-2 gap-8 lg:gap-12 items-center relative overflow-hidden">
+          <div className="relative z-10 text-center lg:text-left">
             <div className="text-[11px] font-mono uppercase tracking-widest text-[#B58BFF] mb-3">ALL IN ONE PLACE</div>
-            <div className="text-4xl font-bold leading-tight">Powerful. Complete.<br/>Built for <span className="text-purple-grad">traders.</span></div>
-            <div className="mt-8 space-y-3">
+            <div className="text-3xl sm:text-4xl font-bold leading-tight">Powerful. Complete.<br/>Built for <span className="text-purple-grad">traders.</span></div>
+            <div className="mt-7 sm:mt-8 space-y-3 text-left max-w-sm mx-auto lg:mx-0">
               {["Manage multiple accounts", "Smart journal with screenshots", "Real-time discipline score", "AI performance analysis", "Track payouts and milestones"].map(x => (
-                <div key={x} className="flex items-center gap-3"><Check className="w-4 h-4 text-[#00E676]"/> <span className="text-sm text-[#B5BBC9]">{x}</span></div>
+                <div key={x} className="flex items-center gap-3"><Check className="w-4 h-4 text-[#00E676] shrink-0"/> <span className="text-sm text-[#B5BBC9]">{x}</span></div>
               ))}
             </div>
             <Link to="/register" className="btn-ghost inline-flex items-center gap-2 mt-8" data-testid="cta-features">Discover all features <ArrowRight className="w-4 h-4"/></Link>
           </div>
-          <div className="relative">
+          {/* Dashboard preview — desktop/tablet only, same reasoning as hero */}
+          <div className="hidden lg:block relative">
             <div style={{ transform: "scale(0.78)", transformOrigin: "top left" }}><DashboardMock /></div>
             <div className="absolute -left-4 top-10 floaty"><Candle color="green" height={90} rot={-4} /></div>
             <div className="absolute right-10 -top-4 floaty-slow"><Candle color="pink" height={110} rot={8} /></div>
@@ -199,30 +207,30 @@ export default function Landing() {
       </section>
 
       {/* PRICING */}
-      <section id="pricing" className="px-6 lg:px-10 pb-20">
+      <section id="pricing" className="px-5 sm:px-6 lg:px-10 pb-14 sm:pb-16 lg:pb-20">
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
+          <div className="text-center mb-10 sm:mb-12">
             <div className="text-[11px] font-mono uppercase tracking-widest text-[#B58BFF] mb-3">PRICING</div>
             <h2 className="text-4xl font-bold text-gradient">Built for funded traders.</h2>
             <p className="text-[#9CA3AF] mt-3">Cancel anytime. No setup fees.</p>
           </div>
           <div className="grid md:grid-cols-2 gap-5">
-            <div className="card-elev p-8">
+            <div className="card-elev p-6 sm:p-8">
               <div className="text-sm font-mono uppercase text-[#9CA3AF]">Starter</div>
-              <div className="text-5xl font-bold mt-4 font-mono">€9.99<span className="text-base text-[#9CA3AF]">/mo</span></div>
+              <div className="text-4xl sm:text-5xl font-bold mt-4 font-mono">€9.99<span className="text-base text-[#9CA3AF]">/mo</span></div>
               <div className="text-sm text-[#9CA3AF] mt-2">Perfect for 1 funded account</div>
               <div className="mt-8 space-y-3 text-sm">
-                {["Up to 2 accounts", "Trade journal", "Discipline score", "Basic analytics"].map(x => <div key={x} className="flex gap-2 text-[#B5BBC9]"><Check className="w-4 h-4 text-[#9CA3AF]"/> {x}</div>)}
+                {["Up to 2 accounts", "Trade journal", "Discipline score", "Basic analytics"].map(x => <div key={x} className="flex gap-2 text-[#B5BBC9]"><Check className="w-4 h-4 text-[#9CA3AF] shrink-0"/> {x}</div>)}
               </div>
               <Link to="/register" className="btn-ghost block text-center mt-8">Start Free</Link>
             </div>
-            <div className="card-elev p-8 glow-purple border-[#7C4DFF]/40 relative" data-testid="pricing-pro">
+            <div className="card-elev p-6 sm:p-8 glow-purple border-[#7C4DFF]/40 relative" data-testid="pricing-pro">
               <div className="absolute -top-3 right-6 text-[10px] font-mono uppercase tracking-widest bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF] rounded-full px-3 py-1">Most Popular</div>
               <div className="text-sm font-mono uppercase text-[#B58BFF]">Pro</div>
-              <div className="text-5xl font-bold mt-4 font-mono">€19.99<span className="text-base text-[#9CA3AF]">/mo</span></div>
+              <div className="text-4xl sm:text-5xl font-bold mt-4 font-mono">€19.99<span className="text-base text-[#9CA3AF]">/mo</span></div>
               <div className="text-sm text-[#9CA3AF] mt-2">For serious multi-account traders</div>
               <div className="mt-8 space-y-3 text-sm">
-                {["Unlimited accounts", "AI Coach (Claude Sonnet 4.5)", "Trading DNA", "Survival Score", "Mistake Cost Tracker", "Priority support"].map(x => <div key={x} className="flex gap-2 text-[#B5BBC9]"><Check className="w-4 h-4 text-[#00E676]"/> {x}</div>)}
+                {["Unlimited accounts", "AI Coach (Claude Sonnet 4.5)", "Trading DNA", "Survival Score", "Mistake Cost Tracker", "Priority support"].map(x => <div key={x} className="flex gap-2 text-[#B5BBC9]"><Check className="w-4 h-4 text-[#00E676] shrink-0"/> {x}</div>)}
               </div>
               <Link to="/register" className="btn-primary block text-center mt-8" data-testid="pricing-pro-cta">Go Pro</Link>
             </div>
@@ -231,11 +239,11 @@ export default function Landing() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="px-6 lg:px-10 pb-20">
+      <section id="faq" className="px-5 sm:px-6 lg:px-10 pb-14 sm:pb-16 lg:pb-20">
         <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-10">
+          <div className="text-center mb-8 sm:mb-10">
             <div className="text-[11px] font-mono uppercase tracking-widest text-[#B58BFF] mb-3">FAQ</div>
-            <h2 className="text-4xl font-bold text-gradient">Frequently asked.</h2>
+            <h2 className="text-3xl sm:text-4xl font-bold text-gradient">Frequently asked.</h2>
           </div>
           <div className="space-y-3">
             {[
@@ -254,22 +262,22 @@ export default function Landing() {
       </section>
 
       {/* CTA */}
-      <section className="px-6 lg:px-10 pb-24">
-        <div className="max-w-7xl mx-auto card-elev p-10 lg:p-14 flex flex-col lg:flex-row items-center justify-between gap-6 relative overflow-hidden">
+      <section className="px-5 sm:px-6 lg:px-10 pb-16 sm:pb-20 lg:pb-24">
+        <div className="max-w-7xl mx-auto card-elev p-6 sm:p-10 lg:p-14 flex flex-col lg:flex-row items-center text-center lg:text-left justify-between gap-6 relative overflow-hidden">
           <div className="absolute -left-10 -top-10 w-[300px] h-[300px] rounded-full blur-3xl opacity-30" style={{ background: "radial-gradient(circle, #7C4DFF, transparent)" }} />
-          <div className="flex items-center gap-5 relative z-10">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] flex items-center justify-center"><Trophy className="w-7 h-7"/></div>
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5 relative z-10">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] flex items-center justify-center shrink-0"><Trophy className="w-7 h-7"/></div>
             <div>
-              <div className="text-2xl lg:text-3xl font-bold text-gradient">Ready to protect your accounts<br/>and maximize your payouts?</div>
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gradient">Ready to protect your accounts<br className="hidden sm:block"/> and maximize your payouts?</div>
             </div>
           </div>
-          <Link to="/register" className="btn-primary inline-flex items-center gap-2 relative z-10" data-testid="footer-cta">Start free <ArrowRight className="w-4 h-4"/></Link>
+          <Link to="/register" className="btn-primary inline-flex items-center gap-2 relative z-10 w-full sm:w-auto justify-center" data-testid="footer-cta">Start free <ArrowRight className="w-4 h-4"/></Link>
         </div>
         <div className="max-w-7xl mx-auto text-center text-xs text-[#6B7280] mt-6">No card required · Setup in 2 minutes</div>
       </section>
 
-      <footer className="border-t border-white/5 py-10 px-6 lg:px-10 text-sm text-[#9CA3AF]">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <footer className="border-t border-white/5 py-8 sm:py-10 px-5 sm:px-6 lg:px-10 text-sm text-[#9CA3AF]">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 text-center sm:text-left">
           <Logo />
           <div>© 2026 PipsEvo · The Operating System for Funded Traders.</div>
         </div>
