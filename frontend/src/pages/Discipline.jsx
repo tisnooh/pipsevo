@@ -8,8 +8,8 @@ export default function Discipline() {
   const k = d?.kpis || { discipline_score: 94 };
   const m = d?.metrics || { plan_respect_rate: 94, winrate: 62 };
   return (
-    <div className="p-7 space-y-5">
-      <h1 className="text-3xl font-bold">Discipline Engine</h1>
+    <div className="p-4 sm:p-7 space-y-5">
+      <h1 className="text-2xl sm:text-3xl font-bold">Discipline Engine</h1>
 
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="card-elev p-8 text-center glow-purple lg:col-span-1">

@@ -4,8 +4,8 @@ import { Link } from "react-router-dom";
 
 export default function Backtest() {
   return (
-    <div className="p-7">
-      <div className="card-elev p-12 text-center relative overflow-hidden">
+    <div className="p-4 sm:p-7">
+      <div className="card-elev p-6 sm:p-12 text-center relative overflow-hidden">
         <div className="absolute -top-10 -left-10 w-[400px] h-[400px] rounded-full blur-3xl opacity-30" style={{ background: "radial-gradient(circle, #7C4DFF, transparent)" }} />
         <div className="relative">
           <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] flex items-center justify-center mb-6 glow-purple"><FlaskConical className="w-8 h-8"/></div>

@@ -28,13 +28,13 @@ export default function Accounts() {
   };
 
   return (
-    <div className="p-7 space-y-5">
-      <div className="flex justify-between items-end">
+    <div className="p-4 sm:p-7 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Comptes</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Comptes</h1>
           <p className="text-sm text-[#9CA3AF] mt-1">Gère tous tes comptes funded en un seul endroit.</p>
         </div>
-        <button onClick={() => setOpen(true)} className="btn-primary inline-flex items-center gap-2 text-sm py-2.5" data-testid="add-account-btn"><Plus className="w-4 h-4"/> Ajouter un compte</button>
+        <button onClick={() => setOpen(true)} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 w-full sm:w-auto" data-testid="add-account-btn"><Plus className="w-4 h-4"/> Ajouter un compte</button>
       </div>
 
       {list.length === 0 ? (
@@ -87,7 +87,7 @@ export default function Accounts() {
 
       {open && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setOpen(false)}>
-          <form onClick={(e) => e.stopPropagation()} onSubmit={create} className="card-elev p-8 w-full max-w-md space-y-4 glow-purple">
+          <form onClick={(e) => e.stopPropagation()} onSubmit={create} className="card-elev p-5 sm:p-8 w-full max-w-md space-y-4 glow-purple max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold">Nouveau compte</h2>
             <Fld label="Nom du compte" value={form.name} onChange={(v)=>setForm({...form,name:v})} testid="acc-name" />
             <div>

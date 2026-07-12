@@ -121,13 +121,13 @@ export function JournalPage() {
   )
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex flex-col lg:flex-row h-full lg:overflow-hidden">
       {/* Left: trades list */}
-      <div className="flex-1 p-6 overflow-y-auto scrollbar-thin">
+      <div className="flex-1 p-4 sm:p-6 overflow-y-auto scrollbar-thin">
         {/* Header */}
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
           <h1 className="text-2xl font-bold text-white">Journal</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF] flex items-center gap-2 cursor-pointer hover:border-[#7C4DFF]/50">
               <span>Tous les comptes</span><ChevronDown className="w-3 h-3" />
             </div>
@@ -165,7 +165,7 @@ export function JournalPage() {
         </div>
 
         {/* KPI row */}
-        <div className="grid grid-cols-6 gap-3 mb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 mb-5">
           {kpis.map((kpi) => (
             <div key={kpi.label} className="p-3 rounded-xl border border-[#1E2430] bg-[#0F1117]">
               <div className="flex items-center justify-between mb-1">
@@ -180,7 +180,7 @@ export function JournalPage() {
 
         {/* Table */}
         {normalized.length === 0 ? (
-          <div className="rounded-xl border border-[#1E2430] bg-[#0F1117] p-16 text-center">
+          <div className="rounded-xl border border-[#1E2430] bg-[#0F1117] p-8 sm:p-16 text-center">
             <div className="text-[#9CA3AF] text-sm mb-4">Pas encore de trades — ajoute ton premier trade !</div>
             <button
               onClick={() => setOpenForm(true)}
@@ -191,10 +191,10 @@ export function JournalPage() {
             </button>
           </div>
         ) : (
-          <div className="rounded-xl border border-[#1E2430] bg-[#0F1117] overflow-hidden">
+          <div className="rounded-xl border border-[#1E2430] bg-[#0F1117] overflow-x-auto">
             {/* Header */}
             <div
-              className="grid text-[11px] text-[#9CA3AF] px-4 py-3 border-b border-[#1E2430] bg-[#0A0C14]"
+              className="grid text-[11px] text-[#9CA3AF] px-4 py-3 border-b border-[#1E2430] bg-[#0A0C14] min-w-[780px]"
               style={{ gridTemplateColumns: "2rem 2fr 1fr 1.5fr 1fr 0.8fr 1fr 1.5fr 1fr 2rem" }}
             >
               <span></span>
@@ -216,7 +216,7 @@ export function JournalPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.04 }}
                 onClick={() => setSelectedTrade(tradeList.find(t => t.id === trade.id))}
-                className={`grid items-center px-4 py-3 border-b border-[#1E2430]/50 last:border-0 cursor-pointer transition-all text-xs ${
+                className={`grid items-center px-4 py-3 border-b border-[#1E2430]/50 last:border-0 cursor-pointer transition-all text-xs min-w-[780px] ${
                   selectedTrade?.id === trade.id ? "bg-[#111322]" : "hover:bg-[#111322]/50"
                 }`}
                 style={{ gridTemplateColumns: "2rem 2fr 1fr 1.5fr 1fr 0.8fr 1fr 1.5fr 1fr 2rem" }}
@@ -254,8 +254,9 @@ export function JournalPage() {
       {selectedTrade && (() => {
         const t = normalize(selectedTrade)
         return (
-          <div className="w-80 border-l border-[#1E2430] bg-[#0A0C14] overflow-y-auto scrollbar-thin flex-shrink-0">
+          <div className="fixed inset-0 z-40 bg-[#0A0C14] lg:static lg:z-auto lg:w-80 lg:border-l lg:border-[#1E2430] overflow-y-auto scrollbar-thin flex-shrink-0">
             <div className="p-4">
+              <button onClick={() => setSelectedTrade(null)} className="lg:hidden mb-4 text-xs text-[#9CA3AF] hover:text-white flex items-center gap-1.5">← Retour à la liste</button>
               {/* Header */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -411,11 +412,11 @@ export function JournalPage() {
           <form
             onClick={(e) => e.stopPropagation()}
             onSubmit={createTrade}
-            className="rounded-xl border border-[#1E2430] bg-[#0A0C14] p-6 w-full max-w-lg space-y-4 max-h-[90vh] overflow-y-auto"
+            className="rounded-xl border border-[#1E2430] bg-[#0A0C14] p-4 sm:p-6 w-full max-w-lg space-y-4 max-h-[90vh] overflow-y-auto"
           >
             <h2 className="text-xl font-bold text-white">Nouveau trade</h2>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
               <Fld label="Instrument" value={form.instrument} onChange={(v) => setForm({ ...form, instrument: v })} placeholder="EURUSD" required />
               <div>
                 <label className="text-[10px] font-mono uppercase text-[#9CA3AF]">Direction</label>

@@ -22,12 +22,12 @@ const sparkData = (seed, down) => {
 const KPICard = ({ label, value, sub, sparkColor = "green", icon: Icon, testid }) => {
   const c = kpiColors[sparkColor];
   return (
-    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="card-elev p-5 relative overflow-hidden h-[180px]" data-testid={testid}>
+    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="card-elev p-4 sm:p-5 relative overflow-hidden h-[160px] sm:h-[180px]" data-testid={testid}>
       <div className="flex items-center justify-between">
-        <div className="text-sm text-[#9CA3AF]">{label}</div>
-        {Icon && <Icon className="w-4 h-4" style={{ color: c.stroke }} />}
+        <div className="text-xs sm:text-sm text-[#9CA3AF]">{label}</div>
+        {Icon && <Icon className="w-4 h-4 shrink-0" style={{ color: c.stroke }} />}
       </div>
-      <div className="text-[34px] font-bold font-mono mt-3 leading-none" style={{ color: sparkColor === "red" ? "#FF5252" : sparkColor === "green" ? "#00E676" : "white" }}>{value}</div>
+      <div className="text-[26px] sm:text-[34px] font-bold font-mono mt-3 leading-none" style={{ color: sparkColor === "red" ? "#FF5252" : sparkColor === "green" ? "#00E676" : "white" }}>{value}</div>
       {sub && <div className="text-xs mt-2 flex items-center gap-1" style={{ color: c.stroke }}>◆ <span>{sub}</span></div>}
       <div className="absolute left-0 right-0 bottom-0 h-[58px] pointer-events-none">
         <ResponsiveContainer width="100%" height="100%">
@@ -69,20 +69,20 @@ export default function Dashboard() {
   const filtered = tab === "Tous" ? tradeList.slice(0, 5) : tab === "Gagnants" ? tradeList.filter(t => t.pnl > 0).slice(0, 5) : tradeList.filter(t => t.pnl < 0).slice(0, 5);
 
   return (
-    <div className="p-7 space-y-5">
+    <div className="p-4 sm:p-7 space-y-5">
       {useDemo && <div className="card-flat px-3 py-2 text-[11px] text-[#B58BFF] inline-flex items-center gap-2" data-testid="demo-banner">◆ Données de démo — ajoute un compte et logue des trades pour voir tes vrais chiffres.</div>}
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Vue d'ensemble</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Vue d'ensemble</h1>
           <p className="text-sm text-[#9CA3AF] mt-1">Track. Analyse. Improve. Get Paid.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button className="card-flat px-3 py-2 text-sm flex items-center gap-2 hover:border-[#7C4DFF]/40" data-testid="date-range"><Calendar className="w-3.5 h-3.5 text-[#9CA3AF]"/>30 derniers jours</button>
           <Link to="/app/accounts" className="btn-primary inline-flex items-center gap-2 text-sm py-2.5" data-testid="dash-add-account"><Plus className="w-4 h-4"/> Ajouter un compte</Link>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <KPICard label="Profit net" value={`+$${k.total_profit.toLocaleString()}`} sub="+ 12.4% vs période précédente" sparkColor="green" icon={TrendingUp} testid="kpi-profit" />
         <KPICard label="Score de discipline" value={<><span>{k.discipline_score}</span><span className="text-[#9CA3AF] text-base"> /100</span></>} sub="Excellent" sparkColor="purple" icon={BarChart3} testid="kpi-discipline" />
         <KPICard label="Comptes actifs" value={k.active_accounts} sub="Tous sains" sparkColor="blue" icon={Shield} testid="kpi-accounts" />
@@ -146,25 +146,27 @@ export default function Dashboard() {
               <button key={t} onClick={()=>setTab(t)} data-testid={`tab-${t}`} className={`pb-2 ${tab===t ? "text-white border-b-2 border-[#7C4DFF]" : "text-[#9CA3AF]"}`}>{t}</button>
             ))}
           </div>
-          <table className="w-full text-sm mt-3">
-            <thead className="text-[#6B7280] text-[11px] uppercase font-mono">
-              <tr><th className="text-left py-2 font-normal">Date</th><th className="text-left font-normal">Actif</th><th className="text-left font-normal">Direction</th><th className="text-right font-normal">Résultat</th><th className="text-right font-normal">R Multiple</th><th className="text-left pl-4 font-normal">Durée</th><th className="text-left font-normal">Compte</th><th className="text-left font-normal">Tags</th></tr>
-            </thead>
-            <tbody>
-              {filtered.map(t => (
-                <tr key={t.id} className="border-t border-white/5">
-                  <td className="py-2.5 text-xs text-[#B5BBC9]">{t.date}</td>
-                  <td className="font-medium">{t.instrument}</td>
-                  <td className={t.direction === "long" ? "text-[#00E676]" : "text-[#FF5252]"}>{t.direction === "long" ? "Achat (Long)" : "Vente (Short)"}</td>
-                  <td className="text-right font-mono" style={{ color: t.pnl >= 0 ? "#00E676" : "#FF5252" }}>{t.pnl>=0?"+":""}${Math.abs(t.pnl).toFixed(2)}</td>
-                  <td className="text-right font-mono" style={{ color: t.pnl >= 0 ? "#00E676" : "#FF5252" }}>{(t.r ?? (t.pnl/100)).toFixed?.(2) ?? (t.r ?? (t.pnl/100))}R</td>
-                  <td className="pl-4 text-xs text-[#9CA3AF]">{t.duration || t.session || "—"}</td>
-                  <td className="text-xs text-[#B5BBC9]">{t.account || (accs.find(a=>a.id===t.account_id)?.firm) || "—"}</td>
-                  <td className="space-x-1">{(t.tags || (t.setup ? [t.setup] : [])).map((tag,i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded border border-white/10 text-[#B5BBC9] inline-block">{tag}</span>)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto -mx-5 px-5 sm:mx-0 sm:px-0 mt-3">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="text-[#6B7280] text-[11px] uppercase font-mono">
+                <tr><th className="text-left py-2 font-normal">Date</th><th className="text-left font-normal">Actif</th><th className="text-left font-normal">Direction</th><th className="text-right font-normal">Résultat</th><th className="text-right font-normal">R Multiple</th><th className="text-left pl-4 font-normal">Durée</th><th className="text-left font-normal">Compte</th><th className="text-left font-normal">Tags</th></tr>
+              </thead>
+              <tbody>
+                {filtered.map(t => (
+                  <tr key={t.id} className="border-t border-white/5">
+                    <td className="py-2.5 text-xs text-[#B5BBC9]">{t.date}</td>
+                    <td className="font-medium">{t.instrument}</td>
+                    <td className={t.direction === "long" ? "text-[#00E676]" : "text-[#FF5252]"}>{t.direction === "long" ? "Achat (Long)" : "Vente (Short)"}</td>
+                    <td className="text-right font-mono" style={{ color: t.pnl >= 0 ? "#00E676" : "#FF5252" }}>{t.pnl>=0?"+":""}${Math.abs(t.pnl).toFixed(2)}</td>
+                    <td className="text-right font-mono" style={{ color: t.pnl >= 0 ? "#00E676" : "#FF5252" }}>{(t.r ?? (t.pnl/100)).toFixed?.(2) ?? (t.r ?? (t.pnl/100))}R</td>
+                    <td className="pl-4 text-xs text-[#9CA3AF]">{t.duration || t.session || "—"}</td>
+                    <td className="text-xs text-[#B5BBC9]">{t.account || (accs.find(a=>a.id===t.account_id)?.firm) || "—"}</td>
+                    <td className="space-x-1">{(t.tags || (t.setup ? [t.setup] : [])).map((tag,i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded border border-white/10 text-[#B5BBC9] inline-block">{tag}</span>)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <Link to="/app/journal" className="block text-center mt-4 text-xs text-[#B58BFF]">Voir tous les trades →</Link>
         </div>
 

@@ -31,16 +31,16 @@ export default function Payouts() {
   const prob = Math.min(95, Math.max(5, 100 - Math.abs(estimated - sim.target) / sim.target * 60));
 
   return (
-    <div className="p-7 space-y-5">
-      <div className="flex justify-between items-end">
+    <div className="p-4 sm:p-7 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Payouts</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Payouts</h1>
           <p className="text-sm text-[#9CA3AF] mt-1">Suis tes retraits et projette ton prochain payout.</p>
         </div>
-        <button onClick={()=>setOpen(true)} className="btn-primary inline-flex items-center gap-2 text-sm py-2.5" data-testid="add-payout-btn"><Plus className="w-4 h-4"/> Enregistrer un payout</button>
+        <button onClick={()=>setOpen(true)} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 w-full sm:w-auto" data-testid="add-payout-btn"><Plus className="w-4 h-4"/> Enregistrer un payout</button>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid sm:grid-cols-3 gap-4">
         <Stat label="Total retiré" value={`$${(kpi?.total_payouts||0).toLocaleString()}`} color="#00E676" icon={Banknote} />
         <Stat label="Prochain payout estimé" value={`$${(kpi?.estimated_payout||0).toLocaleString()}`} color="#B58BFF" icon={TrendingUp} />
         <Stat label="Payouts enregistrés" value={list.length} color="#4F8CFF" icon={Calendar} />
@@ -50,12 +50,12 @@ export default function Payouts() {
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="card-elev p-6">
           <div className="text-sm font-semibold mb-4">Simulateur de payout</div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <Fld label="Profit / jour" value={sim.daily} onChange={(v)=>setSim({...sim,daily:v})} testid="sim-daily" />
             <Fld label="Jours restants" value={sim.days} onChange={(v)=>setSim({...sim,days:v})} testid="sim-days" />
             <Fld label="Objectif ($)" value={sim.target} onChange={(v)=>setSim({...sim,target:v})} testid="sim-target" />
           </div>
-          <div className="grid grid-cols-3 gap-3 mt-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
             <SimOut label="Estimé" value={`$${estimated.toLocaleString()}`} color="#00E676" />
             <SimOut label="Date estimée" value={new Date(Date.now()+sim.days*86400000).toLocaleDateString()} color="#B58BFF" />
             <SimOut label="Probabilité" value={`${prob.toFixed(0)}%`} color="#4F8CFF" />
@@ -79,7 +79,7 @@ export default function Payouts() {
 
       {open && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={()=>setOpen(false)}>
-          <form onClick={(e)=>e.stopPropagation()} onSubmit={create} className="card-elev p-8 w-full max-w-md space-y-4 glow-green">
+          <form onClick={(e)=>e.stopPropagation()} onSubmit={create} className="card-elev p-5 sm:p-8 w-full max-w-md space-y-4 glow-green max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold">Enregistrer un payout</h2>
             <div>
               <label className="text-xs font-mono uppercase text-[#9CA3AF]">Compte</label>

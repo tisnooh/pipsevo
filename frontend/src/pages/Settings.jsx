@@ -5,8 +5,8 @@ import { Crown, Check } from "lucide-react";
 export default function Settings() {
   const { user } = useAuth();
   return (
-    <div className="p-7 space-y-5">
-      <h1 className="text-3xl font-bold">Paramètres</h1>
+    <div className="p-4 sm:p-7 space-y-5">
+      <h1 className="text-2xl sm:text-3xl font-bold">Paramètres</h1>
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="card-elev p-6 lg:col-span-2 space-y-2">
           <div className="text-sm font-semibold mb-3">Profil</div>
