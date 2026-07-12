@@ -40,15 +40,18 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen px-4 sm:px-6 py-8 sm:py-12 relative overflow-hidden">
-      <div className="absolute inset-0 grid-floor opacity-40" />
-      <div className="absolute top-[10%] right-[10%] w-[500px] h-[500px] rounded-full blur-3xl opacity-25" style={{ background: "radial-gradient(circle, #7C4DFF, transparent)" }} />
-      <div className="max-w-3xl mx-auto relative z-10">
-        <div className="flex justify-center mb-6 sm:mb-8"><Logo /></div>
-        <div className="card-elev p-5 sm:p-8 lg:p-10 glow-purple">
-          <div className="flex gap-1.5 mb-6">
-            {[1,2,3,4,5].map(s => <div key={s} className={`h-1 flex-1 rounded-full transition-all ${step>=s?"bg-[#7C4DFF]":"bg-white/10"}`} />)}
+    <div className="min-h-screen px-4 sm:px-6 py-7 sm:py-10 relative overflow-hidden bg-[#050505]">
+      <div className="absolute inset-0 grid-floor opacity-25" />
+      <div className="absolute -top-36 right-[5%] w-[600px] h-[600px] rounded-full blur-3xl opacity-20 bg-[#7C4DFF]" />
+      <div className="absolute -bottom-40 left-[10%] w-[500px] h-[500px] rounded-full blur-3xl opacity-10 bg-[#4F8CFF]" />
+      <div className="max-w-4xl mx-auto relative z-10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-7"><Logo /><div className="text-right"><div className="text-xs text-[#9CA3AF]">Bienvenue, <span className="text-white font-medium">{user?.name || "Trader"}</span></div><div className="text-[10px] text-[#6B7280] mt-1">Personnalisons ton espace.</div></div></div>
+        <div className="rounded-[26px] border border-white/[0.09] bg-gradient-to-br from-[#111426]/95 via-[#0B0E1A]/95 to-[#090B13]/95 p-5 sm:p-8 lg:p-10 shadow-[0_25px_90px_rgba(0,0,0,.5)] relative overflow-hidden">
+          <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-[#7C4DFF] blur-3xl opacity-10"/>
+          <div className="relative grid grid-cols-5 gap-2 mb-7">
+            {["Profil","Actifs","Firms","Comptes","Règles"].map((label,i) => <div key={label}><div className={`h-1.5 rounded-full transition-all duration-500 ${step>=i+1?"bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF] shadow-[0_0_12px_rgba(124,77,255,.35)]":"bg-white/10"}`} /><div className={`hidden sm:block text-[9px] mt-2 ${step===i+1?"text-[#B58BFF]":"text-[#4B5563]"}`}>{label}</div></div>)}
           </div>
+          <div className="relative">
           <div className="text-[10px] font-mono uppercase tracking-widest text-[#B58BFF]">Étape {step} / 5</div>
 
           {step === 1 && (
@@ -112,13 +115,14 @@ export default function Onboarding() {
             </div>
           )}
 
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-3 mt-8 sm:mt-9">
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-3 mt-8 sm:mt-10 pt-6 border-t border-white/[0.06]">
             <button onClick={()=>setStep(s=>Math.max(1,s-1))} disabled={step===1} className="btn-ghost inline-flex items-center justify-center gap-2 disabled:opacity-30 text-sm py-2.5"><ArrowLeft className="w-4 h-4"/> Retour</button>
             {step < 5 ? (
               <button onClick={()=>setStep(s=>s+1)} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5" data-testid="onb-next">Continuer <ArrowRight className="w-4 h-4"/></button>
             ) : (
               <button onClick={finish} disabled={loading} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5" data-testid="onb-finish">{loading?"Sauvegarde…":(<>Entrer dans PipsEvo <ArrowRight className="w-4 h-4"/></>)}</button>
             )}
+          </div>
           </div>
         </div>
       </div>

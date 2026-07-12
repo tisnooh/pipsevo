@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Plus, TrendingUp, Shield, Wallet, Target, ArrowDownRight, Sparkles, Calendar, BarChart3 } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { DEMO_TRADES, DEMO_ACCOUNTS, DEMO_KPIS, DEMO_METRICS, DEMO_EQUITY, isEmpty } from "@/lib/demo";
+import { useAuth } from "@/context/AuthContext";
 
 const kpiColors = {
   green: { stroke: "#00E676", id: "g-green" },
@@ -22,7 +23,8 @@ const sparkData = (seed, down) => {
 const KPICard = ({ label, value, sub, sparkColor = "green", icon: Icon, testid }) => {
   const c = kpiColors[sparkColor];
   return (
-    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="card-elev p-4 sm:p-5 relative overflow-hidden h-[160px] sm:h-[180px]" data-testid={testid}>
+    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -3 }} transition={{ duration: .25 }} className="card-elev p-4 sm:p-5 relative overflow-hidden h-[160px] sm:h-[180px] group hover:border-white/15" data-testid={testid}>
+      <div className="absolute -top-16 -right-16 w-36 h-36 rounded-full blur-3xl opacity-10 group-hover:opacity-20 transition" style={{background:c.stroke}}/>
       <div className="flex items-center justify-between">
         <div className="text-xs sm:text-sm text-[#9CA3AF]">{label}</div>
         {Icon && <Icon className="w-4 h-4 shrink-0" style={{ color: c.stroke }} />}
@@ -47,6 +49,7 @@ const KPICard = ({ label, value, sub, sparkColor = "green", icon: Icon, testid }
 };
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [d, setD] = useState(null);
   const [recent, setRecent] = useState([]);
   const [accs, setAccs] = useState([]);
@@ -76,17 +79,20 @@ export default function Dashboard() {
   ).slice(0, 5);
 
   return (
-    <div className="p-4 sm:p-7 space-y-5">
-      {useDemo && <div className="card-flat px-3 py-2 text-[11px] text-[#B58BFF] inline-flex items-center gap-2" data-testid="demo-banner">◆ Données de démo — ajoute un compte et logue des trades pour voir tes vrais chiffres.</div>}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Vue d'ensemble</h1>
-          <p className="text-sm text-[#9CA3AF] mt-1">Track. Analyse. Improve. Get Paid.</p>
+    <div className="p-4 sm:p-7 space-y-5 max-w-[1800px] mx-auto">
+      <div className="relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-gradient-to-br from-[#111426] via-[#0B0E1A] to-[#090B13] p-5 sm:p-7 shadow-[0_20px_70px_rgba(0,0,0,.32)]">
+        <div className="absolute -top-32 right-[8%] w-80 h-80 rounded-full bg-[#7C4DFF] blur-3xl opacity-15"/><div className="absolute -bottom-36 left-[25%] w-72 h-72 rounded-full bg-[#4F8CFF] blur-3xl opacity-10"/>
+        <div className="relative flex flex-col xl:flex-row xl:items-center justify-between gap-5">
+          <div><div className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[.2em] font-mono text-[#B58BFF]"><span className="w-1.5 h-1.5 rounded-full bg-[#00E676] shadow-[0_0_10px_#00E676]"/>Centre de pilotage</div><h1 className="text-2xl sm:text-4xl font-bold mt-3">Bonjour {user?.name?.split(" ")[0] || "Trader"}<span className="text-[#B58BFF]">.</span></h1><p className="text-sm text-[#9CA3AF] mt-2">Garde le contrôle de ton risque, de ta discipline et de tes prochains objectifs.</p></div>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-0 xl:min-w-[420px]">{[["Capital suivi",`$${k.funded_capital?.toLocaleString?.() || "0"}`,"#4F8CFF"],["Score trader",`${k.trader_score || k.discipline_score}/100`,"#B58BFF"],["Payouts",`$${k.total_payouts?.toLocaleString?.() || "0"}`,"#00E676"]].map(([l,v,c])=><div key={l} className="rounded-2xl border border-white/[0.07] bg-black/20 p-3 sm:p-4 backdrop-blur"><div className="text-[9px] text-[#6B7280] uppercase tracking-wider">{l}</div><div className="text-sm sm:text-xl font-bold font-mono mt-2 truncate" style={{color:c}}>{v}</div></div>)}</div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 pt-5 border-t border-white/[0.06]">
+          {useDemo ? <div className="text-[11px] text-[#B58BFF] inline-flex items-center gap-2" data-testid="demo-banner"><span className="w-1.5 h-1.5 rounded-full bg-[#B58BFF]"/>Mode démonstration : ajoute un compte et des trades pour afficher tes chiffres.</div> : <div className="text-[11px] text-[#00E676] inline-flex items-center gap-2"><Shield className="w-3.5 h-3.5"/>Données synchronisées avec ton journal.</div>}
+          <div className="flex items-center gap-2 flex-wrap">
           <label className="card-flat px-3 py-2 text-sm flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-[#9CA3AF]"/><select value={period} onChange={e=>setPeriod(e.target.value)} className="bg-transparent"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select></label>
           <Link to="/app/markets" className="card-flat px-3 py-2 text-sm inline-flex items-center gap-2 hover:border-[#7C4DFF]/40"><BarChart3 className="w-4 h-4 text-[#B58BFF]"/> Marchés</Link>
           <Link to="/app/accounts" className="btn-primary inline-flex items-center gap-2 text-sm py-2.5" data-testid="dash-add-account"><Plus className="w-4 h-4"/> Ajouter un compte</Link>
+          </div>
         </div>
       </div>
 
