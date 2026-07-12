@@ -254,6 +254,70 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* LE VRAI PROBLÈME */}
+      <section className="px-5 sm:px-6 lg:px-10 pb-16 sm:pb-24">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+            <div>
+              <div className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#FF7A7A]">LE RISQUE INVISIBLE</div>
+              <h2 className="text-3xl sm:text-5xl font-bold leading-tight mt-4">Ton compte ne se fragilise pas en un trade.<br/><span className="text-purple-grad">Il se fragilise en répétant les mêmes décisions.</span></h2>
+              <p className="text-[#9CA3AF] mt-5 leading-relaxed max-w-xl">Une entrée impulsive. Un stop déplacé. Un trade repris trop vite après une perte. Pris séparément, chaque écart paraît minime. Répétés, ils consomment ton drawdown et éloignent ton payout.</p>
+              <Link to="/register" className="btn-ghost inline-flex items-center gap-2 mt-7">Identifier mes habitudes <ArrowRight className="w-4 h-4"/></Link>
+            </div>
+            <div className="space-y-3">
+              {[
+                {n:"01",t:"Avant le trade",d:"Tu connais ton plan, mais tu ne mesures pas toujours si les conditions sont réellement réunies.",c:"#4F8CFF"},
+                {n:"02",t:"Pendant la pression",d:"La perte latente transforme parfois une décision préparée en réaction émotionnelle.",c:"#FFB855"},
+                {n:"03",t:"Après le résultat",d:"Sans journal structuré, tu retiens le gain ou la perte — pas la qualité de la décision.",c:"#FF5252"},
+              ].map((x,i)=><motion.div key={x.n} initial={{opacity:0,x:30}} whileInView={{opacity:1,x:0}} viewport={{once:true}} transition={{delay:i*.12}} className="card-flat p-5 sm:p-6 flex gap-4"><div className="text-xs font-mono w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{color:x.c,background:`${x.c}18`}}>{x.n}</div><div><h3 className="font-semibold">{x.t}</h3><p className="text-sm text-[#9CA3AF] mt-1.5 leading-relaxed">{x.d}</p></div></motion.div>)}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* PARCOURS DE TRANSFORMATION */}
+      <section className="px-5 sm:px-6 lg:px-10 pb-16 sm:pb-24">
+        <div className="max-w-7xl mx-auto card-elev p-6 sm:p-10 lg:p-14 relative overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none opacity-20" style={{background:"radial-gradient(circle at 50% 0%, #7C4DFF, transparent 55%)"}}/>
+          <div className="relative text-center max-w-3xl mx-auto">
+            <div className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#B58BFF]">UNE BOUCLE QUI TE FAIT PROGRESSER</div>
+            <h2 className="text-3xl sm:text-5xl font-bold mt-4">Observe. Comprends. Ajuste. Répète.</h2>
+            <p className="text-[#9CA3AF] mt-4">PipsEvo transforme ton historique en un processus d’amélioration continu.</p>
+          </div>
+          <div className="relative grid md:grid-cols-4 gap-4 mt-10">
+            {[
+              {n:"1",t:"Capture",d:"Enregistre le trade, le contexte, le setup et ton état émotionnel.",I:BookOpen,c:"#4F8CFF"},
+              {n:"2",t:"Mesure",d:"Compare le PnL, le R multiple, la discipline et le drawdown.",I:Activity,c:"#00E676"},
+              {n:"3",t:"Comprends",d:"Repère les sessions, instruments et comportements récurrents.",I:Brain,c:"#B58BFF"},
+              {n:"4",t:"Protège",d:"Transforme l'analyse en règles simples pour les prochains trades.",I:Shield,c:"#FFB855"},
+            ].map((x,i)=><div key={x.n} className="relative card-flat p-6 text-center"><div className="absolute top-3 right-3 text-[10px] font-mono text-[#6B7280]">ÉTAPE {x.n}</div><div className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center" style={{background:`${x.c}18`}}><x.I className="w-6 h-6" style={{color:x.c}}/></div><h3 className="font-semibold mt-5">{x.t}</h3><p className="text-xs text-[#9CA3AF] mt-2 leading-relaxed">{x.d}</p>{i<3&&<div className="hidden md:block absolute top-1/2 -right-3 z-10 text-[#7C4DFF]">→</div>}</div>)}
+          </div>
+        </div>
+      </section>
+
+      {/* HISTOIRES PRODUIT ALTERNÉES */}
+      <section className="px-5 sm:px-6 lg:px-10 pb-16 sm:pb-24">
+        <div className="max-w-7xl mx-auto space-y-20 sm:space-y-28">
+          <StoryChapter side="left" eyebrow="TABLEAU DE BORD" title="Vois le risque avant qu'il ne devienne une violation." text="Tous tes comptes, leur capital, leur drawdown restant et leur progression réunis dans une seule vue. Tu sais où ralentir et où ton processus reste solide." bullets={["Vue consolidée multi-comptes","Santé et survie de chaque compte","Progression vers les objectifs"]} color="#00E676" />
+          <StoryChapter side="right" eyebrow="JOURNAL DE TRADING" title="Le résultat dit combien. Le journal explique pourquoi." text="Un trade gagnant peut être une mauvaise décision. Un trade perdant peut respecter parfaitement ton plan. PipsEvo t'aide à séparer le processus du résultat." bullets={["Notes et contexte par trade","Comparaison par setup et session","Respect du plan mesuré"]} color="#B58BFF" />
+          <StoryChapter side="left" eyebrow="COACH COMPORTEMENTAL" title="Ne demande plus seulement “combien j'ai gagné ?” Demande “qu'est-ce qui se répète ?”" text="Interroge tes propres données pour identifier les écarts les plus coûteux et définir une action concrète pour ta prochaine session." bullets={["Questions basées sur ton historique","Analyse sans signaux de marché","Actions orientées discipline"]} color="#FF4FD8" />
+        </div>
+      </section>
+
+      {/* COMPARAISON */}
+      <section className="px-5 sm:px-6 lg:px-10 pb-16 sm:pb-24">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center max-w-3xl mx-auto mb-10"><div className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#B58BFF]">CHANGE DE SYSTÈME</div><h2 className="text-3xl sm:text-5xl font-bold mt-4">L'intuition se souvient du dernier trade.<br/><span className="text-purple-grad">Les données révèlent les cent derniers.</span></h2></div>
+          <div className="card-elev overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead><tr className="border-b border-white/10"><th className="text-left p-5 text-[#9CA3AF] font-normal">Besoin du trader financé</th><th className="p-5 text-[#9CA3AF] font-normal">Mémoire / intuition</th><th className="p-5 text-[#9CA3AF] font-normal">Tableur</th><th className="p-5 text-[#B58BFF]">PipsEvo</th></tr></thead><tbody>{[
+            ["Comprendre une série de pertes","Impression","Calcul manuel","Analyse structurée"],
+            ["Suivre plusieurs comptes","Difficile","Onglets séparés","Vue consolidée"],
+            ["Mesurer la discipline","Subjectif","Colonnes à maintenir","Score automatique"],
+            ["Protéger le drawdown","Réaction tardive","Formules","Suivi permanent"],
+            ["Préparer un payout","Estimation","Calcul manuel","Projection dédiée"],
+          ].map((r,i)=><tr key={r[0]} className="border-b border-white/5 last:border-0"><td className="p-5 font-medium">{r[0]}</td><td className="p-5 text-center text-[#6B7280]">{r[1]}</td><td className="p-5 text-center text-[#9CA3AF]">{r[2]}</td><td className="p-5 text-center text-[#B58BFF] font-medium">✓ {r[3]}</td></tr>)}</tbody></table></div>
+        </div>
+      </section>
+
       {/* PRICING */}
       <section id="pricing" className="px-5 sm:px-6 lg:px-10 pb-14 sm:pb-16 lg:pb-20">
         <div className="max-w-5xl mx-auto">
@@ -334,6 +398,26 @@ export default function Landing() {
     </div>
   );
 }
+
+const StoryChapter = ({ side, eyebrow, title, text, bullets, color }) => (
+  <motion.div initial={{opacity:0,y:35}} whileInView={{opacity:1,y:0}} viewport={{once:true,amount:.2}} transition={{duration:.7}} className="grid lg:grid-cols-2 gap-8 lg:gap-14 items-center">
+    <div className={side === "right" ? "lg:order-2" : ""}>
+      <div className="text-[11px] font-mono uppercase tracking-[0.25em]" style={{color}}>{eyebrow}</div>
+      <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight mt-4">{title}</h2>
+      <p className="text-[#9CA3AF] leading-relaxed mt-5">{text}</p>
+      <div className="space-y-3 mt-7">{bullets.map(x=><div key={x} className="flex items-center gap-3 text-sm text-[#B5BBC9]"><Check className="w-4 h-4" style={{color}}/>{x}</div>)}</div>
+    </div>
+    <div className={`relative ${side === "right" ? "lg:order-1" : ""}`}>
+      <div className="absolute -inset-10 blur-3xl opacity-20 rounded-full" style={{background:color}}/>
+      <div className="relative card-elev p-5 sm:p-7">
+        <div className="flex items-center justify-between border-b border-white/5 pb-4"><div className="text-xs font-semibold">{eyebrow}</div><div className="flex gap-1.5"><span className="w-2 h-2 rounded-full bg-[#FF5252]"/><span className="w-2 h-2 rounded-full bg-[#FFB855]"/><span className="w-2 h-2 rounded-full bg-[#00E676]"/></div></div>
+        <div className="grid grid-cols-3 gap-3 mt-5">{[["Capital","$105,420"],["Discipline","94/100"],["Drawdown","$6,240"]].map(([k,v],i)=><div key={k} className="card-flat p-3"><div className="text-[9px] text-[#6B7280]">{k}</div><div className="text-sm sm:text-lg font-bold font-mono mt-1" style={{color:i===1?color:"white"}}>{v}</div></div>)}</div>
+        <div className="mt-4 card-flat p-4"><div className="flex justify-between text-[10px] text-[#6B7280]"><span>Évolution du processus</span><span style={{color}}>+12%</span></div><svg viewBox="0 0 420 130" className="w-full h-40"><path d="M0 110 C38 105 55 84 91 90 S142 63 185 70 S234 45 275 53 S340 25 420 18" fill="none" stroke={color} strokeWidth="3"/><path d="M0 110 C38 105 55 84 91 90 S142 63 185 70 S234 45 275 53 S340 25 420 18 L420 130 L0 130Z" fill={`${color}15`}/></svg></div>
+        <div className="mt-4 space-y-2">{["Plan respecté · London session","Trade documenté · +1.8R","Limite quotidienne préservée"].map((x,i)=><div key={x} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.025] border border-white/5"><span className="text-xs text-[#B5BBC9]">{x}</span><span className="text-[10px]" style={{color:i===1?"#00E676":color}}>{i===1?"GAIN":"VALIDÉ"}</span></div>)}</div>
+      </div>
+    </div>
+  </motion.div>
+);
 
 /* ===== ICONS (premium 3D-style) ===== */
 const LayersIcon = () => (
