@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -178,14 +178,33 @@ export default function AppShell() {
 
       {/* MAIN — décalé de 256px uniquement à partir de md (768px), pleine largeur sinon */}
       <div className="w-full min-w-0 overflow-x-hidden md:ml-64 md:w-[calc(100%-16rem)]">
-        <TopBar user={user} onMenuClick={() => setMobileOpen(true)} onSearch={()=>setSearchOpen(true)} notificationsOpen={notificationsOpen} onNotifications={()=>setNotificationsOpen(v=>!v)} />
+        <TopBar
+          user={user}
+          onMenuClick={() => setMobileOpen(true)}
+          onSearch={()=>setSearchOpen(true)}
+          notificationsOpen={notificationsOpen}
+          onNotifications={()=>setNotificationsOpen(v=>!v)}
+          onNavigate={(to)=>nav(to)}
+          onLogout={()=>{ logout(); window.location.href = "/"; }}
+        />
         <Outlet />
       </div>
     </div>
   );
 }
 
-function TopBar({ user, onMenuClick, onSearch, notificationsOpen, onNotifications }) {
+function TopBar({ user, onMenuClick, onSearch, notificationsOpen, onNotifications, onNavigate, onLogout }) {
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
+
+  useEffect(() => {
+    const close = (e) => {
+      if (e.key === "Escape" || (e.type === "mousedown" && !profileRef.current?.contains(e.target))) setProfileOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close); };
+  }, []);
   return (
     <div className="sticky top-0 z-30 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 px-4 md:px-6 py-3 flex items-center gap-3 w-full min-w-0">
       {/* Hamburger — mobile uniquement */}
@@ -232,7 +251,8 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, onNotification
         <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-[#FF4FD8] rounded-full" />
       </button>{notificationsOpen && <div className="absolute right-0 top-11 w-72 card-elev p-4 z-50"><div className="text-sm font-semibold">Notifications</div><div className="text-xs text-[#9CA3AF] mt-3">Aucune nouvelle notification.</div></div>}</div>
 
-      <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl border border-white/10 bg-[#0D1020] shrink-0">
+      <div ref={profileRef} className="relative shrink-0">
+      <button onClick={()=>setProfileOpen(v=>!v)} aria-expanded={profileOpen} aria-label="Ouvrir le menu du profil" className="flex items-center gap-2 px-2 py-1.5 rounded-xl border border-white/10 bg-[#0D1020] hover:border-[#7C4DFF]/40 transition">
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] flex items-center justify-center text-xs font-bold shrink-0">
           {(user?.name || user?.email || "U")[0].toUpperCase()}
         </div>
@@ -242,6 +262,17 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, onNotification
         <span className="hidden sm:inline text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#7C4DFF]/20 text-[#B58BFF] border border-[#7C4DFF]/30 whitespace-nowrap">
           PRO
         </span>
+        <span className={`text-[#9CA3AF] text-xs transition-transform ${profileOpen ? "rotate-180" : ""}`}>⌄</span>
+      </button>
+      {profileOpen && <div className="absolute right-0 top-12 z-50 w-64 card-elev p-2 shadow-2xl">
+        <div className="px-3 py-3 border-b border-white/5">
+          <div className="text-sm font-semibold truncate">{user?.name || "Utilisateur"}</div>
+          <div className="text-xs text-[#9CA3AF] truncate mt-0.5">{user?.email}</div>
+        </div>
+        <button onClick={()=>{onNavigate("/app/settings");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 mt-1 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><Cog className="w-4 h-4"/>Mon profil et paramètres</button>
+        <button onClick={()=>{onNavigate("/app/accounts");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><Wallet className="w-4 h-4"/>Mes comptes</button>
+        <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 border-t border-white/5 mt-1 rounded-lg text-sm text-[#FF7A7A] hover:bg-[#FF5252]/10"><LogOut className="w-4 h-4"/>Se déconnecter</button>
+      </div>}
       </div>
     </div>
   );
