@@ -18,7 +18,7 @@ const faqs = [
 
 function PublicLayout({ title, subtitle, children }) {
   return <div className="min-h-screen bg-[#050505] text-white">
-    <header className="border-b border-white/5 bg-[#050505]/90 backdrop-blur-xl"><div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between"><Link to="/"><Logo/></Link><nav className="flex items-center gap-3 sm:gap-4 text-sm text-[#9CA3AF]"><Link to="/pricing" className="hidden sm:inline hover:text-white">Tarifs</Link><Link to="/faq" className="hidden sm:inline hover:text-white">FAQ</Link><Link to="/contact" className="hidden md:inline hover:text-white">Contact</Link><Link to="/login" className="btn-primary py-2">Connexion</Link></nav></div></header>
+    <header className="border-b border-white/5 bg-[#050505]/90 backdrop-blur-xl"><div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between"><Logo/><nav className="flex items-center gap-3 sm:gap-4 text-sm text-[#9CA3AF]"><Link to="/pricing" className="hidden sm:inline hover:text-white">Tarifs</Link><Link to="/faq" className="hidden sm:inline hover:text-white">FAQ</Link><Link to="/contact" className="hidden md:inline hover:text-white">Contact</Link><Link to="/login" className="btn-primary py-2">Connexion</Link></nav></div></header>
     <main className="max-w-5xl mx-auto px-5 py-14"><div className="text-center mb-10"><h1 className="text-3xl sm:text-5xl font-bold text-gradient">{title}</h1><p className="text-[#9CA3AF] mt-3 max-w-2xl mx-auto">{subtitle}</p></div>{children}</main>
     <Footer/>
   </div>;

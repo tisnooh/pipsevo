@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { LogoMark } from "@/components/Logo";
+import { Logo } from "@/components/Logo";
 import { dashboard } from "@/lib/api";
 
 const links = [
@@ -81,10 +81,7 @@ export default function AppShell() {
         data-testid="app-sidebar"
       >
         <div className="px-5 py-5 flex items-center justify-between gap-2.5 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <LogoMark />
-            <span className="font-bold text-lg whitespace-nowrap">PipsEvo<span className="text-[#7C4DFF]">.</span></span>
-          </div>
+          <Logo to="/app/dashboard" size="md" />
           <button
             onClick={closeMobile}
             className="md:hidden w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-[#9CA3AF]"
@@ -222,10 +219,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
       </button>
 
       {/* Logo compact — mobile uniquement (la sidebar a déjà le logo sur desktop) */}
-      <div className="md:hidden flex items-center gap-1.5 shrink-0">
-        <LogoMark />
-        <span className="font-bold text-sm whitespace-nowrap">PipsEvo<span className="text-[#7C4DFF]">.</span></span>
-      </div>
+      <div className="md:hidden shrink-0"><Logo to="/app/dashboard" size="sm" /></div>
 
       {/* Barre de recherche — desktop uniquement */}
       <button onClick={onSearch} className="hidden md:block flex-1 min-w-0 max-w-md relative text-left">
