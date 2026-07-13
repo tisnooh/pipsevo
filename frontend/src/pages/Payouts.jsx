@@ -88,7 +88,7 @@ export default function Payouts() {
               {list.map(p => (
                 <div key={p.id} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0" data-testid={`payout-${p.id}`}>
                   <div className="flex items-center gap-3"><Banknote className="w-4 h-4 text-[#00E676]"/><div><div className="text-sm">{p.date}</div><div className="text-xs text-[#9CA3AF]">{p.note || "—"}</div></div></div>
-                  <div className="flex items-center gap-3"><div className="text-lg font-bold font-mono text-[#00E676]">+${p.amount.toLocaleString()}</div><button disabled={deleting===p.id} onClick={()=>remove(p)} aria-label="Supprimer le payout" className="text-[#6B7280] hover:text-[#FF5252] disabled:opacity-40"><Trash2 className="w-4 h-4"/></button></div>
+                  <div className="flex items-center gap-3"><div className="text-lg font-bold font-numeric text-[#00E676]">+${p.amount.toLocaleString()}</div><button disabled={deleting===p.id} onClick={()=>remove(p)} aria-label="Supprimer le payout" className="text-[#6B7280] hover:text-[#FF5252] disabled:opacity-40"><Trash2 className="w-4 h-4"/></button></div>
                 </div>
               ))}
             </div>
@@ -120,12 +120,12 @@ export default function Payouts() {
 const Stat = ({ label, value, color, icon: Icon }) => (
   <div className="card-elev p-5">
     <div className="flex justify-between"><div className="text-xs text-[#9CA3AF]">{label}</div><Icon className="w-4 h-4" style={{color}}/></div>
-    <div className="text-3xl font-bold font-mono mt-2" style={{color}}>{value}</div>
+    <div className="text-3xl font-bold font-numeric mt-2" style={{color}}>{value}</div>
   </div>
 );
 const SimOut = ({ label, value, color }) => (
-  <div className="card-flat p-3"><div className="text-[10px] text-[#9CA3AF] uppercase font-mono">{label}</div><div className="font-mono font-bold mt-1" style={{color}}>{value}</div></div>
+  <div className="card-flat p-3"><div className="text-[10px] text-[#9CA3AF] uppercase font-mono">{label}</div><div className="font-numeric font-bold mt-1" style={{color}}>{value}</div></div>
 );
 const Fld = ({ label, value, onChange, type="text", testid }) => (
-  <div><label className="text-xs font-mono uppercase text-[#9CA3AF]">{label}</label><input type={type} required value={value} onChange={(e)=>onChange(e.target.value)} data-testid={testid} className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-2.5 font-mono outline-none focus:border-[#7C4DFF]"/></div>
+  <div><label className="text-xs font-mono uppercase text-[#9CA3AF]">{label}</label><input type={type} required value={value} onChange={(e)=>onChange(e.target.value)} data-testid={testid} className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-2.5 font-numeric outline-none focus:border-[#7C4DFF]"/></div>
 );

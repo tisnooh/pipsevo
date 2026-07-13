@@ -31,7 +31,7 @@ const KPICard = ({ label, value, sub, sparkColor = "green", icon: Icon, testid }
         <div className="text-xs sm:text-sm text-[#9CA3AF]">{label}</div>
         {Icon && <Icon className="w-4 h-4 shrink-0" style={{ color: c.stroke }} />}
       </div>
-      <div className="text-[26px] sm:text-[34px] font-bold font-mono mt-3 leading-none" style={{ color: sparkColor === "red" ? "#FF5252" : sparkColor === "green" ? "#00E676" : "white" }}>{value}</div>
+      <div className="text-[26px] sm:text-[34px] font-bold font-numeric mt-3 leading-none" style={{ color: sparkColor === "red" ? "#FF5252" : sparkColor === "green" ? "#00E676" : "white" }}>{value}</div>
       {sub && <div className="text-xs mt-2 flex items-center gap-1" style={{ color: c.stroke }}>◆ <span>{sub}</span></div>}
       <div className="absolute left-0 right-0 bottom-0 h-[58px] pointer-events-none">
         <ResponsiveContainer width="100%" height="100%">
@@ -99,7 +99,7 @@ export default function Dashboard() {
         <div className="absolute -top-32 right-[8%] w-80 h-80 rounded-full bg-[#7C4DFF] blur-3xl opacity-15"/><div className="absolute -bottom-36 left-[25%] w-72 h-72 rounded-full bg-[#4F8CFF] blur-3xl opacity-10"/>
         <div className="relative flex flex-col xl:flex-row xl:items-center justify-between gap-5">
           <div><div className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[.2em] font-mono text-[#B58BFF]"><span className="w-1.5 h-1.5 rounded-full bg-[#00E676] shadow-[0_0_10px_#00E676]"/>Centre de pilotage</div><h1 className="text-2xl sm:text-4xl font-bold mt-3">Bonjour {user?.name?.split(" ")[0] || "Trader"}<span className="text-[#B58BFF]">.</span></h1><p className="text-sm text-[#9CA3AF] mt-2">Garde le contrôle de ton risque, de ta discipline et de tes prochains objectifs.</p></div>
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-0 xl:min-w-[420px]">{[["Capital suivi",`$${k.funded_capital?.toLocaleString?.() || "0"}`,"#4F8CFF"],["Score trader",`${k.trader_score || k.discipline_score}/100`,"#B58BFF"],["Payouts",`$${k.total_payouts?.toLocaleString?.() || "0"}`,"#00E676"]].map(([l,v,c])=><div key={l} className="rounded-2xl border border-white/[0.07] bg-black/20 p-3 sm:p-4 backdrop-blur"><div className="text-[9px] text-[#6B7280] uppercase tracking-wider">{l}</div><div className="text-sm sm:text-xl font-bold font-mono mt-2 truncate" style={{color:c}}>{v}</div></div>)}</div>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-0 xl:min-w-[420px]">{[["Capital suivi",`$${k.funded_capital?.toLocaleString?.() || "0"}`,"#4F8CFF"],["Score trader",`${k.trader_score || k.discipline_score}/100`,"#B58BFF"],["Payouts",`$${k.total_payouts?.toLocaleString?.() || "0"}`,"#00E676"]].map(([l,v,c])=><div key={l} className="rounded-2xl border border-white/[0.07] bg-black/20 p-3 sm:p-4 backdrop-blur"><div className="text-[9px] text-[#6B7280] uppercase tracking-wider">{l}</div><div className="text-sm sm:text-xl font-bold font-numeric mt-2 truncate" style={{color:c}}>{v}</div></div>)}</div>
         </div>
         <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 pt-5 border-t border-white/[0.06]">
           {isEmptyAccount ? <div className="text-[11px] text-[#B58BFF] inline-flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[#B58BFF]"/>Ton espace est prêt : ajoute un compte puis journalise ton premier trade.</div> : <div className="text-[11px] text-[#00E676] inline-flex items-center gap-2"><Shield className="w-3.5 h-3.5"/>Données réelles synchronisées avec ton journal.</div>}
@@ -146,13 +146,13 @@ export default function Dashboard() {
             <div className="text-sm font-semibold mb-3">Progression des payouts</div>
             <div className="text-xs text-[#9CA3AF]">{accList[0] ? `${accList[0].firm} · ${accList[0].name}` : "Aucun compte configuré"}</div>
             <div className="flex items-baseline gap-2 mt-2">
-              <div className="text-2xl font-bold font-mono">${Number(k.total_payouts || 0).toLocaleString()}</div>
+              <div className="text-2xl font-bold font-numeric">${Number(k.total_payouts || 0).toLocaleString()}</div>
               <div className="text-xs text-[#9CA3AF]">/ ${payoutGoal.toLocaleString()}</div>
               <div className="ml-auto text-xs font-mono">{payoutProgress}%</div>
             </div>
             <div className="h-2 rounded-full bg-white/5 mt-2 overflow-hidden"><div className="h-full bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF] rounded-full" style={{ width: `${payoutProgress}%` }} /></div>
             <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
-              <div><div className="text-xs text-[#9CA3AF]">Prochain payout estimé</div><div className="text-xl font-bold font-mono mt-1">${k.estimated_payout.toLocaleString()}</div></div>
+              <div><div className="text-xs text-[#9CA3AF]">Prochain payout estimé</div><div className="text-xl font-bold font-numeric mt-1">${k.estimated_payout.toLocaleString()}</div></div>
               <Link to="/app/payouts" className="text-xs text-[#B58BFF] flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/5 hover:border-[#7C4DFF]/40"><Calendar className="w-3 h-3"/>Simuler</Link>
             </div>
           </div>
@@ -183,7 +183,7 @@ export default function Dashboard() {
               const directionLong = String(t.direction).toLowerCase() === "long";
               const accountName = t.account || accList.find(a=>a.id===t.account_id)?.firm || "Compte";
               return <div key={t.id} className="rounded-2xl border border-white/[0.07] bg-[#0B0E17] p-4 transition active:border-[#7C4DFF]/40">
-                <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3 min-w-0"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#15182A] text-xs font-bold text-[#B58BFF]">{String(t.instrument || "?").slice(0,2)}</span><div className="min-w-0"><div className="font-semibold truncate">{t.instrument}</div><div className="text-[11px] text-[#6B7280] mt-0.5">{t.date} · {accountName}</div></div></div><div className="text-right"><div className="font-mono font-semibold" style={{color:!hasPnl?"#9CA3AF":positive?"#00E676":"#FF5252"}}>{hasPnl?`${positive?"+":"-"}$${Math.abs(t.pnl).toFixed(2)}`:"—"}</div><div className="text-[10px] text-[#6B7280] mt-0.5">{typeof t.r==="number"?`${t.r.toFixed(2)}R`:"—"}</div></div></div>
+                <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3 min-w-0"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#15182A] text-xs font-bold text-[#B58BFF]">{String(t.instrument || "?").slice(0,2)}</span><div className="min-w-0"><div className="font-semibold truncate">{t.instrument}</div><div className="text-[11px] text-[#6B7280] mt-0.5">{t.date} · {accountName}</div></div></div><div className="text-right"><div className="font-numeric font-semibold" style={{color:!hasPnl?"#9CA3AF":positive?"#00E676":"#FF5252"}}>{hasPnl?`${positive?"+":"-"}$${Math.abs(t.pnl).toFixed(2)}`:"—"}</div><div className="text-[10px] text-[#6B7280] mt-0.5">{typeof t.r==="number"?`${t.r.toFixed(2)}R`:"—"}</div></div></div>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.05]"><span className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${directionLong ? "bg-[#00E676]/10 text-[#00E676]" : "bg-[#FF5252]/10 text-[#FF7272]"}`}>{directionLong ? "Achat · Long" : "Vente · Short"}</span><span className="text-[11px] text-[#7E8798]">{t.duration || t.session || "—"}</span></div>
               </div>;
             })}
@@ -201,8 +201,8 @@ export default function Dashboard() {
                     <td className="px-4 py-3.5 text-xs text-[#8B93A3] whitespace-nowrap">{t.date}</td>
                     <td className="px-3 font-semibold"><span className="inline-flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-[#15182A] text-[9px] text-[#B58BFF] group-hover:bg-[#7C4DFF]/15">{String(t.instrument || "?").slice(0,2)}</span>{t.instrument}</span></td>
                     <td className="px-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium ${directionLong ? "bg-[#00E676]/10 text-[#00E676]" : "bg-[#FF5252]/10 text-[#FF7272]"}`}>{directionLong ? "Achat · Long" : "Vente · Short"}</span></td>
-                    <td className="px-3 text-right font-mono font-semibold" style={{ color: !hasPnl ? "#9CA3AF" : positive ? "#00E676" : "#FF5252" }}>{hasPnl?`${positive?"+":"-"}$${Math.abs(t.pnl).toFixed(2)}`:"—"}</td>
-                    <td className="px-3 text-right font-mono text-[#B5BBC9]">{typeof t.r==="number"?`${t.r.toFixed(2)}R`:"—"}</td>
+                    <td className="px-3 text-right font-numeric font-semibold" style={{ color: !hasPnl ? "#9CA3AF" : positive ? "#00E676" : "#FF5252" }}>{hasPnl?`${positive?"+":"-"}$${Math.abs(t.pnl).toFixed(2)}`:"—"}</td>
+                    <td className="px-3 text-right font-numeric text-[#B5BBC9]">{typeof t.r==="number"?`${t.r.toFixed(2)}R`:"—"}</td>
                     <td className="px-3 text-xs text-[#8B93A3]">{t.duration || t.session || "—"}</td>
                     <td className="px-3 text-xs text-[#B5BBC9]"><span className="rounded-lg border border-white/[0.07] bg-white/[0.025] px-2 py-1">{t.account || (accList.find(a=>a.id===t.account_id)?.firm) || "—"}</span></td>
                     <td className="px-4 space-x-1">{(t.tags || (t.setup ? [t.setup] : [])).slice(0,2).map((tag,i) => <span key={i} className="text-[9px] px-2 py-1 rounded-md bg-[#7C4DFF]/10 text-[#C8AEFF] inline-block">{tag}</span>)}</td>
@@ -234,7 +234,7 @@ export default function Dashboard() {
                 <div key={a.id} className="rounded-xl border border-white/[0.065] bg-[#0A0D16] p-3 transition hover:border-white/[0.12]">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 min-w-0"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#15182A] text-[10px] font-bold text-[#B58BFF]">{String(a.firm || a.name || "C").slice(0,2).toUpperCase()}</span><div className="min-w-0"><div className="text-xs font-medium truncate">{a.name || a.firm}</div><div className="text-[9px] text-[#6B7280] truncate mt-0.5">{a.firm || "Compte de trading"}</div></div></div>
-                    <div className="text-right shrink-0"><div className="text-xs font-mono font-semibold" style={{ color: pnl >= 0 ? "#00E676" : "#FF5252" }}>{pnl>=0?"+":"-"}${Math.abs(pnl).toLocaleString()}</div><div className="text-[9px] text-[#6B7280] mt-0.5">P&amp;L</div></div>
+                    <div className="text-right shrink-0"><div className="text-xs font-numeric font-semibold" style={{ color: pnl >= 0 ? "#00E676" : "#FF5252" }}>{pnl>=0?"+":"-"}${Math.abs(pnl).toLocaleString()}</div><div className="text-[9px] text-[#6B7280] mt-0.5">P&amp;L</div></div>
                   </div>
                   <div className="mt-3 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.05]"><div className="h-full rounded-full bg-gradient-to-r from-[#4F8CFF] to-[#7C4DFF]" style={{width:`${health}%`}}/></div><span className="w-7 text-right text-[9px] font-mono text-[#8B93A3]">{health}%</span></div>
                 </div>
@@ -260,7 +260,7 @@ function BigGauge({ value }) {
         <path d="M20 95 A75 75 0 0 1 180 95" stroke="url(#bg-grad)" strokeWidth="12" fill="none" strokeLinecap="round" strokeDasharray="236" strokeDashoffset={236 - 236*pct} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-end pb-2">
-        <div className="text-3xl font-bold font-mono">{value}<span className="text-sm text-[#9CA3AF]">/100</span></div>
+        <div className="text-3xl font-bold font-numeric">{value}<span className="text-sm text-[#9CA3AF]">/100</span></div>
         <div className="text-[10px] text-[#9CA3AF] mt-0.5">{value>=80?"Excellent":value>=60?"À consolider":value?"À améliorer":"En attente"}</div>
       </div>
     </div>
