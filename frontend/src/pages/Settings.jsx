@@ -9,6 +9,9 @@ import { toast } from "sonner";
 import TradingRulesEditor, { normalizeTradingRules } from "@/components/TradingRulesEditor";
 import JournalPreferencesEditor from "@/components/JournalPreferencesEditor";
 import { normalizeJournalPreferences } from "@/lib/journalPreferences";
+import { useI18n } from "@/context/I18nContext";
+import { readSettings, writeSettings } from "@/lib/preferences";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const sections = [
   { id: "profile", label: "Mon profil", subtitle: "Identité et marché", icon: User },
@@ -19,14 +22,6 @@ const sections = [
   { id: "security", label: "Sécurité", subtitle: "Accès au compte", icon: ShieldCheck },
   { id: "billing", label: "Abonnement", subtitle: "Plan et facturation", icon: CreditCard },
 ];
-
-const getStoredSettings = () => {
-  try {
-    return JSON.parse(localStorage.getItem("pipsevo_settings")) || {};
-  } catch {
-    return {};
-  }
-};
 
 function Toggle({ checked, onChange, label, description, icon: Icon }) {
   return <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/[0.07] bg-[#0B0E18] p-4 transition hover:border-white/[0.12]">
@@ -42,7 +37,8 @@ function Toggle({ checked, onChange, label, description, icon: Icon }) {
 
 export default function Settings() {
   const { user, setUser } = useAuth();
-  const stored = getStoredSettings();
+  const { setLanguage } = useI18n();
+  const stored = readSettings();
   const [active, setActive] = useState(()=>new URLSearchParams(window.location.search).get("section") || "profile");
   const [name, setName] = useState(user?.name || "");
   const [traderType, setTraderType] = useState(user?.trader_type || "futures");
@@ -64,8 +60,8 @@ export default function Settings() {
   });
 
   const persistLocal = (message) => {
-    localStorage.setItem("pipsevo_settings", JSON.stringify({ ...preferences, ...notifications }));
-    window.dispatchEvent(new Event("pipsevo:settings-updated"));
+    writeSettings({ ...preferences, ...notifications });
+    setLanguage(preferences.language);
     toast.success(message);
   };
 
@@ -133,7 +129,7 @@ export default function Settings() {
               <label className="block text-xs text-[#9CA3AF]">Nom complet<input value={name} onChange={e=>setName(e.target.value)} required maxLength={80} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0D1020] px-4 py-3 text-white outline-none transition focus:border-[#7C4DFF] focus:ring-2 focus:ring-[#7C4DFF]/10"/></label>
               <label className="block text-xs text-[#9CA3AF]">Adresse email<div className="relative"><Mail className="absolute left-4 top-5 h-4 w-4 text-[#596172]"/><input value={user?.email || ""} disabled className="mt-2 w-full rounded-xl border border-white/[0.07] bg-[#090B13] py-3 pl-11 pr-4 text-[#6B7280]"/></div></label>
             </div>
-            <label className="block text-xs text-[#9CA3AF]">Marchés tradés<select value={traderType} onChange={e=>setTraderType(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0D1020] px-4 py-3 text-white outline-none focus:border-[#7C4DFF]"><option value="futures">Futures</option><option value="cfd">CFD / Forex</option><option value="both">Futures et CFD / Forex</option></select></label>
+            <SettingsSelect item={{label:"Marchés tradés",icon:Globe2,options:[["futures","Futures"],["cfd","CFD / Forex"],["both","Futures et CFD / Forex"]]}} value={traderType} onChange={setTraderType}/>
           </div>
           <div className="flex justify-end border-t border-white/[0.06] bg-white/[0.015] p-4 sm:px-6"><button disabled={saving} className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"><Save className="h-4 w-4"/>{saving ? "Sauvegarde…" : "Enregistrer le profil"}</button></div>
         </form>}
@@ -149,7 +145,7 @@ export default function Settings() {
         {active === "preferences" && <section className="card-elev overflow-hidden">
           <div className="border-b border-white/[0.06] p-5 sm:p-6"><h2 className="font-semibold">Préférences de trading</h2><p className="mt-1 text-xs text-[#7E8798]">Adapte les montants, horaires et l’affichage à ta façon de travailler.</p></div>
           <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
-            {[{label:"Devise principale",key:"currency",icon:CreditCard,options:[["USD","USD — Dollar"],["EUR","EUR — Euro"],["GBP","GBP — Livre"]]},{label:"Fuseau horaire",key:"timezone",icon:Globe2,options:[["Europe/Paris","Europe / Paris"],["America/New_York","America / New York"],["Europe/London","Europe / London"]]},{label:"Langue",key:"language",icon:Globe2,options:[["fr","Français"],["en","English"]]}].map(item=><label key={item.key} className="text-xs text-[#9CA3AF]">{item.label}<div className="relative"><item.icon className="absolute left-4 top-5 h-4 w-4 text-[#596172]"/><select value={preferences[item.key]} onChange={e=>setPreferences({...preferences,[item.key]:e.target.value})} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0D1020] py-3 pl-11 pr-4 text-white outline-none focus:border-[#7C4DFF]">{item.options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></div></label>)}
+            {[{label:"Devise principale",key:"currency",icon:CreditCard,options:[["USD","USD — Dollar"],["EUR","EUR — Euro"],["GBP","GBP — Livre"]]},{label:"Fuseau horaire",key:"timezone",icon:Globe2,options:[["Europe/Paris","Europe / Paris"],["America/New_York","America / New York"],["Europe/London","Europe / London"]]},{label:"Langue",key:"language",icon:Globe2,options:[["fr","Français"],["en","English"]]}].map(item=><SettingsSelect key={item.key} item={item} value={preferences[item.key]} onChange={value=>{setPreferences(current=>({...current,[item.key]:value}));if(item.key==="language")setLanguage(value)}}/>)}
             <div className="sm:col-span-2"><Toggle checked={preferences.compactMode} onChange={v=>setPreferences({...preferences,compactMode:v})} label="Affichage compact" description="Réduit l’espacement des tableaux et affiche davantage de données à l’écran." icon={SlidersHorizontal}/></div>
           </div>
           <div className="flex justify-end border-t border-white/[0.06] p-4 sm:px-6"><button onClick={()=>persistLocal("Préférences enregistrées")} className="btn-primary inline-flex items-center gap-2"><Save className="h-4 w-4"/>Enregistrer</button></div>
@@ -162,5 +158,20 @@ export default function Settings() {
         {active === "billing" && <section className="card-elev overflow-hidden glow-purple"><div className="relative border-b border-white/[0.06] p-5 sm:p-7"><Crown className="absolute -right-5 -top-7 h-32 w-32 text-[#7C4DFF]/15"/><div className="relative"><span className="rounded-full border border-[#7C4DFF]/30 bg-[#7C4DFF]/10 px-3 py-1 text-[10px] font-medium text-[#C8AEFF]">PLAN ACTUEL · BÊTA</span><h2 className="mt-4 text-xl font-bold">Accès bêta</h2><div className="mt-2 flex items-end gap-2"><span className="text-3xl font-bold font-mono">0 €</span><span className="pb-1 text-sm text-[#7E8798]">aujourd’hui</span></div><p className="mt-3 text-sm text-[#8B93A3]">Aucune carte bancaire enregistrée et aucun prélèvement pendant la bêta.</p></div></div><div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6">{["Comptes multiples","Coach IA selon disponibilité","Trading DNA","Analyses avancées","Rapports détaillés","Support bêta"].map(f=><div key={f} className="flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-[#0B0E18] p-3 text-xs"><span className="grid h-5 w-5 place-items-center rounded-full bg-[#00E676]/10"><Check className="h-3 w-3 text-[#00E676]"/></span>{f}</div>)}</div><div className="border-t border-white/[0.06] p-5 sm:p-6"><button disabled title="Paiement indisponible pendant la bêta" className="btn-primary w-full sm:w-auto cursor-not-allowed opacity-50">Facturation indisponible</button><p className="mt-2 text-xs text-[#7E8798]">Une offre Pro à 19,99 €/mois est envisagée après la bêta. Le prix et les conditions seront confirmés avant toute facturation.</p></div></section>}
       </main>
     </div>
+  </div>;
+}
+
+function SettingsSelect({ item, value, onChange }) {
+  const Icon = item.icon;
+  return <div className="text-xs text-[#9CA3AF]">
+    <div>{item.label}</div>
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="mt-2 h-12 rounded-xl border-white/10 bg-[#0D1020] px-4 text-white shadow-none focus:ring-[#7C4DFF]/50">
+        <span className="flex min-w-0 items-center gap-3"><Icon className="h-4 w-4 shrink-0 text-[#596172]"/><SelectValue/></span>
+      </SelectTrigger>
+      <SelectContent className="z-[90] border-white/10 bg-[#0D1020] p-1 text-white shadow-2xl">
+        {item.options.map(([optionValue,label])=><SelectItem key={optionValue} value={optionValue} className="rounded-lg py-2.5 pl-3 pr-9 focus:bg-[#7C4DFF]/20 focus:text-white">{label}</SelectItem>)}
+      </SelectContent>
+    </Select>
   </div>;
 }

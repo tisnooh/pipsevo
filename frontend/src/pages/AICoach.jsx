@@ -2,17 +2,21 @@ import React, { useEffect, useState } from "react";
 import { coach, dashboard } from "@/lib/api";
 import { toast } from "sonner";
 import { Sparkles, Send, Brain, AlertTriangle, Target, Clock, Shield, Trophy } from "lucide-react";
+import { useAppSettings } from "@/hooks/useAppSettings";
+import { useI18n } from "@/context/I18nContext";
 
 const PRESETS = [
-  "Analyse mon mois",
-  "Trouve mes erreurs",
-  "Pourquoi je perds ?",
-  "Quel est mon meilleur setup ?",
-  "Comment améliorer ma discipline ?",
-  "Quel est mon coût d'overtrading ?",
+  { fr:"Analyse mon mois", en:"Analyze my month" },
+  { fr:"Trouve mes erreurs", en:"Find my mistakes" },
+  { fr:"Pourquoi je perds ?", en:"Why am I losing?" },
+  { fr:"Quel est mon meilleur setup ?", en:"What is my best setup?" },
+  { fr:"Comment améliorer ma discipline ?", en:"How can I improve my discipline?" },
+  { fr:"Quel est mon coût d'overtrading ?", en:"What is the cost of my overtrading?" },
 ];
 
 export default function AICoach() {
+  const { date } = useAppSettings();
+  const { language } = useI18n();
   const [q, setQ] = useState("");
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -56,7 +60,7 @@ export default function AICoach() {
           <button onClick={()=>ask()} disabled={loading} className="btn-primary inline-flex items-center gap-2 text-sm" data-testid="coach-ask"><Send className="w-4 h-4"/>{loading?"…":"Envoyer"}</button>
         </div>
         <div className="flex flex-wrap gap-2 mt-4">
-          {PRESETS.map(p => <button key={p} onClick={()=>ask(p)} disabled={loading} data-testid={`coach-preset-${p.slice(0,8)}`} className="text-xs px-3 py-1.5 rounded-full border border-white/10 hover:border-[#7C4DFF]/40 text-[#B5BBC9] hover:text-white transition">{p}</button>)}
+          {PRESETS.map(p => { const label=p[language] || p.fr; return <button key={p.fr} onClick={()=>ask(label)} disabled={loading} data-testid={`coach-preset-${p.fr.slice(0,8)}`} className="text-xs px-3 py-1.5 rounded-full border border-white/10 hover:border-[#7C4DFF]/40 text-[#B5BBC9] hover:text-white transition">{label}</button> })}
         </div>
       </div>
 
@@ -79,7 +83,7 @@ export default function AICoach() {
         )}
         {history.map(r => (
           <div key={r.id} className="card-elev p-6" data-testid={`coach-report-${r.id}`}>
-            <div className="text-[10px] font-mono uppercase text-[#B58BFF] mb-2">{r.tag} · {new Date(r.created_at).toLocaleString()}</div>
+            <div className="text-[10px] font-mono uppercase text-[#B58BFF] mb-2">{r.tag} · {date(r.created_at,{withTime:true})}</div>
             <div className="font-semibold mb-3">{r.question}</div>
             <div className="text-sm text-[#B5BBC9] whitespace-pre-wrap leading-relaxed">{r.answer}</div>
           </div>

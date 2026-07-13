@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useState } from "react";
 import { payouts, accounts as accAPI, dashboard } from "@/lib/api";
 import { toast } from "sonner";
 import { Plus, Banknote, Calendar, TrendingUp, Trash2, RefreshCw, X } from "lucide-react";
+import { useAppSettings } from "@/hooks/useAppSettings";
 
 export default function Payouts() {
+  const { settings, money, date } = useAppSettings();
   const [list, setList] = useState([]);
   const [accs, setAccs] = useState([]);
   const [kpi, setKpi] = useState(null);
@@ -37,7 +39,7 @@ export default function Payouts() {
     finally { setSaving(false); }
   };
   const remove = async (payout) => {
-    if (!window.confirm(`Supprimer le payout de $${Number(payout.amount).toLocaleString()} ?`)) return;
+    if (!window.confirm(`Supprimer le payout de ${money(payout.amount)} ?`)) return;
     setDeleting(payout.id);
     try { await payouts.delete(payout.id); toast.success("Payout supprimé"); await load(); }
     catch (e) { toast.error(e.response?.data?.detail || "Suppression impossible"); }
@@ -60,8 +62,8 @@ export default function Payouts() {
       {loading && <div className="grid sm:grid-cols-3 gap-4">{Array.from({length:3}).map((_,i)=><div key={i} className="h-28 card-elev animate-pulse"/>)}</div>}
 
       {!loading && <div className="grid sm:grid-cols-3 gap-4">
-        <Stat label="Total retiré" value={`$${(kpi?.total_payouts||0).toLocaleString()}`} color="#00E676" icon={Banknote} />
-        <Stat label="Prochain payout estimé" value={`$${(kpi?.estimated_payout||0).toLocaleString()}`} color="#B58BFF" icon={TrendingUp} />
+        <Stat label="Total retiré" value={money(kpi?.total_payouts||0)} color="#00E676" icon={Banknote} />
+        <Stat label="Prochain payout estimé" value={money(kpi?.estimated_payout||0)} color="#B58BFF" icon={TrendingUp} />
         <Stat label="Payouts enregistrés" value={list.length} color="#4F8CFF" icon={Calendar} />
       </div>}
 
@@ -72,12 +74,12 @@ export default function Payouts() {
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <Fld label="Profit / jour" value={sim.daily} onChange={(v)=>setSim({...sim,daily:v})} testid="sim-daily" />
             <Fld label="Jours restants" value={sim.days} onChange={(v)=>setSim({...sim,days:v})} testid="sim-days" />
-            <Fld label="Objectif ($)" value={sim.target} onChange={(v)=>setSim({...sim,target:v})} testid="sim-target" />
+            <Fld label={`Objectif (${settings.currency})`} value={sim.target} onChange={(v)=>setSim({...sim,target:v})} testid="sim-target" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
-            <SimOut label="Estimé" value={`$${estimated.toLocaleString()}`} color="#00E676" />
-            <SimOut label="Date estimée" value={new Date(Date.now()+sim.days*86400000).toLocaleDateString()} color="#B58BFF" />
-            <SimOut label="Écart objectif" value={`${gap>=0?"+":"-"}$${Math.abs(gap).toLocaleString()}`} color={gap>=0?"#00E676":"#FF5252"} />
+            <SimOut label="Estimé" value={money(estimated)} color="#00E676" />
+            <SimOut label="Date estimée" value={date(new Date(Date.now()+Number(sim.days)*86400000))} color="#B58BFF" />
+            <SimOut label="Écart objectif" value={money(gap,{signDisplay:"always"})} color={gap>=0?"#00E676":"#FF5252"} />
           </div>
         </div>
 
@@ -87,8 +89,8 @@ export default function Payouts() {
             <div className="space-y-1">
               {list.map(p => (
                 <div key={p.id} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0" data-testid={`payout-${p.id}`}>
-                  <div className="flex items-center gap-3"><Banknote className="w-4 h-4 text-[#00E676]"/><div><div className="text-sm">{p.date}</div><div className="text-xs text-[#9CA3AF]">{p.note || "—"}</div></div></div>
-                  <div className="flex items-center gap-3"><div className="text-lg font-bold font-numeric text-[#00E676]">+${p.amount.toLocaleString()}</div><button disabled={deleting===p.id} onClick={()=>remove(p)} aria-label="Supprimer le payout" className="text-[#6B7280] hover:text-[#FF5252] disabled:opacity-40"><Trash2 className="w-4 h-4"/></button></div>
+                  <div className="flex items-center gap-3"><Banknote className="w-4 h-4 text-[#00E676]"/><div><div className="text-sm">{date(p.date)}</div><div className="text-xs text-[#9CA3AF]">{p.note || "—"}</div></div></div>
+                  <div className="flex items-center gap-3"><div className="text-lg font-bold font-numeric text-[#00E676]">{money(p.amount,{signDisplay:"always"})}</div><button disabled={deleting===p.id} onClick={()=>remove(p)} aria-label="Supprimer le payout" className="text-[#6B7280] hover:text-[#FF5252] disabled:opacity-40"><Trash2 className="w-4 h-4"/></button></div>
                 </div>
               ))}
             </div>
@@ -106,7 +108,7 @@ export default function Payouts() {
                 {accs.map(a => <option key={a.id} value={a.id}>{a.firm} — {a.name}</option>)}
               </select>
             </div>
-            <Fld label="Montant ($)" type="number" value={form.amount} onChange={(v)=>setForm({...form,amount:v})} testid="p-amount" />
+            <Fld label={`Montant (${settings.currency})`} type="number" value={form.amount} onChange={(v)=>setForm({...form,amount:v})} testid="p-amount" />
             <Fld label="Date" type="date" value={form.date} onChange={(v)=>setForm({...form,date:v})} testid="p-date" />
             <Fld label="Note" value={form.note} onChange={(v)=>setForm({...form,note:v})} testid="p-note" />
             <button disabled={saving || !form.account_id} className="btn-primary w-full disabled:opacity-50" data-testid="p-submit">{saving ? "Enregistrement…" : "Enregistrer"}</button>

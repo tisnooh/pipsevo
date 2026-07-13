@@ -1,42 +1,49 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { LogoMark, LogoWordmark } from "@/components/Logo";
 import { dashboard } from "@/lib/api";
+import { useI18n } from "@/context/I18nContext";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { applyDocumentPreferences, readSettings, SETTINGS_EVENT } from "@/lib/preferences";
 
-const links = [
-  { to: "/app/dashboard", label: "Aperçu", icon: Home, testid: "nav-dashboard" },
-  { to: "/app/accounts", label: "Comptes", icon: Wallet, testid: "nav-accounts" },
-  { to: "/app/journal", label: "Journal", icon: BookOpen, testid: "nav-journal" },
-  { to: "/app/markets", label: "Marchés", icon: BarChart3, testid: "nav-markets" },
-  { to: "/app/backtest", label: "Backtest", icon: FlaskConical, testid: "nav-backtest" },
-  { to: "/app/analytics", label: "Statistiques", icon: BarChart3, testid: "nav-analytics" },
-  { to: "/app/coach", label: "Analyse IA", icon: Brain, testid: "nav-coach" },
-  { to: "/app/discipline", label: "Discipline", icon: Shield, testid: "nav-discipline" },
-  { to: "/app/payouts", label: "Payouts", icon: Banknote, testid: "nav-payouts" },
-  { to: "/app/dna", label: "Rapports", icon: FileText, testid: "nav-dna" },
-  { to: "/app/settings", label: "Paramètres", icon: Cog, testid: "nav-settings" },
+const NAV_LINKS = [
+  { to: "/app/dashboard", fr: "Aperçu", en: "Overview", icon: Home, testid: "nav-dashboard" },
+  { to: "/app/accounts", fr: "Comptes", en: "Accounts", icon: Wallet, testid: "nav-accounts" },
+  { to: "/app/journal", fr: "Journal", en: "Journal", icon: BookOpen, testid: "nav-journal" },
+  { to: "/app/markets", fr: "Marchés", en: "Markets", icon: BarChart3, testid: "nav-markets" },
+  { to: "/app/backtest", fr: "Backtest", en: "Backtest", icon: FlaskConical, testid: "nav-backtest" },
+  { to: "/app/analytics", fr: "Statistiques", en: "Analytics", icon: BarChart3, testid: "nav-analytics" },
+  { to: "/app/coach", fr: "Analyse IA", en: "AI Analysis", icon: Brain, testid: "nav-coach" },
+  { to: "/app/discipline", fr: "Discipline", en: "Discipline", icon: Shield, testid: "nav-discipline" },
+  { to: "/app/payouts", fr: "Payouts", en: "Payouts", icon: Banknote, testid: "nav-payouts" },
+  { to: "/app/dna", fr: "Rapports", en: "Reports", icon: FileText, testid: "nav-dna" },
+  { to: "/app/settings", fr: "Paramètres", en: "Settings", icon: Cog, testid: "nav-settings" },
 ];
 
 export default function AppShell() {
   const { user, logout } = useAuth();
+  const { t } = useI18n();
   const nav = useNavigate();
+  const links = useMemo(() => NAV_LINKS.map(link => ({ ...link, label: t(link.fr, link.en) })), [t]);
   const [discipline, setDiscipline] = useState(0);
   const [summary, setSummary] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [settings, setSettings] = useState(readSettings);
 
   useEffect(() => {
     dashboard().then(r => { setDiscipline(r.data?.kpis?.discipline_score ?? 0); setSummary(r.data); }).catch(() => {});
   }, []);
 
   useEffect(() => {
-    const applyPreferences = () => { try { const s=JSON.parse(localStorage.getItem("pipsevo_settings"))||{}; document.documentElement.dataset.density=s.compactMode?"compact":"comfortable"; } catch {} };
-    applyPreferences(); window.addEventListener("pipsevo:settings-updated", applyPreferences);
-    return () => window.removeEventListener("pipsevo:settings-updated", applyPreferences);
+    const applyPreferences = (event) => { const next = event.detail || readSettings(); setSettings(next); applyDocumentPreferences(next); };
+    applyPreferences({ detail: readSettings() });
+    window.addEventListener(SETTINGS_EVENT, applyPreferences);
+    return () => window.removeEventListener(SETTINGS_EVENT, applyPreferences);
   }, []);
 
   useEffect(() => { const shortcut=e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();setSearchOpen(true)}}; window.addEventListener("keydown",shortcut); return()=>window.removeEventListener("keydown",shortcut); }, []);
@@ -183,7 +190,7 @@ export default function AppShell() {
           onMenuClick={() => setMobileOpen(true)}
           onSearch={()=>setSearchOpen(true)}
           notificationsOpen={notificationsOpen}
-          notifications={buildNotifications(summary)}
+          notifications={buildNotifications(summary, settings, t)}
           onNotifications={()=>setNotificationsOpen(v=>!v)}
           onNavigate={(to)=>nav(to)}
           onLogout={()=>{ logout(); window.location.href = "/"; }}
@@ -273,6 +280,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
         <button onClick={()=>{onNavigate("/app/accounts");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><Wallet className="w-4 h-4"/>Mes comptes</button>
         <button onClick={()=>{onNavigate("/faq");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><BookOpen className="w-4 h-4"/>FAQ et centre d'aide</button>
         <button onClick={()=>{onNavigate("/contact");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><Bell className="w-4 h-4"/>Contacter le support</button>
+        <div className="mt-1 flex items-center justify-between border-t border-white/5 px-3 py-2.5"><span className="text-sm text-[#B5BBC9]">Langue</span><LanguageSwitcher/></div>
         <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 border-t border-white/5 mt-1 rounded-lg text-sm text-[#FF7A7A] hover:bg-[#FF5252]/10"><LogOut className="w-4 h-4"/>Se déconnecter</button>
       </div>}
       </div>
@@ -280,11 +288,12 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
   );
 }
 
-function buildNotifications(summary) {
+function buildNotifications(summary, settings, t) {
   if (!summary) return [];
   const out = [];
-  if (!summary.kpis?.active_accounts) out.push({ text: "Ajoute ton premier compte pour commencer le suivi.", to: "/app/accounts" });
-  else if (!summary.kpis?.total_trades) out.push({ text: "Journalise ton premier trade pour activer les analyses.", to: "/app/journal" });
-  if (summary.metrics?.plan_respect_rate < 80 && summary.kpis?.total_trades) out.push({ text: `Plan respecté sur ${summary.metrics.plan_respect_rate}% des trades. Consulte ta discipline.`, to: "/app/discipline" });
+  if (settings.daily && !summary.kpis?.active_accounts) out.push({ text: t("Ajoute ton premier compte pour commencer le suivi.", "Add your first account to start tracking."), to: "/app/accounts" });
+  else if (settings.daily && !summary.kpis?.total_trades) out.push({ text: t("Journalise ton premier trade pour activer les analyses.", "Log your first trade to activate analytics."), to: "/app/journal" });
+  if (settings.risk && summary.metrics?.plan_respect_rate < 80 && summary.kpis?.total_trades) out.push({ text: t(`Plan respecté sur ${summary.metrics.plan_respect_rate}% des trades. Consulte ta discipline.`, `Plan followed on ${summary.metrics.plan_respect_rate}% of trades. Review your discipline.`), to: "/app/discipline" });
+  if (settings.payout && summary.kpis?.active_accounts && !summary.kpis?.total_payouts) out.push({ text: t("Configure ton objectif de payout pour suivre ta progression.", "Set your payout goal to track your progress."), to: "/app/payouts" });
   return out;
 }

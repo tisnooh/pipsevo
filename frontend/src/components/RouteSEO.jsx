@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
+import { useI18n } from "@/context/I18nContext";
 
 const ORIGIN = "https://pipsevo.vercel.app";
 const pages = {
@@ -19,6 +20,23 @@ const pages = {
   "/login": ["Connexion — PipsEvo", "Connecte-toi à ton espace PipsEvo."],
 };
 
+const pagesEn = {
+  "/": ["PipsEvo — Trading journal and discipline for funded traders", "Centralize your funded accounts, trading journal, discipline and payout goals."],
+  "/pricing": ["Beta pricing — PipsEvo", "Explore free beta access and the features planned for PipsEvo Pro."],
+  "/faq": ["Frequently asked questions — PipsEvo", "Answers about the trading journal, prop firms, Atlas and privacy."],
+  "/contact": ["Contact PipsEvo", "Contact the PipsEvo team with a question, issue or suggestion."],
+  "/platforms": ["Platforms and imports — PipsEvo", "Discover available input methods and planned PipsEvo integrations."],
+  "/blog": ["Responsible trading guides — PipsEvo", "Practical guides about discipline, trading journals and funded accounts."],
+  "/help": ["Help center — PipsEvo", "Access answers, guides, security information and PipsEvo support."],
+  "/privacy": ["Privacy policy — PipsEvo", "Information about data, cookies and PipsEvo user rights."],
+  "/terms": ["Terms of use — PipsEvo", "Terms governing the use of the PipsEvo service."],
+  "/security": ["Security — PipsEvo", "Security measures and good practices to protect your PipsEvo account."],
+  "/affiliate": ["Partner program — PipsEvo", "Early information about PipsEvo's future responsible partner program."],
+  "/affiliate-terms": ["Partner terms — PipsEvo", "Preliminary terms for the future PipsEvo partner program."],
+  "/register": ["Create an account — PipsEvo", "Create your PipsEvo workspace for free during beta."],
+  "/login": ["Sign in — PipsEvo", "Sign in to your PipsEvo workspace."],
+};
+
 const setMeta = (selector, attr, value) => {
   let element = document.head.querySelector(selector);
   if (!element) { element = document.createElement("meta"); const match=selector.match(/\[(name|property)="([^"]+)"\]/); if(match) element.setAttribute(match[1],match[2]); document.head.appendChild(element); }
@@ -27,8 +45,10 @@ const setMeta = (selector, attr, value) => {
 
 export default function RouteSEO() {
   const { pathname } = useLocation();
+  const { language } = useI18n();
   useEffect(() => {
-    const [title, description] = pages[pathname] || ["PipsEvo — Application", "Espace personnel PipsEvo."];
+    const source = language === "en" ? pagesEn : pages;
+    const [title, description] = source[pathname] || (language === "en" ? ["PipsEvo — Application", "Your personal PipsEvo workspace."] : ["PipsEvo — Application", "Espace personnel PipsEvo."]);
     const isPrivate = pathname.startsWith("/app") || pathname === "/onboarding";
     document.title = title;
     setMeta('meta[name="description"]', "content", description);
@@ -51,15 +71,19 @@ export default function RouteSEO() {
       operatingSystem:"Web",
       url:ORIGIN,
       description,
-      offers:{"@type":"Offer",price:"0",priceCurrency:"EUR",description:"Accès gratuit pendant la bêta"}
+      offers:{"@type":"Offer",price:"0",priceCurrency:"EUR",description:language === "en" ? "Free access during beta" : "Accès gratuit pendant la bêta"}
     } : pathname === "/faq" ? {
       "@context":"https://schema.org",
       "@type":"FAQPage",
-      mainEntity:[
+      mainEntity:(language === "en" ? [
+        ["How do I add trades?","From the Journal, select New trade, choose your account, then enter the result and context."],
+        ["Does PipsEvo provide signals?","No. The service only analyzes your performance, discipline and habits."],
+        ["Can I use multiple accounts?","Yes. Beta access lets you centralize multiple accounts and filter results by account."]
+      ] : [
         ["Comment ajouter mes trades ?","Depuis le Journal, clique sur Nouveau trade, choisis ton compte puis renseigne le résultat et le contexte du trade."],
         ["PipsEvo donne-t-il des signaux ?","Non. Le service analyse uniquement tes performances, ta discipline et tes habitudes."],
         ["Puis-je utiliser plusieurs comptes ?","Oui. L'accès bêta permet de centraliser plusieurs comptes et de filtrer les résultats par compte."]
-      ].map(([name,text])=>({"@type":"Question",name,acceptedAnswer:{"@type":"Answer",text}}))
+      ]).map(([name,text])=>({"@type":"Question",name,acceptedAnswer:{"@type":"Answer",text}}))
     } : null;
     if (structuredData) {
       const script=document.createElement("script");
@@ -68,6 +92,6 @@ export default function RouteSEO() {
       script.textContent=JSON.stringify(structuredData);
       document.head.appendChild(script);
     }
-  }, [pathname]);
+  }, [pathname, language]);
   return null;
 }

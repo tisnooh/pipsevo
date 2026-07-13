@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Plus, TrendingUp, Shield, Target, ArrowDownRight, Sparkles, Calendar, BarChart3, RefreshCw } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { useAuth } from "@/context/AuthContext";
+import useAppSettings from "@/hooks/useAppSettings";
 
 const EMPTY_KPIS = { funded_capital: 0, total_profit: 0, remaining_drawdown: 0, estimated_payout: 0, discipline_score: 0, trader_score: 0, total_payouts: 0, active_accounts: 0, total_trades: 0 };
 const EMPTY_METRICS = { winrate: 0, profit_factor: 0, avg_win: 0, avg_loss: 0, plan_respect_rate: 0 };
@@ -52,6 +53,7 @@ const KPICard = ({ label, value, sub, sparkColor = "green", icon: Icon, testid }
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { money } = useAppSettings();
   const [d, setD] = useState(null);
   const [recent, setRecent] = useState([]);
   const [accs, setAccs] = useState([]);
@@ -99,7 +101,7 @@ export default function Dashboard() {
         <div className="absolute -top-32 right-[8%] w-80 h-80 rounded-full bg-[#7C4DFF] blur-3xl opacity-15"/><div className="absolute -bottom-36 left-[25%] w-72 h-72 rounded-full bg-[#4F8CFF] blur-3xl opacity-10"/>
         <div className="relative flex flex-col xl:flex-row xl:items-center justify-between gap-5">
           <div><div className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[.2em] font-mono text-[#B58BFF]"><span className="w-1.5 h-1.5 rounded-full bg-[#00E676] shadow-[0_0_10px_#00E676]"/>Centre de pilotage</div><h1 className="text-2xl sm:text-4xl font-bold mt-3">Bonjour {user?.name?.split(" ")[0] || "Trader"}<span className="text-[#B58BFF]">.</span></h1><p className="text-sm text-[#9CA3AF] mt-2">Garde le contrôle de ton risque, de ta discipline et de tes prochains objectifs.</p></div>
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-0 xl:min-w-[420px]">{[["Capital suivi",`$${k.funded_capital?.toLocaleString?.() || "0"}`,"#4F8CFF"],["Score trader",`${k.trader_score || k.discipline_score}/100`,"#B58BFF"],["Payouts",`$${k.total_payouts?.toLocaleString?.() || "0"}`,"#00E676"]].map(([l,v,c])=><div key={l} className="rounded-2xl border border-white/[0.07] bg-black/20 p-3 sm:p-4 backdrop-blur"><div className="text-[9px] text-[#6B7280] uppercase tracking-wider">{l}</div><div className="text-sm sm:text-xl font-bold font-numeric mt-2 truncate" style={{color:c}}>{v}</div></div>)}</div>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-0 xl:min-w-[420px]">{[["Capital suivi",money(k.funded_capital),"#4F8CFF"],["Score trader",`${k.trader_score || k.discipline_score}/100`,"#B58BFF"],["Payouts",money(k.total_payouts),"#00E676"]].map(([l,v,c])=><div key={l} className="rounded-2xl border border-white/[0.07] bg-black/20 p-3 sm:p-4 backdrop-blur"><div className="text-[9px] text-[#6B7280] uppercase tracking-wider">{l}</div><div className="text-sm sm:text-xl font-bold font-numeric mt-2 truncate" style={{color:c}}>{v}</div></div>)}</div>
         </div>
         <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 pt-5 border-t border-white/[0.06]">
           {isEmptyAccount ? <div className="text-[11px] text-[#B58BFF] inline-flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[#B58BFF]"/>Ton espace est prêt : ajoute un compte puis journalise ton premier trade.</div> : <div className="text-[11px] text-[#00E676] inline-flex items-center gap-2"><Shield className="w-3.5 h-3.5"/>Données réelles synchronisées avec ton journal.</div>}
@@ -115,11 +117,11 @@ export default function Dashboard() {
       {loading && <div className="grid grid-cols-2 md:grid-cols-5 gap-3">{Array.from({length:5}).map((_,i)=><div key={i} className="h-40 rounded-2xl bg-white/[0.035] animate-pulse"/>)}</div>}
 
       {!loading && <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        <KPICard label="Profit net" value={`${periodProfit>=0?"+":"-"}$${Math.abs(periodProfit).toLocaleString()}`} sub={`Sur les ${period} derniers jours`} sparkColor={periodProfit < 0 ? "red" : "green"} icon={TrendingUp} testid="kpi-profit" />
+        <KPICard label="Profit net" value={money(periodProfit,{signDisplay:"always"})} sub={`Sur les ${period} derniers jours`} sparkColor={periodProfit < 0 ? "red" : "green"} icon={TrendingUp} testid="kpi-profit" />
         <KPICard label="Score de discipline" value={<><span>{k.discipline_score}</span><span className="text-[#9CA3AF] text-base"> /100</span></>} sub={`${m.plan_respect_rate}% du plan respecté`} sparkColor="purple" icon={BarChart3} testid="kpi-discipline" />
         <KPICard label="Comptes actifs" value={k.active_accounts} sub={`${k.active_accounts} compte${k.active_accounts>1?"s":""} suivi${k.active_accounts>1?"s":""}`} sparkColor="blue" icon={Shield} testid="kpi-accounts" />
         <KPICard label="Win Rate" value={`${periodWinrate}%`} sub={`${tradeList.length} trades sur la période`} sparkColor="green" icon={Target} testid="kpi-winrate" />
-        <KPICard label="Drawdown restant" value={`$${k.remaining_drawdown.toLocaleString()}`} sub="Marge de risque disponible" sparkColor="red" icon={ArrowDownRight} testid="kpi-dd" />
+        <KPICard label="Drawdown restant" value={money(k.remaining_drawdown)} sub="Marge de risque disponible" sparkColor="red" icon={ArrowDownRight} testid="kpi-dd" />
       </div>}
 
       <div className="grid lg:grid-cols-3 gap-4">
@@ -133,7 +135,7 @@ export default function Dashboard() {
               <AreaChart data={equityData}>
                 <defs><linearGradient id="eqfill-d" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7C4DFF" stopOpacity="0.55"/><stop offset="100%" stopColor="#7C4DFF" stopOpacity="0"/></linearGradient></defs>
                 <XAxis dataKey="date" stroke="#6B7280" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#6B7280" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v)=>`$${(v/1000).toFixed(0)}K`} />
+                <YAxis stroke="#6B7280" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v)=>money(v,{maximumFractionDigits:0})} />
                 <Tooltip contentStyle={{ background: "#0F1117", border: "1px solid #1E2430", borderRadius: 12, fontSize: 12 }} />
                 <Area type="monotone" dataKey="equity" stroke="#B58BFF" strokeWidth={2.4} fill="url(#eqfill-d)" />
               </AreaChart>
@@ -146,13 +148,13 @@ export default function Dashboard() {
             <div className="text-sm font-semibold mb-3">Progression des payouts</div>
             <div className="text-xs text-[#9CA3AF]">{accList[0] ? `${accList[0].firm} · ${accList[0].name}` : "Aucun compte configuré"}</div>
             <div className="flex items-baseline gap-2 mt-2">
-              <div className="text-2xl font-bold font-numeric">${Number(k.total_payouts || 0).toLocaleString()}</div>
-              <div className="text-xs text-[#9CA3AF]">/ ${payoutGoal.toLocaleString()}</div>
+              <div className="text-2xl font-bold font-numeric">{money(k.total_payouts)}</div>
+              <div className="text-xs text-[#9CA3AF]">/ {money(payoutGoal)}</div>
               <div className="ml-auto text-xs font-mono">{payoutProgress}%</div>
             </div>
             <div className="h-2 rounded-full bg-white/5 mt-2 overflow-hidden"><div className="h-full bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF] rounded-full" style={{ width: `${payoutProgress}%` }} /></div>
             <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
-              <div><div className="text-xs text-[#9CA3AF]">Prochain payout estimé</div><div className="text-xl font-bold font-numeric mt-1">${k.estimated_payout.toLocaleString()}</div></div>
+              <div><div className="text-xs text-[#9CA3AF]">Prochain payout estimé</div><div className="text-xl font-bold font-numeric mt-1">{money(k.estimated_payout)}</div></div>
               <Link to="/app/payouts" className="text-xs text-[#B58BFF] flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/5 hover:border-[#7C4DFF]/40"><Calendar className="w-3 h-3"/>Simuler</Link>
             </div>
           </div>
@@ -183,7 +185,7 @@ export default function Dashboard() {
               const directionLong = String(t.direction).toLowerCase() === "long";
               const accountName = t.account || accList.find(a=>a.id===t.account_id)?.firm || "Compte";
               return <div key={t.id} className="rounded-2xl border border-white/[0.07] bg-[#0B0E17] p-4 transition active:border-[#7C4DFF]/40">
-                <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3 min-w-0"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#15182A] text-xs font-bold text-[#B58BFF]">{String(t.instrument || "?").slice(0,2)}</span><div className="min-w-0"><div className="font-semibold truncate">{t.instrument}</div><div className="text-[11px] text-[#6B7280] mt-0.5">{t.date} · {accountName}</div></div></div><div className="text-right"><div className="font-numeric font-semibold" style={{color:!hasPnl?"#9CA3AF":positive?"#00E676":"#FF5252"}}>{hasPnl?`${positive?"+":"-"}$${Math.abs(t.pnl).toFixed(2)}`:"—"}</div><div className="text-[10px] text-[#6B7280] mt-0.5">{typeof t.r==="number"?`${t.r.toFixed(2)}R`:"—"}</div></div></div>
+                <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3 min-w-0"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#15182A] text-xs font-bold text-[#B58BFF]">{String(t.instrument || "?").slice(0,2)}</span><div className="min-w-0"><div className="font-semibold truncate">{t.instrument}</div><div className="text-[11px] text-[#6B7280] mt-0.5">{t.date} · {accountName}</div></div></div><div className="text-right"><div className="font-numeric font-semibold" style={{color:!hasPnl?"#9CA3AF":positive?"#00E676":"#FF5252"}}>{hasPnl?money(t.pnl,{minimumFractionDigits:2,maximumFractionDigits:2,signDisplay:"always"}):"—"}</div><div className="text-[10px] text-[#6B7280] mt-0.5">{typeof t.r==="number"?`${t.r.toFixed(2)}R`:"—"}</div></div></div>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.05]"><span className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${directionLong ? "bg-[#00E676]/10 text-[#00E676]" : "bg-[#FF5252]/10 text-[#FF7272]"}`}>{directionLong ? "Achat · Long" : "Vente · Short"}</span><span className="text-[11px] text-[#7E8798]">{t.duration || t.session || "—"}</span></div>
               </div>;
             })}
@@ -201,7 +203,7 @@ export default function Dashboard() {
                     <td className="px-4 py-3.5 text-xs text-[#8B93A3] whitespace-nowrap">{t.date}</td>
                     <td className="px-3 font-semibold"><span className="inline-flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-[#15182A] text-[9px] text-[#B58BFF] group-hover:bg-[#7C4DFF]/15">{String(t.instrument || "?").slice(0,2)}</span>{t.instrument}</span></td>
                     <td className="px-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium ${directionLong ? "bg-[#00E676]/10 text-[#00E676]" : "bg-[#FF5252]/10 text-[#FF7272]"}`}>{directionLong ? "Achat · Long" : "Vente · Short"}</span></td>
-                    <td className="px-3 text-right font-numeric font-semibold" style={{ color: !hasPnl ? "#9CA3AF" : positive ? "#00E676" : "#FF5252" }}>{hasPnl?`${positive?"+":"-"}$${Math.abs(t.pnl).toFixed(2)}`:"—"}</td>
+                    <td className="px-3 text-right font-numeric font-semibold" style={{ color: !hasPnl ? "#9CA3AF" : positive ? "#00E676" : "#FF5252" }}>{hasPnl?money(t.pnl,{minimumFractionDigits:2,maximumFractionDigits:2,signDisplay:"always"}):"—"}</td>
                     <td className="px-3 text-right font-numeric text-[#B5BBC9]">{typeof t.r==="number"?`${t.r.toFixed(2)}R`:"—"}</td>
                     <td className="px-3 text-xs text-[#8B93A3]">{t.duration || t.session || "—"}</td>
                     <td className="px-3 text-xs text-[#B5BBC9]"><span className="rounded-lg border border-white/[0.07] bg-white/[0.025] px-2 py-1">{t.account || (accList.find(a=>a.id===t.account_id)?.firm) || "—"}</span></td>
@@ -234,7 +236,7 @@ export default function Dashboard() {
                 <div key={a.id} className="rounded-xl border border-white/[0.065] bg-[#0A0D16] p-3 transition hover:border-white/[0.12]">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 min-w-0"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#15182A] text-[10px] font-bold text-[#B58BFF]">{String(a.firm || a.name || "C").slice(0,2).toUpperCase()}</span><div className="min-w-0"><div className="text-xs font-medium truncate">{a.name || a.firm}</div><div className="text-[9px] text-[#6B7280] truncate mt-0.5">{a.firm || "Compte de trading"}</div></div></div>
-                    <div className="text-right shrink-0"><div className="text-xs font-numeric font-semibold" style={{ color: pnl >= 0 ? "#00E676" : "#FF5252" }}>{pnl>=0?"+":"-"}${Math.abs(pnl).toLocaleString()}</div><div className="text-[9px] text-[#6B7280] mt-0.5">P&amp;L</div></div>
+                    <div className="text-right shrink-0"><div className="text-xs font-numeric font-semibold" style={{ color: pnl >= 0 ? "#00E676" : "#FF5252" }}>{money(pnl,{signDisplay:"always"})}</div><div className="text-[9px] text-[#6B7280] mt-0.5">P&amp;L</div></div>
                   </div>
                   <div className="mt-3 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.05]"><div className="h-full rounded-full bg-gradient-to-r from-[#4F8CFF] to-[#7C4DFF]" style={{width:`${health}%`}}/></div><span className="w-7 text-right text-[9px] font-mono text-[#8B93A3]">{health}%</span></div>
                 </div>

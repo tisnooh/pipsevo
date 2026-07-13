@@ -5,6 +5,7 @@ import { ArrowRight, Play, Check, Shield, BookOpen, Activity, Brain, Banknote, U
 import { Logo } from "@/components/Logo";
 import { Candle, DashboardMock } from "@/components/CandleArt";
 import { openCookieSettings } from "@/components/CookieConsent";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 const fade = {
   hidden: { opacity: 0, y: 30 },
@@ -51,6 +52,7 @@ export default function Landing() {
             <Link to="/contact" className="hover:text-white transition">Contact</Link>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-3">
+            <LanguageSwitcher compact />
             <Link to="/login" className="text-xs sm:text-sm px-2.5 sm:px-4 py-2 text-[#9CA3AF] hover:text-white" data-testid="nav-login">Connexion</Link>
             <Link to="/register" className="btn-primary text-xs sm:text-sm px-3.5 sm:px-5" data-testid="nav-register">Accès gratuit</Link>
           </div>

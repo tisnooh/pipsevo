@@ -7,6 +7,7 @@ import { Logo } from "@/components/Logo";
 import TradingRulesEditor, { DEFAULT_TRADING_RULES, normalizeTradingRules } from "@/components/TradingRulesEditor";
 import { TrendingUp, Bitcoin, BarChart3, LineChart, Fuel, ArrowRight, ArrowLeft, Check, Clock3, SlidersHorizontal } from "lucide-react";
 import { ASSET_GROUPS, MARKET_INSTRUMENTS, PROP_FIRMS, getInstrumentsForMarket, marketKeys, normalizeJournalPreferences } from "@/lib/journalPreferences";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 const ASSET_ICONS = {
   forex: LineChart, indices_cfd: BarChart3, commodities_cfd: Fuel, stocks_cfd: TrendingUp, crypto_cfd: Bitcoin,
@@ -59,7 +60,7 @@ export default function Onboarding() {
       <div className="absolute -top-36 right-[5%] w-[600px] h-[600px] rounded-full blur-3xl opacity-20 bg-[#7C4DFF]" />
       <div className="absolute -bottom-40 left-[10%] w-[500px] h-[500px] rounded-full blur-3xl opacity-10 bg-[#4F8CFF]" />
       <div className="max-w-5xl mx-auto relative z-10">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-7"><Logo /><div className="text-right"><div className="text-xs text-[#9CA3AF]">Bienvenue, <span className="text-white font-medium">{user?.name || "Trader"}</span></div><div className="text-[10px] text-[#6B7280] mt-1">Personnalisons ton espace.</div></div></div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-7"><Logo /><div className="flex items-center justify-between gap-3 sm:justify-end"><LanguageSwitcher compact/><div className="text-right"><div className="text-xs text-[#9CA3AF]">Bienvenue, <span className="text-white font-medium">{user?.name || "Trader"}</span></div><div className="text-[10px] text-[#6B7280] mt-1">Personnalisons ton espace.</div></div></div></div>
         <div className="rounded-[26px] border border-white/[0.09] bg-gradient-to-br from-[#111426]/95 via-[#0B0E1A]/95 to-[#090B13]/95 p-5 sm:p-8 lg:p-10 shadow-[0_25px_90px_rgba(0,0,0,.5)] relative overflow-hidden">
           <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-[#7C4DFF] blur-3xl opacity-10"/>
           <div className="relative grid grid-cols-6 gap-2 mb-7">

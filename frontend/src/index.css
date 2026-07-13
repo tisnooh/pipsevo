@@ -220,6 +220,11 @@ input[type="time"] {
 
 input:focus, select:focus, textarea:focus { outline: none; }
 
+/* Garde les contrôles natifs lisibles dans le thème sombre, y compris les
+   listes qui restent natives dans les formulaires métier. */
+input, select, textarea { color-scheme: dark; }
+select option, select optgroup { background-color: #0D1020; color: #F7F8FB; }
+
 ::selection { background: rgba(124,77,255,0.4); color: white; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 8px; }

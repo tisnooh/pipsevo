@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Check, ListChecks, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { DEFAULT_CHECKLIST } from "@/lib/journalPreferences";
+import { useAppSettings } from "@/hooks/useAppSettings";
 
 export const DEFAULT_TRADING_RULES = {
   max_trades: 3,
@@ -38,6 +39,7 @@ const RuleToggle = ({ item, onToggle, onDelete, custom = false }) => (
 );
 
 export default function TradingRulesEditor({ value, onChange }) {
+  const { settings } = useAppSettings();
   const rules = normalizeTradingRules(value);
   const [draft, setDraft] = useState("");
   const update = (key, next) => onChange({ ...rules, [key]: next });
@@ -55,7 +57,7 @@ export default function TradingRulesEditor({ value, onChange }) {
       <div className="mb-4 flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#7C4DFF]/12 text-[#B58BFF]"><ShieldCheck className="h-5 w-5"/></span><div><h3 className="text-sm font-semibold">Limites de protection</h3><p className="mt-1 text-xs text-[#687183]">Des garde-fous mesurables pour arrêter avant de dégrader ton compte.</p></div></div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <NumberField label="Trades maximum par jour" value={rules.max_trades} min={1} max={100} onChange={v=>update("max_trades",v)}/>
-        <NumberField label="Perte journalière maximale" suffix="$" value={rules.daily_loss_limit} min={1} onChange={v=>update("daily_loss_limit",v)}/>
+        <NumberField label="Perte journalière maximale" suffix={settings.currency} value={rules.daily_loss_limit} min={1} onChange={v=>update("daily_loss_limit",v)}/>
         <NumberField label="Risque maximum par trade" suffix="%" value={rules.max_risk_pct} min={0.1} max={10} step={0.1} onChange={v=>update("max_risk_pct",v)}/>
         <NumberField label="Arrêt après pertes consécutives" value={rules.stop_after_loss} min={1} max={20} onChange={v=>update("stop_after_loss",v)}/>
         <NumberField label="Ratio risque/rendement minimum" suffix="R" value={rules.min_rr} min={0.1} max={20} step={0.1} onChange={v=>update("min_rr",v)}/>

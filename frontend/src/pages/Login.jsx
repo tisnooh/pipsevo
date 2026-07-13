@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Logo } from "@/components/Logo";
 import { Candle } from "@/components/CandleArt";
 import { ArrowRight } from "lucide-react";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 export default function Login() {
   const { login } = useAuth();
@@ -26,6 +27,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-6 py-16 relative overflow-hidden">
+      <div className="absolute right-4 top-4 z-20 sm:right-7 sm:top-7"><LanguageSwitcher compact /></div>
       <div className="absolute inset-0 grid-floor opacity-40" />
       <div className="absolute top-[10%] left-[15%] w-[400px] h-[400px] rounded-full blur-3xl opacity-30" style={{ background: "radial-gradient(circle, #7C4DFF, transparent)" }} />
       <div className="absolute bottom-[10%] right-[15%] w-[400px] h-[400px] rounded-full blur-3xl opacity-25" style={{ background: "radial-gradient(circle, #4F8CFF, transparent)" }} />
