@@ -86,6 +86,7 @@ class LoginIn(BaseModel):
 class ProfileIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     trader_type: Optional[str] = None
+    rules: Optional[Dict[str, Any]] = None
 
 
 class OnboardingIn(BaseModel):
@@ -137,6 +138,7 @@ class TradeIn(BaseModel):
     size: float = 1
     duration: Optional[str] = None
     tags: List[str] = []
+    checklist_results: List[Dict[str, Any]] = []
 
 
 class TradeUpdate(BaseModel):
@@ -159,6 +161,7 @@ class TradeUpdate(BaseModel):
     size: Optional[float] = None
     duration: Optional[str] = None
     tags: Optional[List[str]] = None
+    checklist_results: Optional[List[Dict[str, Any]]] = None
     starred: Optional[bool] = None
 
 
@@ -232,6 +235,8 @@ async def me(user=Depends(get_current_user)):
 @api.patch("/auth/me")
 async def update_profile(body: ProfileIn, user=Depends(get_current_user)):
     updates = {"name": body.name.strip(), "trader_type": body.trader_type}
+    if body.rules is not None:
+        updates["rules"] = body.rules
     await db.users.update_one({"id": user["id"]}, {"$set": updates})
     return await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
 

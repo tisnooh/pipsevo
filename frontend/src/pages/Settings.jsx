@@ -3,12 +3,14 @@ import { useAuth } from "@/context/AuthContext";
 import { auth } from "@/lib/api";
 import {
   Bell, Check, ChevronRight, CreditCard, Crown, Globe2, LockKeyhole,
-  Mail, Save, ShieldCheck, SlidersHorizontal, User, Volume2
+  ListChecks, Mail, Save, ShieldCheck, SlidersHorizontal, User, Volume2
 } from "lucide-react";
 import { toast } from "sonner";
+import TradingRulesEditor, { normalizeTradingRules } from "@/components/TradingRulesEditor";
 
 const sections = [
   { id: "profile", label: "Mon profil", subtitle: "Identité et marché", icon: User },
+  { id: "rules", label: "Règles de trading", subtitle: "Limites et check-list", icon: ListChecks },
   { id: "preferences", label: "Préférences", subtitle: "Affichage et trading", icon: SlidersHorizontal },
   { id: "notifications", label: "Notifications", subtitle: "Alertes et résumés", icon: Bell },
   { id: "security", label: "Sécurité", subtitle: "Accès au compte", icon: ShieldCheck },
@@ -42,6 +44,8 @@ export default function Settings() {
   const [name, setName] = useState(user?.name || "");
   const [traderType, setTraderType] = useState(user?.trader_type || "futures");
   const [saving, setSaving] = useState(false);
+  const [savingRules, setSavingRules] = useState(false);
+  const [tradingRules, setTradingRules] = useState(()=>normalizeTradingRules(user?.rules));
   const [preferences, setPreferences] = useState({
     currency: stored.currency || "USD",
     timezone: stored.timezone || "Europe/Paris",
@@ -69,6 +73,19 @@ export default function Settings() {
     } catch (e) {
       toast.error(e.response?.data?.detail || "Impossible de sauvegarder");
     } finally { setSaving(false); }
+  };
+
+  const saveRules = async () => {
+    setSavingRules(true);
+    try {
+      const nextRules={...normalizeTradingRules(tradingRules),configured:true};
+      const { data }=await auth.update({name:name || user?.name || "Trader",trader_type:traderType,rules:nextRules});
+      setTradingRules(nextRules);
+      setUser(data);
+      toast.success("Règles de trading enregistrées");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Impossible de sauvegarder les règles");
+    } finally { setSavingRules(false); }
   };
 
   const initials = (user?.name || user?.email || "P E").split(" ").map(x=>x[0]).join("").slice(0,2).toUpperCase();
@@ -102,6 +119,12 @@ export default function Settings() {
           </div>
           <div className="flex justify-end border-t border-white/[0.06] bg-white/[0.015] p-4 sm:px-6"><button disabled={saving} className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"><Save className="h-4 w-4"/>{saving ? "Sauvegarde…" : "Enregistrer le profil"}</button></div>
         </form>}
+
+        {active === "rules" && <section className="card-elev overflow-hidden">
+          <div className="border-b border-white/[0.06] p-5 sm:p-6"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#7C4DFF]/12 text-[#B58BFF]"><ListChecks className="h-5 w-5"/></span><div><h2 className="font-semibold">Règles de trading</h2><p className="mt-1 text-xs leading-relaxed text-[#7E8798]">Modifie tes limites, prépare ta check-list avant trade et ajoute tes propres règles.</p></div></div>{user?.rules?.configured === false && <div className="mt-4 rounded-xl border border-[#FFB855]/20 bg-[#FFB855]/[0.06] p-3 text-xs text-[#C9A978]">Tu avais choisi de les configurer plus tard. Les valeurs conseillées sont préremplies et restent modifiables.</div>}</div>
+          <div className="p-5 sm:p-6"><TradingRulesEditor value={tradingRules} onChange={setTradingRules}/></div>
+          <div className="flex justify-end border-t border-white/[0.06] bg-white/[0.015] p-4 sm:px-6"><button type="button" onClick={saveRules} disabled={savingRules} className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"><Save className="h-4 w-4"/>{savingRules ? "Sauvegarde…" : "Enregistrer mes règles"}</button></div>
+        </section>}
 
         {active === "preferences" && <section className="card-elev overflow-hidden">
           <div className="border-b border-white/[0.06] p-5 sm:p-6"><h2 className="font-semibold">Préférences de trading</h2><p className="mt-1 text-xs text-[#7E8798]">Adapte les montants, horaires et l’affichage à ta façon de travailler.</p></div>

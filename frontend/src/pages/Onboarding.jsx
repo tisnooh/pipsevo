@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { onboarding } from "@/lib/api";
 import { Logo } from "@/components/Logo";
-import { TrendingUp, Bitcoin, BarChart3, LineChart, Fuel, ArrowRight, ArrowLeft, Check } from "lucide-react";
+import TradingRulesEditor, { DEFAULT_TRADING_RULES, normalizeTradingRules } from "@/components/TradingRulesEditor";
+import { TrendingUp, Bitcoin, BarChart3, LineChart, Fuel, ArrowRight, ArrowLeft, Check, Clock3, SlidersHorizontal } from "lucide-react";
 
 const ASSET_GROUPS = {
   cfd: [
@@ -39,7 +40,8 @@ export default function Onboarding() {
   const [assets, setAssets] = useState([]);
   const [firms, setFirms] = useState([]);
   const [numAccounts, setNumAccounts] = useState(1);
-  const [rules, setRules] = useState({ max_trades: 3, daily_loss_limit: 300, max_risk_pct: 1, stop_after_loss: 2 });
+  const [rules, setRules] = useState(DEFAULT_TRADING_RULES);
+  const [rulesTiming, setRulesTiming] = useState("now");
   const [loading, setLoading] = useState(false);
 
   const toggle = (arr, set, v) => set(arr.includes(v) ? arr.filter(x=>x!==v) : [...arr, v]);
@@ -53,16 +55,17 @@ export default function Onboarding() {
     setFirms(current => current.filter(name => allowedFirms.includes(name)));
   };
   const canContinue = step === 1 || (step === 2 && assets.length > 0) || (step === 3 && firms.length > 0) || (step === 4 && Number(numAccounts) >= 1 && Number(numAccounts) <= 50);
-  const canFinish = Number(rules.max_trades) >= 1 && Number(rules.daily_loss_limit) > 0 && Number(rules.max_risk_pct) > 0 && Number(rules.max_risk_pct) <= 10 && Number(rules.stop_after_loss) >= 1;
+  const canFinish = rulesTiming === "later" || (Number(rules.max_trades) >= 1 && Number(rules.daily_loss_limit) > 0 && Number(rules.max_risk_pct) > 0 && Number(rules.max_risk_pct) <= 10 && Number(rules.stop_after_loss) >= 1 && Number(rules.min_rr) > 0 && Number(rules.max_session_minutes) >= 15);
 
   const finish = async () => {
     setLoading(true);
     try {
-      await onboarding({ trader_type: traderType, prop_firms: firms, num_accounts: +numAccounts, rules: { ...rules, assets } });
-      setUser({ ...user, onboarded: true, trader_type: traderType, prop_firms: firms, rules });
-      toast.success("Bienvenue sur PipsEvo");
+      const savedRules = rulesTiming === "later" ? { ...DEFAULT_TRADING_RULES, configured: false, assets } : { ...normalizeTradingRules(rules), configured: true, assets };
+      await onboarding({ trader_type: traderType, prop_firms: firms, num_accounts: +numAccounts, rules: savedRules });
+      setUser({ ...user, onboarded: true, trader_type: traderType, prop_firms: firms, rules: savedRules });
+      toast.success(rulesTiming === "later" ? "Profil créé — complète tes règles quand tu veux" : "Tes règles sont enregistrées");
       nav("/app/dashboard");
-    } catch { toast.error("Erreur") } finally { setLoading(false); }
+    } catch (error) { toast.error(error.response?.data?.detail || "Impossible de terminer la configuration") } finally { setLoading(false); }
   };
 
   return (
@@ -70,7 +73,7 @@ export default function Onboarding() {
       <div className="absolute inset-0 grid-floor opacity-25" />
       <div className="absolute -top-36 right-[5%] w-[600px] h-[600px] rounded-full blur-3xl opacity-20 bg-[#7C4DFF]" />
       <div className="absolute -bottom-40 left-[10%] w-[500px] h-[500px] rounded-full blur-3xl opacity-10 bg-[#4F8CFF]" />
-      <div className="max-w-4xl mx-auto relative z-10">
+      <div className="max-w-5xl mx-auto relative z-10">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-7"><Logo /><div className="text-right"><div className="text-xs text-[#9CA3AF]">Bienvenue, <span className="text-white font-medium">{user?.name || "Trader"}</span></div><div className="text-[10px] text-[#6B7280] mt-1">Personnalisons ton espace.</div></div></div>
         <div className="rounded-[26px] border border-white/[0.09] bg-gradient-to-br from-[#111426]/95 via-[#0B0E1A]/95 to-[#090B13]/95 p-5 sm:p-8 lg:p-10 shadow-[0_25px_90px_rgba(0,0,0,.5)] relative overflow-hidden">
           <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-[#7C4DFF] blur-3xl opacity-10"/>
@@ -123,12 +126,12 @@ export default function Onboarding() {
           {step === 5 && (
             <div className="mt-3">
               <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Tes règles de trading</h2>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 mt-5 sm:mt-7">
-                <Field label="Max trades / jour" min="1" max="100" value={rules.max_trades} onChange={(v)=>setRules({...rules,max_trades:+v})} testid="rule-max-trades" />
-                <Field label="Daily loss limit ($)" min="1" value={rules.daily_loss_limit} onChange={(v)=>setRules({...rules,daily_loss_limit:+v})} testid="rule-dll" />
-                <Field label="Max risque / trade (%)" min="0.1" max="10" step="0.1" value={rules.max_risk_pct} onChange={(v)=>setRules({...rules,max_risk_pct:+v})} testid="rule-risk" />
-                <Field label="Stop après N pertes" min="1" max="20" value={rules.stop_after_loss} onChange={(v)=>setRules({...rules,stop_after_loss:+v})} testid="rule-stop-loss" />
+              <p className="mt-2 text-sm text-[#8B93A3]">Construis tes garde-fous maintenant ou commence directement et complète-les ensuite dans Paramètres.</p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <button type="button" onClick={()=>setRulesTiming("now")} className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${rulesTiming === "now" ? "border-[#7C4DFF]/70 bg-[#7C4DFF]/10 shadow-[0_12px_35px_rgba(124,77,255,.12)]" : "border-white/[0.07] bg-white/[0.025] hover:border-white/20"}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#7C4DFF]/12 text-[#B58BFF]"><SlidersHorizontal className="h-5 w-5"/></span><span><span className="block text-sm font-semibold">Configurer maintenant</span><span className="mt-1 block text-xs leading-relaxed text-[#7E8798]">Définis tes limites, ta check-list et tes règles personnelles.</span></span></button>
+                <button type="button" onClick={()=>setRulesTiming("later")} className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${rulesTiming === "later" ? "border-[#4F8CFF]/70 bg-[#4F8CFF]/10 shadow-[0_12px_35px_rgba(79,140,255,.12)]" : "border-white/[0.07] bg-white/[0.025] hover:border-white/20"}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#4F8CFF]/12 text-[#8FB4FF]"><Clock3 className="h-5 w-5"/></span><span><span className="block text-sm font-semibold">Ajouter ultérieurement</span><span className="mt-1 block text-xs leading-relaxed text-[#7E8798]">Utilise les valeurs conseillées et personnalise-les plus tard.</span></span></button>
               </div>
+              {rulesTiming === "now" ? <div className="mt-7"><TradingRulesEditor value={rules} onChange={setRules}/></div> : <div className="mt-6 rounded-2xl border border-[#4F8CFF]/20 bg-[#4F8CFF]/[0.06] p-5"><div className="text-sm font-semibold text-[#AFC8FF]">Tu pourras revenir dessus à tout moment</div><p className="mt-2 text-xs leading-relaxed text-[#8B93A3]">Les valeurs de protection conseillées seront enregistrées. Retrouve ensuite la section « Règles de trading » dans les paramètres de ton compte.</p></div>}
             </div>
           )}
 
@@ -137,7 +140,7 @@ export default function Onboarding() {
             {step < 5 ? (
               <button onClick={()=>setStep(s=>s+1)} disabled={!canContinue} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed" data-testid="onb-next">Continuer <ArrowRight className="w-4 h-4"/></button>
             ) : (
-              <button onClick={finish} disabled={loading || !canFinish} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed" data-testid="onb-finish">{loading?"Sauvegarde…":(<>Entrer dans PipsEvo <ArrowRight className="w-4 h-4"/></>)}</button>
+              <button onClick={finish} disabled={loading || !canFinish} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed" data-testid="onb-finish">{loading?"Sauvegarde…":(<>{rulesTiming === "later" ? "Continuer et configurer plus tard" : "Enregistrer et entrer dans PipsEvo"} <ArrowRight className="w-4 h-4"/></>)}</button>
             )}
           </div>
           </div>
@@ -183,10 +186,3 @@ const FirmSection = ({ market, selected, onToggle, showTitle }) => {
     })}</div>
   </section>;
 };
-
-const Field = ({ label, value, onChange, testid, min, max, step }) => (
-  <div>
-    <label className="text-xs font-mono uppercase text-[#9CA3AF]">{label}</label>
-    <input type="number" min={min} max={max} step={step} value={value} onChange={(e)=>onChange(e.target.value)} data-testid={testid} className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 font-mono outline-none focus:border-[#7C4DFF]" />
-  </div>
-);

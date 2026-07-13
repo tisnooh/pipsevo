@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Star, Edit2, Trash2, Camera, Plus } from "lucide-react"
+import { Star, Edit2, Trash2, Camera, Check, ListChecks, Plus } from "lucide-react"
 import { AreaChart, Area, ResponsiveContainer } from "recharts"
 import { trades as tradesAPI, accounts as accAPI } from "@/lib/api"
 import { toast } from "sonner"
+import { useAuth } from "@/context/AuthContext"
+import { normalizeTradingRules } from "@/components/TradingRulesEditor"
 
 const miniChartData = [
   { t: 1, v: 1.0784 }, { t: 2, v: 1.0790 }, { t: 3, v: 1.0785 },
@@ -12,6 +14,7 @@ const miniChartData = [
 ]
 
 export function JournalPage() {
+  const { user } = useAuth()
   const [tradeList, setTradeList] = useState([])
   const [accounts, setAccounts] = useState([])
   const [selectedTrade, setSelectedTrade] = useState(null)
@@ -21,6 +24,7 @@ export function JournalPage() {
   const [openForm, setOpenForm] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [checklistChecks, setChecklistChecks] = useState({})
   const [accountFilter, setAccountFilter] = useState("")
   const [days, setDays] = useState("30")
   const [form, setForm] = useState({
@@ -30,6 +34,8 @@ export function JournalPage() {
     entry: "", exit_price: "", stop: "", take_profit: "", size: "1",
     notes: "", duration: ""
   })
+  const userRules = normalizeTradingRules(user?.rules)
+  const activeChecklist = [...userRules.pre_trade_checklist, ...userRules.custom_rules].filter(item=>item.enabled)
 
   const load = async () => {
     setLoading(true)
@@ -57,6 +63,7 @@ export function JournalPage() {
         stop: nullableNumber(form.stop), take_profit: nullableNumber(form.take_profit),
         size: nullableNumber(form.size) || 1,
         tags: form.setup ? [form.setup] : [],
+        checklist_results: activeChecklist.map(item=>({id:item.id,label:item.label,checked:Boolean(checklistChecks[item.id])})),
       }
       if (editingTrade) await tradesAPI.update(editingTrade.id, payload); else await tradesAPI.create(payload)
       toast.success(editingTrade ? "Trade mis à jour" : "Trade ajouté")
@@ -70,12 +77,14 @@ export function JournalPage() {
   const openNewTrade = () => {
     if (!accounts.length) { toast.error("Ajoute d’abord un compte de trading"); return }
     setEditingTrade(null)
+    setChecklistChecks({})
     setForm({ instrument:"",direction:"long",pnl:"",r:"",account_id:accounts[0].id,date:new Date().toISOString().slice(0,10),session:"",setup:"",emotion:"",plan_respected:true,entry:"",exit_price:"",stop:"",take_profit:"",size:"1",notes:"",duration:"" })
     setOpenForm(true)
   }
 
   const openEditTrade = (trade) => {
     setEditingTrade(trade)
+    setChecklistChecks(Object.fromEntries((trade.checklist_results || []).map(item=>[item.id,Boolean(item.checked)])))
     setForm({ instrument:trade.instrument||"",direction:trade.direction||"long",pnl:trade.pnl??"",r:trade.r??"",account_id:trade.account_id||accounts[0]?.id||"",date:trade.date||new Date().toISOString().slice(0,10),session:trade.session||"",setup:trade.setup||"",emotion:trade.emotion||"",plan_respected:trade.plan_respected!==false,entry:trade.entry??"",exit_price:trade.exit_price??"",stop:trade.stop??"",take_profit:trade.take_profit??"",size:trade.size??"1",notes:trade.notes||"",duration:trade.duration||"" })
     setOpenForm(true)
   }
@@ -354,6 +363,8 @@ export function JournalPage() {
                     </div>
                   )}
 
+                  {selectedTrade.checklist_results?.length > 0 && <div className="mb-4 rounded-xl border border-white/[0.06] bg-[#0F1117] p-3"><div className="mb-2 flex items-center justify-between gap-2"><span className="text-[10px] font-medium text-[#9CA3AF]">Check-list du trade</span><span className="text-[9px] text-[#B58BFF]">{selectedTrade.checklist_results.filter(item=>item.checked).length}/{selectedTrade.checklist_results.length} respectées</span></div><div className="space-y-1.5">{selectedTrade.checklist_results.map(item=><div key={item.id} className="flex items-center gap-2"><span className={`grid h-4 w-4 shrink-0 place-items-center rounded ${item.checked ? "bg-[#00E676] text-[#06130C]" : "bg-[#FF5252]/10 text-[#FF6B76]"}`}>{item.checked ? <Check className="h-2.5 w-2.5"/> : "×"}</span><span className={`text-[10px] ${item.checked ? "text-[#B5BBC9]" : "text-[#7E8798]"}`}>{item.label}</span></div>)}</div></div>}
+
                   {/* Mini chart */}
                   <div className="mb-4">
                     <p className="text-[10px] font-medium text-[#9CA3AF] mb-2">Mini graphique</p>
@@ -462,6 +473,11 @@ export function JournalPage() {
                 className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-[#7C4DFF] text-white h-20 resize-none"
                 placeholder="Décris ton setup, ta gestion…" />
             </div>
+
+            {activeChecklist.length > 0 && <section className="rounded-2xl border border-[#7C4DFF]/20 bg-[#7C4DFF]/[0.05] p-4">
+              <div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#7C4DFF]/15 text-[#B58BFF]"><ListChecks className="h-4 w-4"/></span><div><div className="text-sm font-semibold">Check-list avant trade</div><p className="mt-1 text-[10px] leading-relaxed text-[#7E8798]">Coche les règles respectées. Elles seront enregistrées avec ce trade.</p></div></div>
+              <div className="mt-3 space-y-2">{activeChecklist.map(item=><button type="button" key={item.id} onClick={()=>setChecklistChecks(current=>({...current,[item.id]:!current[item.id]}))} className="flex w-full items-center gap-3 rounded-xl border border-white/[0.06] bg-[#0B0E18] p-3 text-left"><span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border transition ${checklistChecks[item.id] ? "border-[#00E676] bg-[#00E676] text-[#06130C]" : "border-white/15 text-transparent"}`}><Check className="h-3 w-3"/></span><span className={`text-xs ${checklistChecks[item.id] ? "text-[#D6DAE4]" : "text-[#8B93A3]"}`}>{item.label}</span></button>)}</div>
+            </section>}
 
             <div className="flex items-center gap-2">
               <input type="checkbox" id="plan" checked={form.plan_respected} onChange={(e) => setForm({ ...form, plan_respected: e.target.checked })} className="rounded" />

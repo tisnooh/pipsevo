@@ -126,30 +126,35 @@ export default function Landing() {
       </section>
 
       {/* 4 STEPS */}
-      <section id="how" className="px-5 sm:px-6 lg:px-10 pb-14 sm:pb-16 lg:pb-20">
-        <div className="max-w-7xl mx-auto card-elev p-6 sm:p-10 lg:p-14">
-          <div className="grid lg:grid-cols-5 gap-6 sm:gap-8 items-center">
-            <div className="lg:col-span-1 text-center lg:text-left">
-              <div className="text-2xl sm:text-3xl font-bold leading-tight text-gradient">Commence<br/>en 4 étapes simples</div>
+      <section id="how" className="px-4 sm:px-6 lg:px-8 pb-16 sm:pb-20 lg:pb-28">
+        <div className="max-w-[1500px] min-h-[390px] mx-auto relative overflow-hidden rounded-[30px] border border-white/[0.09] bg-[linear-gradient(145deg,rgba(12,15,27,.98),rgba(6,7,13,.98))] p-6 sm:p-10 lg:p-14 xl:p-16 shadow-[0_40px_100px_rgba(0,0,0,.58),0_0_70px_rgba(124,77,255,.08),inset_0_1px_0_rgba(255,255,255,.05)]">
+          <div className="pointer-events-none absolute -left-40 top-1/2 h-[360px] w-[360px] -translate-y-1/2 rounded-full bg-[#7C4DFF]/10 blur-[110px]"/>
+          <div className="pointer-events-none absolute -right-24 -top-32 h-[360px] w-[360px] rounded-full bg-[#4F8CFF]/10 blur-[120px]"/>
+          <div className="pointer-events-none absolute inset-x-[8%] bottom-4 h-16 rounded-[50%] bg-black/80 blur-2xl"/>
+          <div className="relative grid lg:grid-cols-[230px_1fr] xl:grid-cols-[270px_1fr] gap-9 lg:gap-10 xl:gap-14 items-center">
+            <div className="text-center lg:text-left">
+              <div className="text-[10px] font-mono uppercase tracking-[.28em] text-[#B58BFF]">PARCOURS PIPSEVO</div>
+              <div className="text-3xl sm:text-4xl lg:text-[42px] font-bold leading-[1.08] text-gradient mt-4">Commence<br className="hidden lg:block"/> en 4 étapes simples</div>
+              <p className="mt-5 text-sm leading-relaxed text-[#7E8798] max-w-xs mx-auto lg:mx-0">De la création du compte à l’analyse de tes habitudes, ton suivi reste clair et progressif.</p>
             </div>
-            <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 relative">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-4 xl:gap-6 relative" style={{perspective:"1400px"}}>
+              <div className="hidden lg:block pointer-events-none absolute left-[4%] right-[4%] top-1/2 h-px -translate-y-1/2 bg-gradient-to-r from-transparent via-[#7C4DFF]/45 to-transparent shadow-[0_0_18px_rgba(124,77,255,.45)]"/>
               {[
                 { n: 1, t: "Crée ton compte", d: "Inscription gratuite en quelques secondes.", I: User },
                 { n: 2, t: "Ajoute tes comptes", d: "Renseigne manuellement tes comptes financés.", I: Building2 },
                 { n: 3, t: "Journalise tes trades", d: "Saisis le résultat, le contexte et le respect du plan.", I: TrendingUp },
                 { n: 4, t: "Analyse ton processus", d: "Identifie tes forces, tes risques et tes habitudes.", I: Trophy },
               ].map((s, i) => (
-                <motion.div key={s.n} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.12, duration: 0.6 }} className="relative">
-                  <div className="card-flat p-5 h-full text-center">
-                    <div className="w-9 h-9 mx-auto rounded-full border border-[#7C4DFF]/50 flex items-center justify-center text-[#B58BFF] font-bold text-sm bg-[#7C4DFF]/10">{s.n}</div>
-                    <div className="mt-4 mb-3 mx-auto w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: s.n === 3 ? "linear-gradient(135deg,#00E67622,#00E67611)" : "linear-gradient(135deg,#7C4DFF22,#4F8CFF11)" }}>
-                      <s.I className="w-6 h-6" style={{ color: s.n === 3 ? "#00E676" : "#B58BFF" }} />
+                <motion.div key={s.n} initial={{ opacity: 0, y: 34, rotateY: i < 2 ? -4 : 4 }} whileInView={{ opacity: 1, y: i % 2 === 0 ? -6 : 6, rotateY: 0 }} whileHover={{ y: -14, scale: 1.045, rotateX: 2, rotateY: i < 2 ? 2 : -2 }} viewport={{ once: true }} transition={{ delay: i * 0.12, duration: 0.55, ease:[.22,1,.36,1] }} className="relative z-10 min-h-[245px] rounded-[22px] border border-white/[0.09] bg-[linear-gradient(150deg,rgba(17,20,38,.98),rgba(9,11,22,.98))] p-6 text-center shadow-[0_24px_45px_rgba(0,0,0,.42),0_8px_24px_rgba(124,77,255,.08),inset_0_1px_0_rgba(255,255,255,.05)] transition-[border-color,box-shadow] duration-300 hover:border-[#7C4DFF]/45 hover:shadow-[0_34px_65px_rgba(0,0,0,.58),0_12px_40px_rgba(124,77,255,.2),inset_0_1px_0_rgba(255,255,255,.09)]" style={{transformStyle:"preserve-3d"}}>
+                  <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"/>
+                  <div className="w-10 h-10 mx-auto rounded-full border border-[#7C4DFF]/60 flex items-center justify-center text-[#C8AEFF] font-bold text-sm bg-[#7C4DFF]/15 shadow-[0_0_24px_rgba(124,77,255,.2)]" style={{transform:"translateZ(24px)"}}>{s.n}</div>
+                    <div className="mt-5 mb-4 mx-auto w-16 h-16 rounded-2xl flex items-center justify-center border border-white/[0.06] shadow-[0_14px_30px_rgba(0,0,0,.28)]" style={{ background: s.n === 3 ? "linear-gradient(135deg,#00E67624,#00E6760D)" : "linear-gradient(135deg,#7C4DFF28,#4F8CFF0D)", transform:"translateZ(34px)" }}>
+                      <s.I className="w-7 h-7" style={{ color: s.n === 3 ? "#00E676" : "#B58BFF", filter:`drop-shadow(0 0 10px ${s.n === 3 ? "#00E67655" : "#7C4DFF66"})` }} />
                     </div>
-                    <div className="font-semibold text-sm">{s.t}</div>
-                    <div className="text-xs text-[#9CA3AF] mt-1 leading-relaxed">{s.d}</div>
-                  </div>
+                    <div className="font-semibold text-[15px]" style={{transform:"translateZ(20px)"}}>{s.t}</div>
+                    <div className="text-xs text-[#9CA3AF] mt-2 leading-relaxed" style={{transform:"translateZ(14px)"}}>{s.d}</div>
                   {i < 3 && (
-                    <div className="hidden lg:block absolute top-1/2 -right-3 w-6 -translate-y-1/2">
+                    <div className="hidden lg:block absolute z-20 top-1/2 -right-4 xl:-right-5 w-8 xl:w-10 -translate-y-1/2">
                       <div className="dashed-arrow" />
                     </div>
                   )}
