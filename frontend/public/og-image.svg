@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">PipsEvo</title>
+  <desc id="desc">Journal et discipline pour traders financés</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#050505"/><stop offset="1" stop-color="#0c0b19"/></linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#7c4dff"/><stop offset=".55" stop-color="#b58bff"/><stop offset="1" stop-color="#ff4fd8"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#7c4dff" stop-opacity=".32"/><stop offset="1" stop-color="#7c4dff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="945" cy="120" r="360" fill="url(#glow)"/>
+  <g stroke="#ffffff" stroke-opacity=".055"><path d="M0 105h1200M0 210h1200M0 315h1200M0 420h1200M0 525h1200"/><path d="M200 0v630M400 0v630M600 0v630M800 0v630M1000 0v630"/></g>
+  <g transform="translate(92 94)" fill="none" stroke="#7c4dff" stroke-width="12" stroke-linecap="round"><path d="M34 0H0v34M94 0h34v34M34 94H0V60M94 94h34V60"/></g>
+  <text x="250" y="168" fill="#ffffff" font-family="Inter,Arial,sans-serif" font-size="58" font-weight="800">PipsEvo<tspan fill="#b58bff">.</tspan></text>
+  <text x="92" y="326" fill="#ffffff" font-family="Inter,Arial,sans-serif" font-size="68" font-weight="800">Transforme chaque trade</text>
+  <text x="92" y="407" fill="url(#accent)" font-family="Inter,Arial,sans-serif" font-size="68" font-weight="800">en décision exploitable.</text>
+  <text x="96" y="490" fill="#9ca3af" font-family="Inter,Arial,sans-serif" font-size="27">Journal · Discipline · Comptes financés · Payouts</text>
+  <rect x="92" y="538" width="294" height="8" rx="4" fill="url(#accent)"/>
+</svg>

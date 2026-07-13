@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Play, Check, Shield, BookOpen, Activity, Brain, Banknote, User, Building2, TrendingUp, Trophy, FlaskConical, Target } from "lucide-react";
 import { Logo, LogoMark } from "@/components/Logo";
 import { Candle, DashboardMock } from "@/components/CandleArt";
+import { openCookieSettings } from "@/components/CookieConsent";
 
 const fade = {
   hidden: { opacity: 0, y: 30 },
@@ -42,16 +43,16 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Logo size="lg" />
           <div className="hidden md:flex items-center gap-9 text-sm text-[#B5BBC9]">
-            <a href="#features" className="hover:text-white transition">Features</a>
-            <a href="#how" className="hover:text-white transition">How it Works</a>
+            <a href="#features" className="hover:text-white transition">Fonctionnalités</a>
+            <a href="#how" className="hover:text-white transition">Fonctionnement</a>
             <Link to="/pricing" className="hover:text-white transition">Tarifs</Link>
-            <a href="#reviews" className="hover:text-white transition">Reviews</a>
+            <a href="#reviews" className="hover:text-white transition">Bêta</a>
             <Link to="/faq" className="hover:text-white transition">FAQ</Link>
             <Link to="/contact" className="hover:text-white transition">Contact</Link>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-3">
-            <Link to="/login" className="text-xs sm:text-sm px-2.5 sm:px-4 py-2 text-[#9CA3AF] hover:text-white" data-testid="nav-login">Log in</Link>
-            <Link to="/register" className="btn-primary text-xs sm:text-sm px-3.5 sm:px-5" data-testid="nav-register">Start Free</Link>
+            <Link to="/login" className="text-xs sm:text-sm px-2.5 sm:px-4 py-2 text-[#9CA3AF] hover:text-white" data-testid="nav-login">Connexion</Link>
+            <Link to="/register" className="btn-primary text-xs sm:text-sm px-3.5 sm:px-5" data-testid="nav-register">Accès gratuit</Link>
           </div>
         </div>
       </nav>
@@ -70,7 +71,7 @@ export default function Landing() {
           {/* LEFT */}
           <motion.div initial="hidden" animate="show" variants={fade} className="lg:col-span-5 space-y-6 sm:space-y-7 text-center lg:text-left">
             <motion.div custom={0} variants={fade} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass text-[10px] sm:text-[11px] font-mono uppercase tracking-widest text-[#B5BBC9]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00E676] pulse-glow shrink-0" /> Now in Beta · Join 2,400+ funded traders
+              <span className="w-1.5 h-1.5 rounded-full bg-[#00E676] pulse-glow shrink-0" /> Bêta publique · Accès gratuit sans carte bancaire
             </motion.div>
             <motion.h1 custom={1} variants={fade} className="text-4xl sm:text-6xl lg:text-7xl font-bold leading-[1.08] sm:leading-[1.02] tracking-tight">
               <span className="text-gradient">Protège tes comptes financés.</span><br className="hidden sm:block" />{" "}
@@ -84,7 +85,7 @@ export default function Landing() {
               <a href="#story" className="btn-ghost inline-flex items-center justify-center gap-2 text-base w-full sm:w-auto" data-testid="hero-cta-demo"><Play className="w-4 h-4 fill-white"/> Découvrir PipsEvo</a>
             </motion.div>
             <motion.div custom={4} variants={fade} className="pt-4 sm:pt-6">
-              <div className="text-[11px] font-mono uppercase tracking-widest text-[#6B7280] mb-3">Trusted by traders at</div>
+              <div className="text-[11px] font-mono uppercase tracking-widest text-[#6B7280] mb-3">Comptes de prop firms compatibles</div>
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-7 gap-y-5 min-h-7">
                 {propFirmLogos.map((firm) => (
                   <img
@@ -129,14 +130,14 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto card-elev p-6 sm:p-10 lg:p-14">
           <div className="grid lg:grid-cols-5 gap-6 sm:gap-8 items-center">
             <div className="lg:col-span-1 text-center lg:text-left">
-              <div className="text-2xl sm:text-3xl font-bold leading-tight text-gradient">Get Started<br/>in 4 Simple Steps</div>
+              <div className="text-2xl sm:text-3xl font-bold leading-tight text-gradient">Commence<br/>en 4 étapes simples</div>
             </div>
             <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 relative">
               {[
-                { n: 1, t: "Create Account", d: "Sign up in seconds.", I: User },
-                { n: 2, t: "Connect Prop Firms", d: "Link your prop firm accounts.", I: Building2 },
-                { n: 3, t: "Start Tracking", d: "Import or sync your trades automatically.", I: TrendingUp },
-                { n: 4, t: "Get Paid", d: "Optimize, protect and maximize payouts.", I: Trophy },
+                { n: 1, t: "Crée ton compte", d: "Inscription gratuite en quelques secondes.", I: User },
+                { n: 2, t: "Ajoute tes comptes", d: "Renseigne manuellement tes comptes financés.", I: Building2 },
+                { n: 3, t: "Journalise tes trades", d: "Saisis le résultat, le contexte et le respect du plan.", I: TrendingUp },
+                { n: 4, t: "Analyse ton processus", d: "Identifie tes forces, tes risques et tes habitudes.", I: Trophy },
               ].map((s, i) => (
                 <motion.div key={s.n} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.12, duration: 0.6 }} className="relative">
                   <div className="card-flat p-5 h-full text-center">
@@ -163,11 +164,11 @@ export default function Landing() {
       <section id="features" className="px-5 sm:px-6 lg:px-10 pb-14 sm:pb-16 lg:pb-20">
         <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {[
-            { I: LayersIcon, t: "Multi-Account", d: "Manage all funded accounts in one place.", c: "purple" },
-            { I: JournalIcon, t: "Smart Journal", d: "Capture every trade with screenshots and notes.", c: "blue" },
-            { I: DisciplineIcon, t: "Discipline Engine", d: "Real-time scoring to master consistency.", c: "green" },
-            { I: AICoachIcon, t: "AI Coach", d: "Personalized insights to grow faster.", c: "purple" },
-            { I: PayoutIcon, t: "Payout Tracker", d: "Track milestones and maximize every payout.", c: "pink" },
+            { I: LayersIcon, t: "Multi-comptes", d: "Centralise tes comptes financés dans une seule vue.", c: "purple" },
+            { I: JournalIcon, t: "Journal structuré", d: "Documente le résultat, le contexte, les notes et les émotions.", c: "blue" },
+            { I: DisciplineIcon, t: "Moteur de discipline", d: "Mesure le respect de tes règles et de ton plan.", c: "green" },
+            { I: AICoachIcon, t: "Coach Atlas", d: "Interroge tes propres données sans recevoir de signaux.", c: "purple" },
+            { I: PayoutIcon, t: "Suivi des payouts", d: "Enregistre tes retraits et simule tes prochains objectifs.", c: "pink" },
           ].map((f, i) => (
             <motion.div key={f.t} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08, duration: 0.6 }} className="card-flat p-6 hover:border-[#7C4DFF]/40 transition-all" data-testid={`feature-${f.t.toLowerCase().replace(/\s/g,'-')}`}>
               <div className="mb-5"><f.I /></div>
@@ -183,16 +184,16 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto card-elev p-6 sm:p-10 lg:p-14">
           <div className="grid lg:grid-cols-12 gap-8 lg:gap-10 items-center">
             <div className="lg:col-span-3 text-center lg:text-left">
-              <div className="text-[11px] font-mono uppercase tracking-widest text-[#B58BFF] mb-3 px-3 py-1 rounded-full inline-block border border-[#7C4DFF]/40">SUPPORTED ASSETS</div>
-              <div className="text-3xl sm:text-4xl font-bold leading-tight">Trade <span className="text-purple-grad">all.</span><br/>Analyze <span className="text-purple-grad">all.</span></div>
+              <div className="text-[11px] font-mono uppercase tracking-widest text-[#B58BFF] mb-3 px-3 py-1 rounded-full inline-block border border-[#7C4DFF]/40">ACTIFS COMPATIBLES</div>
+              <div className="text-3xl sm:text-4xl font-bold leading-tight">Journalise <span className="text-purple-grad">tout.</span><br/>Analyse <span className="text-purple-grad">mieux.</span></div>
             </div>
             <div className="lg:col-span-9 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
                 { l: "Forex", I: ForexIcon },
                 { l: "Crypto", I: CryptoIcon },
-                { l: "Stocks", I: StocksIcon },
+                { l: "Actions", I: StocksIcon },
                 { l: "Indices", I: IndicesIcon },
-                { l: "Commodities", I: CommoditiesIcon },
+                { l: "Matières premières", I: CommoditiesIcon },
                 { l: "Futures", I: FuturesIcon },
               ].map((a, i) => (
                 <motion.div key={a.l} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: i * 0.06 }} className="card-flat p-4 text-center hover:border-[#7C4DFF]/40 transition-all">
@@ -202,7 +203,7 @@ export default function Landing() {
               ))}
             </div>
           </div>
-          <div className="text-center text-xs text-[#6B7280] mt-8">And more…</div>
+          <div className="text-center text-xs text-[#6B7280] mt-8">Et d’autres instruments saisis manuellement.</div>
         </div>
       </section>
 
@@ -210,14 +211,14 @@ export default function Landing() {
       <section className="px-5 sm:px-6 lg:px-10 pb-14 sm:pb-16 lg:pb-20">
         <div className="max-w-7xl mx-auto card-elev p-6 sm:p-10 lg:p-14 grid lg:grid-cols-2 gap-8 lg:gap-12 items-center relative overflow-hidden">
           <div className="relative z-10 text-center lg:text-left">
-            <div className="text-[11px] font-mono uppercase tracking-widest text-[#B58BFF] mb-3">ALL IN ONE PLACE</div>
-            <div className="text-3xl sm:text-4xl font-bold leading-tight">Powerful. Complete.<br/>Built for <span className="text-purple-grad">traders.</span></div>
+            <div className="text-[11px] font-mono uppercase tracking-widest text-[#B58BFF] mb-3">TOUT AU MÊME ENDROIT</div>
+            <div className="text-3xl sm:text-4xl font-bold leading-tight">Clair. Structuré.<br/>Conçu pour les <span className="text-purple-grad">traders financés.</span></div>
             <div className="mt-7 sm:mt-8 space-y-3 text-left max-w-sm mx-auto lg:mx-0">
-              {["Manage multiple accounts", "Smart journal with screenshots", "Real-time discipline score", "AI performance analysis", "Track payouts and milestones"].map(x => (
+              {["Suivi de plusieurs comptes", "Journal avec notes et contexte", "Score de discipline calculé", "Analyse comportementale par Atlas", "Suivi des payouts et objectifs"].map(x => (
                 <div key={x} className="flex items-center gap-3"><Check className="w-4 h-4 text-[#00E676] shrink-0"/> <span className="text-sm text-[#B5BBC9]">{x}</span></div>
               ))}
             </div>
-            <Link to="/register" className="btn-ghost inline-flex items-center gap-2 mt-8" data-testid="cta-features">Discover all features <ArrowRight className="w-4 h-4"/></Link>
+            <Link to="/register" className="btn-ghost inline-flex items-center gap-2 mt-8" data-testid="cta-features">Découvrir les fonctionnalités <ArrowRight className="w-4 h-4"/></Link>
           </div>
           {/* Dashboard preview — desktop/tablet only, same reasoning as hero */}
           <div className="hidden lg:block relative">
@@ -335,33 +336,46 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* PRICING */}
+      {/* BÊTA — transparence plutôt que faux témoignages */}
+      <section id="reviews" className="px-5 sm:px-6 lg:px-10 pb-16 sm:pb-24">
+        <div className="max-w-6xl mx-auto rounded-[28px] border border-[#7C4DFF]/25 bg-gradient-to-br from-[#7C4DFF]/10 via-[#0B0E18] to-[#4F8CFF]/5 p-6 sm:p-10 lg:p-12">
+          <div className="text-center max-w-3xl mx-auto"><div className="text-[11px] font-mono uppercase tracking-[.22em] text-[#B58BFF]">BÊTA PUBLIQUE</div><h2 className="text-3xl sm:text-5xl font-bold mt-4">Construisons un outil utile,<br/><span className="text-purple-grad">sans promesses artificielles.</span></h2><p className="text-[#9CA3AF] mt-4 leading-relaxed">PipsEvo est encore en bêta. Les fonctions disponibles sont clairement indiquées, l’accès est gratuit et les retours des premiers utilisateurs servent à définir les prochaines priorités.</p></div>
+          <div className="grid md:grid-cols-3 gap-4 mt-8">{[
+            ["Données réelles","Les chiffres de l’application proviennent uniquement des comptes et trades que tu ajoutes."],
+            ["Aucun signal","Atlas analyse ton processus et ta discipline, jamais le prochain mouvement du marché."],
+            ["Roadmap transparente","La saisie manuelle est disponible. Les imports et connexions directes restent en développement."],
+          ].map(([title,text])=><div key={title} className="rounded-2xl border border-white/[0.07] bg-black/20 p-5"><Check className="w-5 h-5 text-[#00E676]"/><h3 className="font-semibold mt-4">{title}</h3><p className="text-sm text-[#8B93A3] mt-2 leading-relaxed">{text}</p></div>)}</div>
+          <div className="text-center mt-8"><Link to="/contact" className="btn-ghost inline-flex items-center gap-2">Partager une suggestion <ArrowRight className="w-4 h-4"/></Link></div>
+        </div>
+      </section>
+
+      {/* TARIFS */}
       <section id="pricing" className="px-5 sm:px-6 lg:px-10 pb-14 sm:pb-16 lg:pb-20">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-10 sm:mb-12">
-            <div className="text-[11px] font-mono uppercase tracking-widest text-[#B58BFF] mb-3">PRICING</div>
-            <h2 className="text-4xl font-bold text-gradient">Built for funded traders.</h2>
-            <p className="text-[#9CA3AF] mt-3">Cancel anytime. No setup fees.</p>
+            <div className="text-[11px] font-mono uppercase tracking-widest text-[#B58BFF] mb-3">TARIFS</div>
+            <h2 className="text-4xl font-bold text-gradient">Gratuit pendant la bêta.</h2>
+            <p className="text-[#9CA3AF] mt-3">Aucune carte bancaire et aucun prélèvement pendant cette période.</p>
           </div>
           <div className="grid md:grid-cols-2 gap-5">
-            <div className="card-elev p-6 sm:p-8">
-              <div className="text-sm font-mono uppercase text-[#9CA3AF]">Starter</div>
-              <div className="text-4xl sm:text-5xl font-bold mt-4 font-mono">€9.99<span className="text-base text-[#9CA3AF]">/mo</span></div>
-              <div className="text-sm text-[#9CA3AF] mt-2">Perfect for 1 funded account</div>
+            <div className="card-elev p-6 sm:p-8 glow-purple border-[#7C4DFF]/40">
+              <div className="text-sm font-mono uppercase text-[#B58BFF]">Accès bêta</div>
+              <div className="text-4xl sm:text-5xl font-bold mt-4 font-mono">0 €</div>
+              <div className="text-sm text-[#9CA3AF] mt-2">Toutes les fonctions actuellement disponibles</div>
               <div className="mt-8 space-y-3 text-sm">
-                {["Up to 2 accounts", "Trade journal", "Discipline score", "Basic analytics"].map(x => <div key={x} className="flex gap-2 text-[#B5BBC9]"><Check className="w-4 h-4 text-[#9CA3AF] shrink-0"/> {x}</div>)}
+                {["Comptes et trades manuels", "Journal et statistiques", "Discipline et payouts", "Atlas selon disponibilité du service IA"].map(x => <div key={x} className="flex gap-2 text-[#B5BBC9]"><Check className="w-4 h-4 text-[#00E676] shrink-0"/> {x}</div>)}
               </div>
-              <Link to="/register" className="btn-ghost block text-center mt-8">Start Free</Link>
+              <Link to="/register" className="btn-primary block text-center mt-8">Rejoindre la bêta</Link>
             </div>
-            <div className="card-elev p-6 sm:p-8 glow-purple border-[#7C4DFF]/40 relative" data-testid="pricing-pro">
-              <div className="absolute -top-3 right-6 text-[10px] font-mono uppercase tracking-widest bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF] rounded-full px-3 py-1">Most Popular</div>
-              <div className="text-sm font-mono uppercase text-[#B58BFF]">Pro</div>
-              <div className="text-4xl sm:text-5xl font-bold mt-4 font-mono">€19.99<span className="text-base text-[#9CA3AF]">/mo</span></div>
-              <div className="text-sm text-[#9CA3AF] mt-2">For serious multi-account traders</div>
+            <div className="card-elev p-6 sm:p-8 relative opacity-80" data-testid="pricing-pro">
+              <div className="absolute -top-3 right-6 text-[10px] font-mono uppercase tracking-widest border border-white/10 bg-[#111322] rounded-full px-3 py-1 text-[#9CA3AF]">APRÈS LA BÊTA</div>
+              <div className="text-sm font-mono uppercase text-[#9CA3AF]">Offre Pro prévue</div>
+              <div className="text-4xl sm:text-5xl font-bold mt-4 font-mono">19,99 €<span className="text-base text-[#9CA3AF]">/mois</span></div>
+              <div className="text-sm text-[#9CA3AF] mt-2">Le prix final sera confirmé avant tout paiement.</div>
               <div className="mt-8 space-y-3 text-sm">
-                {["Unlimited accounts", "AI Coach (Claude Sonnet 4.5)", "Trading DNA", "Survival Score", "Mistake Cost Tracker", "Priority support"].map(x => <div key={x} className="flex gap-2 text-[#B5BBC9]"><Check className="w-4 h-4 text-[#00E676] shrink-0"/> {x}</div>)}
+                {["Comptes illimités", "Coach Atlas", "Imports avancés prévus", "Rapports et support prioritaires"].map(x => <div key={x} className="flex gap-2 text-[#B5BBC9]"><Check className="w-4 h-4 text-[#6B7280] shrink-0"/> {x}</div>)}
               </div>
-              <Link to="/register" className="btn-primary block text-center mt-8" data-testid="pricing-pro-cta">Go Pro</Link>
+              <button disabled className="btn-ghost block w-full text-center mt-8 cursor-not-allowed opacity-60" data-testid="pricing-pro-cta">Bientôt disponible</button>
             </div>
           </div>
         </div>
@@ -372,14 +386,14 @@ export default function Landing() {
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-8 sm:mb-10">
             <div className="text-[11px] font-mono uppercase tracking-widest text-[#B58BFF] mb-3">FAQ</div>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gradient">Frequently asked.</h2>
+            <h2 className="text-3xl sm:text-4xl font-bold text-gradient">Questions fréquentes.</h2>
           </div>
           <div className="space-y-3">
             {[
-              { q: "Does PipsEvo connect to my broker?", a: "Currently you log trades manually or import. Direct Tradovate, Rithmic, MT4/5, cTrader and NinjaTrader connections are on the roadmap." },
-              { q: "Will you give me trade signals?", a: "Never. PipsEvo only analyzes your behavior and performance — an operating system, not a signal service." },
-              { q: "Which prop firms do you support?", a: "Topstep, Apex, FTMO, FundedNext, The5ers, Take Profit Trader — plus custom rules for any firm." },
-              { q: "Can I cancel anytime?", a: "Yes, from your billing portal. No questions asked." },
+              { q: "PipsEvo se connecte-t-il automatiquement à mon broker ?", a: "Pas encore. La saisie manuelle est disponible. L’import CSV et les connexions directes sont indiqués comme étant en préparation sur la page Plateformes." },
+              { q: "PipsEvo fournit-il des signaux ?", a: "Non. PipsEvo analyse uniquement tes données, ta discipline et ton processus. Il ne prédit pas le marché et ne recommande aucune entrée." },
+              { q: "Quelles prop firms sont compatibles ?", a: "Tu peux suivre des comptes Topstep, Apex, FTMO, FundedNext, The5ers et Take Profit Trader. Leur présence n’implique aucun partenariat officiel." },
+              { q: "Dois-je renseigner une carte bancaire ?", a: "Non. L’accès est gratuit pendant la bêta. Tu seras informé avant l’activation éventuelle d’une offre payante." },
             ].map(f => (
               <details key={f.q} className="card-flat p-5 cursor-pointer">
                 <summary className="font-semibold flex items-center justify-between text-sm">{f.q}<span className="text-[#B58BFF]">+</span></summary>
@@ -397,19 +411,19 @@ export default function Landing() {
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5 relative z-10">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] flex items-center justify-center shrink-0"><Trophy className="w-7 h-7"/></div>
             <div>
-              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gradient">Ready to protect your accounts<br className="hidden sm:block"/> and maximize your payouts?</div>
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gradient">Prêt à mieux comprendre tes décisions<br className="hidden sm:block"/> et protéger tes comptes ?</div>
             </div>
           </div>
-          <Link to="/register" className="btn-primary inline-flex items-center gap-2 relative z-10 w-full sm:w-auto justify-center" data-testid="footer-cta">Start free <ArrowRight className="w-4 h-4"/></Link>
+          <Link to="/register" className="btn-primary inline-flex items-center gap-2 relative z-10 w-full sm:w-auto justify-center" data-testid="footer-cta">Créer mon espace gratuit <ArrowRight className="w-4 h-4"/></Link>
         </div>
-        <div className="max-w-7xl mx-auto text-center text-xs text-[#6B7280] mt-6">No card required · Setup in 2 minutes</div>
+        <div className="max-w-7xl mx-auto text-center text-xs text-[#6B7280] mt-6">Aucune carte bancaire · Configuration en quelques minutes</div>
       </section>
 
       <footer className="border-t border-white/5 py-8 sm:py-10 px-5 sm:px-6 lg:px-10 text-sm text-[#9CA3AF]">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 text-center sm:text-left">
           <Logo />
-          <div className="flex flex-wrap justify-center gap-4"><Link to="/help">Aide</Link><Link to="/contact">Contact</Link><Link to="/platforms">Plateformes</Link><Link to="/blog">Blog</Link><Link to="/faq">FAQ</Link><Link to="/affiliate">Partenaires</Link><Link to="/privacy">Confidentialité</Link><Link to="/terms">Conditions</Link></div>
-          <div>© 2026 PipsEvo · The Operating System for Funded Traders.</div>
+          <div className="flex flex-wrap justify-center gap-4"><Link to="/help">Aide</Link><Link to="/contact">Contact</Link><Link to="/platforms">Plateformes</Link><Link to="/blog">Guides</Link><Link to="/faq">FAQ</Link><Link to="/affiliate">Partenaires</Link><Link to="/privacy">Confidentialité</Link><Link to="/terms">Conditions</Link><button type="button" onClick={openCookieSettings} className="hover:text-white">Cookies</button></div>
+          <div>© 2026 PipsEvo · Journal et discipline pour traders financés.</div>
         </div>
       </footer>
     </div>

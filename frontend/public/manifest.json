@@ -1,0 +1,11 @@
+{
+  "short_name": "PipsEvo",
+  "name": "PipsEvo — Journal des traders financés",
+  "description": "Journal, discipline et suivi multi-comptes pour traders financés.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#050505",
+  "background_color": "#050505",
+  "lang": "fr",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

@@ -43,7 +43,7 @@ export default function Login() {
             <input type="email" required value={email} onChange={(e)=>setEmail(e.target.value)} data-testid="login-email" className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 focus:border-[#7C4DFF] outline-none" />
           </div>
           <div>
-            <label className="text-xs font-mono uppercase text-[#9CA3AF]">Mot de passe</label>
+            <div className="flex items-center justify-between gap-3"><label className="text-xs font-mono uppercase text-[#9CA3AF]">Mot de passe</label><Link to="/contact" className="text-[11px] text-[#B58BFF] hover:text-white">Besoin d’aide ?</Link></div>
             <input type="password" required value={password} onChange={(e)=>setPassword(e.target.value)} data-testid="login-password" className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 focus:border-[#7C4DFF] outline-none" />
           </div>
           <button type="submit" disabled={loading} className="btn-primary w-full inline-flex items-center justify-center gap-2" data-testid="login-submit">{loading ? "Connexion…" : (<>Se connecter <ArrowRight className="w-4 h-4"/></>)}</button>
@@ -51,7 +51,7 @@ export default function Login() {
         <div className="text-center text-sm text-[#9CA3AF] mt-6">
           Pas encore de compte ? <Link to="/register" className="text-[#B58BFF] hover:underline" data-testid="login-go-register">Crée-en un</Link>
         </div>
-        <div className="mt-6 text-xs text-center text-[#6B7280]">Google login arrive en v2</div>
+        <div className="mt-6 text-xs text-center text-[#6B7280]">Pendant la bêta, le support peut t’aider à récupérer l’accès à ton compte.</div>
       </div>
     </div>
   );

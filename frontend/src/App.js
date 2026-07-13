@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import Landing from "@/pages/Landing";
@@ -19,6 +19,8 @@ import Settings from "@/pages/Settings";
 import Backtest from "@/pages/Backtest";
 import MarketTerminal from "@/pages/MarketTerminal";
 import { FAQPage, ContactPage, PricingPage, LegalPage, PlatformsPage, BlogPage, HelpPage, AffiliatePage } from "@/pages/SupportPages";
+import CookieConsent from "@/components/CookieConsent";
+import RouteSEO from "@/components/RouteSEO";
 import "@/index.css";
 
 function Protected() {
@@ -41,6 +43,8 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <RouteSEO />
+        <CookieConsent />
         <Toaster theme="dark" position="top-right" />
         <Routes>
           <Route path="/" element={<Landing />} />
