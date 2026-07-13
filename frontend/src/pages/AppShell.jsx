@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { LogoWordmark } from "@/components/Logo";
+import { LogoMark, LogoWordmark } from "@/components/Logo";
 import { dashboard } from "@/lib/api";
 
 const links = [
@@ -218,8 +218,10 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
         <Menu className="w-5 h-5" />
       </button>
 
-      {/* Mot-symbole seul dans l'application, y compris sur mobile. */}
-      <div className="md:hidden shrink-0"><LogoWordmark to="/app/dashboard" size="sm" /></div>
+      {/* Sur mobile, le favicon compact reste à côté du menu hamburger. */}
+      <button onClick={()=>onNavigate("/app/dashboard")} aria-label="Retour au tableau de bord" className="md:hidden grid h-9 w-9 shrink-0 place-items-center rounded-xl hover:bg-white/5">
+        <LogoMark size="sm" />
+      </button>
 
       {/* Barre de recherche — desktop uniquement */}
       <button onClick={onSearch} className="hidden md:block flex-1 min-w-0 max-w-md relative text-left">
