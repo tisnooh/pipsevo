@@ -2,9 +2,9 @@ import React from "react";
 import { Link } from "react-router-dom";
 
 const logoSizes = {
-  sm: "h-7 w-[94px]",
-  md: "h-8 w-[108px]",
-  lg: "h-11 w-[148px]",
+  sm: "h-7 w-[124px]",
+  md: "h-8 w-36",
+  lg: "h-11 w-[196px]",
 };
 
 const markSizes = { sm: "h-7 w-7", md: "h-8 w-8", lg: "h-10 w-10" };
