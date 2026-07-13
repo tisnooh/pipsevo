@@ -6,31 +6,12 @@ import { onboarding } from "@/lib/api";
 import { Logo } from "@/components/Logo";
 import TradingRulesEditor, { DEFAULT_TRADING_RULES, normalizeTradingRules } from "@/components/TradingRulesEditor";
 import { TrendingUp, Bitcoin, BarChart3, LineChart, Fuel, ArrowRight, ArrowLeft, Check, Clock3, SlidersHorizontal } from "lucide-react";
+import { ASSET_GROUPS, MARKET_INSTRUMENTS, PROP_FIRMS, getInstrumentsForMarket, marketKeys, normalizeJournalPreferences } from "@/lib/journalPreferences";
 
-const ASSET_GROUPS = {
-  cfd: [
-    { id: "forex", name: "Forex", description: "Paires de devises", icon: LineChart, color: "#7C4DFF" },
-    { id: "indices_cfd", name: "Indices CFD", description: "DAX, Nasdaq, S&P 500…", icon: BarChart3, color: "#4F8CFF" },
-    { id: "commodities_cfd", name: "Matières premières CFD", description: "Or, argent, pétrole…", icon: Fuel, color: "#FFB855" },
-    { id: "stocks_cfd", name: "Actions CFD", description: "Actions internationales", icon: TrendingUp, color: "#00E676" },
-    { id: "crypto_cfd", name: "Crypto CFD", description: "Bitcoin, Ether et autres", icon: Bitcoin, color: "#F7931A" },
-  ],
-  futures: [
-    { id: "indices_futures", name: "Indices Futures", description: "ES, NQ, YM, RTY…", icon: BarChart3, color: "#4F8CFF" },
-    { id: "commodities_futures", name: "Matières premières Futures", description: "CL, GC, SI, NG…", icon: Fuel, color: "#FFB855" },
-    { id: "fx_futures", name: "Devises Futures", description: "6E, 6B, 6J, micro FX…", icon: LineChart, color: "#B58BFF" },
-    { id: "crypto_futures", name: "Crypto Futures", description: "Micro Bitcoin et Micro Ether", icon: Bitcoin, color: "#F7931A" },
-  ],
+const ASSET_ICONS = {
+  forex: LineChart, indices_cfd: BarChart3, commodities_cfd: Fuel, stocks_cfd: TrendingUp, crypto_cfd: Bitcoin,
+  indices_futures: BarChart3, commodities_futures: Fuel, fx_futures: LineChart, crypto_futures: Bitcoin,
 };
-
-const PROP_FIRMS = [
-  { id: "topstep", name: "Topstep", markets: ["futures"] },
-  { id: "apex", name: "Apex Trader Funding", markets: ["futures"] },
-  { id: "take-profit-trader", name: "Take Profit Trader", markets: ["futures"] },
-  { id: "ftmo", name: "FTMO", markets: ["cfd"] },
-  { id: "the5ers", name: "The5ers", markets: ["cfd"] },
-  { id: "fundednext", name: "FundedNext", markets: ["futures", "cfd"] },
-];
 
 export default function Onboarding() {
   const { user, setUser } = useAuth();
@@ -42,10 +23,10 @@ export default function Onboarding() {
   const [numAccounts, setNumAccounts] = useState(1);
   const [rules, setRules] = useState(DEFAULT_TRADING_RULES);
   const [rulesTiming, setRulesTiming] = useState("now");
+  const [journalPreferences, setJournalPreferences] = useState(()=>normalizeJournalPreferences(user?.journal_preferences));
   const [loading, setLoading] = useState(false);
 
   const toggle = (arr, set, v) => set(arr.includes(v) ? arr.filter(x=>x!==v) : [...arr, v]);
-  const marketKeys = (type) => type === "both" ? ["cfd", "futures"] : [type];
   const selectTraderType = (type) => {
     const allowedMarkets = marketKeys(type);
     const allowedAssets = allowedMarkets.flatMap(m => ASSET_GROUPS[m].map(a => a.id));
@@ -53,16 +34,20 @@ export default function Onboarding() {
     setTraderType(type);
     setAssets(current => current.filter(id => allowedAssets.includes(id)));
     setFirms(current => current.filter(name => allowedFirms.includes(name)));
+    const allowedInstrumentIds=new Set(MARKET_INSTRUMENTS.filter(item=>allowedMarkets.includes(item.market)).map(item=>item.id));
+    setJournalPreferences(current=>({...current,favoriteInstruments:current.favoriteInstruments.filter(id=>allowedInstrumentIds.has(id))}));
   };
-  const canContinue = step === 1 || (step === 2 && assets.length > 0) || (step === 3 && firms.length > 0) || (step === 4 && Number(numAccounts) >= 1 && Number(numAccounts) <= 50);
+  const togglePreferenceFavorite = (key,id) => setJournalPreferences(current=>{const ids=current.favorites[key] || [];return {...current,favorites:{...current.favorites,[key]:ids.includes(id)?ids.filter(value=>value!==id):[...ids,id]}}});
+  const toggleFavoriteInstrument = id => setJournalPreferences(current=>({...current,favoriteInstruments:current.favoriteInstruments.includes(id)?current.favoriteInstruments.filter(value=>value!==id):[...current.favoriteInstruments,id]}));
+  const canContinue = step === 1 || (step === 2 && assets.length > 0 && journalPreferences.favoriteInstruments.length > 0) || step === 3 || (step === 4 && firms.length > 0) || (step === 5 && Number(numAccounts) >= 1 && Number(numAccounts) <= 50);
   const canFinish = rulesTiming === "later" || (Number(rules.max_trades) >= 1 && Number(rules.daily_loss_limit) > 0 && Number(rules.max_risk_pct) > 0 && Number(rules.max_risk_pct) <= 10 && Number(rules.stop_after_loss) >= 1 && Number(rules.min_rr) > 0 && Number(rules.max_session_minutes) >= 15);
 
   const finish = async () => {
     setLoading(true);
     try {
       const savedRules = rulesTiming === "later" ? { ...DEFAULT_TRADING_RULES, configured: false, assets } : { ...normalizeTradingRules(rules), configured: true, assets };
-      await onboarding({ trader_type: traderType, prop_firms: firms, num_accounts: +numAccounts, rules: savedRules });
-      setUser({ ...user, onboarded: true, trader_type: traderType, prop_firms: firms, rules: savedRules });
+      await onboarding({ trader_type: traderType, prop_firms: firms, num_accounts: +numAccounts, rules: savedRules, journal_preferences: journalPreferences });
+      setUser({ ...user, onboarded: true, trader_type: traderType, prop_firms: firms, rules: savedRules, journal_preferences: journalPreferences });
       toast.success(rulesTiming === "later" ? "Profil créé — complète tes règles quand tu veux" : "Tes règles sont enregistrées");
       nav("/app/dashboard");
     } catch (error) { toast.error(error.response?.data?.detail || "Impossible de terminer la configuration") } finally { setLoading(false); }
@@ -77,11 +62,11 @@ export default function Onboarding() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-7"><Logo /><div className="text-right"><div className="text-xs text-[#9CA3AF]">Bienvenue, <span className="text-white font-medium">{user?.name || "Trader"}</span></div><div className="text-[10px] text-[#6B7280] mt-1">Personnalisons ton espace.</div></div></div>
         <div className="rounded-[26px] border border-white/[0.09] bg-gradient-to-br from-[#111426]/95 via-[#0B0E1A]/95 to-[#090B13]/95 p-5 sm:p-8 lg:p-10 shadow-[0_25px_90px_rgba(0,0,0,.5)] relative overflow-hidden">
           <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-[#7C4DFF] blur-3xl opacity-10"/>
-          <div className="relative grid grid-cols-5 gap-2 mb-7">
-            {["Profil","Actifs","Firms","Comptes","Règles"].map((label,i) => <div key={label}><div className={`h-1.5 rounded-full transition-all duration-500 ${step>=i+1?"bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF] shadow-[0_0_12px_rgba(124,77,255,.35)]":"bg-white/10"}`} /><div className={`hidden sm:block text-[9px] mt-2 ${step===i+1?"text-[#B58BFF]":"text-[#4B5563]"}`}>{label}</div></div>)}
+          <div className="relative grid grid-cols-6 gap-2 mb-7">
+            {["Profil","Actifs","Journal","Firms","Comptes","Règles"].map((label,i) => <div key={label}><div className={`h-1.5 rounded-full transition-all duration-500 ${step>=i+1?"bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF] shadow-[0_0_12px_rgba(124,77,255,.35)]":"bg-white/10"}`} /><div className={`hidden sm:block text-[9px] mt-2 ${step===i+1?"text-[#B58BFF]":"text-[#4B5563]"}`}>{label}</div></div>)}
           </div>
           <div className="relative">
-          <div className="text-[10px] font-mono uppercase tracking-widest text-[#B58BFF]">Étape {step} / 5</div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[#B58BFF]">Étape {step} / 6</div>
 
           {step === 1 && (
             <div className="mt-3">
@@ -103,10 +88,15 @@ export default function Onboarding() {
               <div className="space-y-7 mt-6">
                 {marketKeys(traderType).map(market => <AssetSection key={market} market={market} assets={assets} onToggle={(id)=>toggle(assets,setAssets,id)} showTitle={traderType === "both"}/>) }
               </div>
+              <div className="mt-8 border-t border-white/[0.07] pt-6"><h3 className="text-sm font-semibold">Tes instruments favoris</h3><p className="mt-1 text-xs text-[#7E8798]">Ils apparaîtront en premier dans Nouveau trade.</p><div className="mt-4 flex flex-wrap gap-2">{getInstrumentsForMarket(traderType,journalPreferences).map(item=><button type="button" key={item.id} aria-pressed={journalPreferences.favoriteInstruments.includes(item.id)} onClick={()=>toggleFavoriteInstrument(item.id)} className={`rounded-full border px-3 py-2 text-xs transition ${journalPreferences.favoriteInstruments.includes(item.id)?"border-[#7C4DFF] bg-[#7C4DFF]/15 text-white":"border-white/10 bg-white/[0.025] text-[#8B93A3] hover:border-white/20"}`}>{item.label}</button>)}</div></div>
             </div>
           )}
 
           {step === 3 && (
+            <div className="mt-3"><h2 className="text-2xl sm:text-3xl font-bold text-gradient">Préférences du journal</h2><p className="mt-2 text-sm text-[#8B93A3]">Choisis tes options habituelles. Elles resteront toutes disponibles, mais tes favorites apparaîtront en premier.</p><div className="mt-6 grid gap-5 lg:grid-cols-2"><PreferenceFavorites title="Sessions habituelles" options={journalPreferences.sessions} selected={journalPreferences.favorites.sessions} onToggle={id=>togglePreferenceFavorite("sessions",id)}/><PreferenceFavorites title="Setups utilisés" options={journalPreferences.setups} selected={journalPreferences.favorites.setups} onToggle={id=>togglePreferenceFavorite("setups",id)}/><PreferenceFavorites title="États fréquents" options={journalPreferences.emotions} selected={journalPreferences.favorites.emotions} onToggle={id=>togglePreferenceFavorite("emotions",id)}/><PreferenceFavorites title="Durées habituelles" options={journalPreferences.durations} selected={journalPreferences.favorites.durations} onToggle={id=>togglePreferenceFavorite("durations",id)}/></div></div>
+          )}
+
+          {step === 4 && (
             <div className="mt-3">
               <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Quelles prop firms ?</h2>
               <p className="text-[#9CA3AF] text-sm mt-2">Seules les firmes compatibles avec {traderType === "both" ? "tes deux marchés" : traderType === "futures" ? "les Futures" : "les CFD / Forex"} sont proposées.</p>
@@ -116,14 +106,14 @@ export default function Onboarding() {
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <div className="mt-3">
               <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Combien de comptes ?</h2>
               <input type="number" min="1" max="50" value={numAccounts} onChange={(e)=>setNumAccounts(e.target.value)} data-testid="onb-num-accounts" className="mt-5 sm:mt-7 w-full bg-[#0D1020] border border-white/10 rounded-xl px-4 py-4 text-2xl sm:text-3xl font-mono outline-none focus:border-[#7C4DFF]" />
             </div>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <div className="mt-3">
               <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Tes règles de trading</h2>
               <p className="mt-2 text-sm text-[#8B93A3]">Construis tes garde-fous maintenant ou commence directement et complète-les ensuite dans Paramètres.</p>
@@ -137,7 +127,7 @@ export default function Onboarding() {
 
           <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-3 mt-8 sm:mt-10 pt-6 border-t border-white/[0.06]">
             <button onClick={()=>setStep(s=>Math.max(1,s-1))} disabled={step===1} className="btn-ghost inline-flex items-center justify-center gap-2 disabled:opacity-30 text-sm py-2.5"><ArrowLeft className="w-4 h-4"/> Retour</button>
-            {step < 5 ? (
+            {step < 6 ? (
               <button onClick={()=>setStep(s=>s+1)} disabled={!canContinue} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed" data-testid="onb-next">Continuer <ArrowRight className="w-4 h-4"/></button>
             ) : (
               <button onClick={finish} disabled={loading || !canFinish} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed" data-testid="onb-finish">{loading?"Sauvegarde…":(<>{rulesTiming === "later" ? "Continuer et configurer plus tard" : "Enregistrer et entrer dans PipsEvo"} <ArrowRight className="w-4 h-4"/></>)}</button>
@@ -158,12 +148,14 @@ const SectionTitle = ({ market }) => (
   </div>
 );
 
+const PreferenceFavorites = ({ title, options, selected, onToggle }) => <section className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">{title}</h3><span className="text-[10px] text-[#6B7280]">{selected.length} favorite{selected.length>1?"s":""}</span></div><div className="mt-3 flex max-h-44 flex-wrap gap-2 overflow-y-auto pr-1 scrollbar-thin">{options.filter(item=>!item.hidden).map(item=><button type="button" key={item.id} aria-pressed={selected.includes(item.id)} onClick={()=>onToggle(item.id)} className={`rounded-full border px-3 py-1.5 text-[11px] transition ${selected.includes(item.id)?"border-[#7C4DFF] bg-[#7C4DFF]/15 text-white":"border-white/10 text-[#8B93A3] hover:border-white/20"}`}>{item.label}</button>)}</div></section>;
+
 const AssetSection = ({ market, assets, onToggle, showTitle }) => (
   <section>
     {showTitle && <SectionTitle market={market}/>} 
     <div className="grid sm:grid-cols-2 gap-3">
       {ASSET_GROUPS[market].map(asset => {
-        const selected = assets.includes(asset.id); const Icon = asset.icon;
+        const selected = assets.includes(asset.id); const Icon = ASSET_ICONS[asset.id] || BarChart3;
         return <button key={asset.id} onClick={()=>onToggle(asset.id)} data-testid={`onb-asset-${asset.id}`} className={`relative text-left rounded-2xl border p-4 transition-all ${selected ? "border-[#7C4DFF]/70 bg-[#7C4DFF]/10 shadow-[0_10px_35px_rgba(124,77,255,.12)]" : "border-white/[0.07] bg-white/[0.025] hover:border-white/20"}`}>
           <div className="flex items-center gap-3"><span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{background:`${asset.color}18`}}><Icon className="w-5 h-5" style={{color:asset.color}}/></span><div className="min-w-0"><div className="font-semibold text-sm">{asset.name}</div><div className="text-[10px] text-[#6B7280] mt-1">{asset.description}</div></div></div>
           {selected && <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#7C4DFF] flex items-center justify-center"><Check className="w-3 h-3"/></span>}

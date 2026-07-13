@@ -87,6 +87,7 @@ class ProfileIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     trader_type: Optional[str] = None
     rules: Optional[Dict[str, Any]] = None
+    journal_preferences: Optional[Dict[str, Any]] = None
 
 
 class OnboardingIn(BaseModel):
@@ -94,11 +95,13 @@ class OnboardingIn(BaseModel):
     prop_firms: List[str]
     num_accounts: int
     rules: Dict[str, Any]
+    journal_preferences: Dict[str, Any] = Field(default_factory=dict)
 
 
 class PropAccountIn(BaseModel):
     name: str
     firm: str  # Topstep | Apex | FTMO | FundedNext | The5ers | TakeProfitTrader
+    market_type: Optional[str] = None
     balance: float
     initial_balance: float
     profit_target: float
@@ -110,6 +113,7 @@ class PropAccountIn(BaseModel):
 class PropAccountUpdate(BaseModel):
     name: Optional[str] = None
     firm: Optional[str] = None
+    market_type: Optional[str] = None
     balance: Optional[float] = None
     initial_balance: Optional[float] = None
     profit_target: Optional[float] = None
@@ -123,20 +127,33 @@ class TradeIn(BaseModel):
     date: str
     instrument: str
     direction: str  # long | short
-    entry: float
+    entry: Optional[float] = None
     stop: Optional[float] = None
     take_profit: Optional[float] = None
     exit_price: Optional[float] = None
-    pnl: float
+    pnl: Optional[float] = None
+    result_status: Optional[str] = "closed"
+    market_type: Optional[str] = None
     setup: Optional[str] = None
+    setups: List[str] = []
     session: Optional[str] = None  # London | NY | Asia
     emotion: Optional[str] = None
+    emotion_secondary: Optional[str] = None
+    emotion_intensity: Optional[str] = None
     notes: Optional[str] = None
     plan_respected: bool = True
     screenshots: List[str] = []
-    r: float = 0
+    r: Optional[float] = None
     size: float = 1
     duration: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    entry_time: Optional[str] = None
+    exit_time: Optional[str] = None
+    point_value: Optional[float] = None
+    commission: Optional[float] = 0
+    mistakes: List[str] = []
+    exit_reason: Optional[str] = None
+    plan_exception_reason: Optional[str] = None
     tags: List[str] = []
     checklist_results: List[Dict[str, Any]] = []
 
@@ -151,15 +168,28 @@ class TradeUpdate(BaseModel):
     take_profit: Optional[float] = None
     exit_price: Optional[float] = None
     pnl: Optional[float] = None
+    result_status: Optional[str] = None
+    market_type: Optional[str] = None
     setup: Optional[str] = None
+    setups: Optional[List[str]] = None
     session: Optional[str] = None
     emotion: Optional[str] = None
+    emotion_secondary: Optional[str] = None
+    emotion_intensity: Optional[str] = None
     notes: Optional[str] = None
     plan_respected: Optional[bool] = None
     screenshots: Optional[List[str]] = None
     r: Optional[float] = None
     size: Optional[float] = None
     duration: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    entry_time: Optional[str] = None
+    exit_time: Optional[str] = None
+    point_value: Optional[float] = None
+    commission: Optional[float] = None
+    mistakes: Optional[List[str]] = None
+    exit_reason: Optional[str] = None
+    plan_exception_reason: Optional[str] = None
     tags: Optional[List[str]] = None
     checklist_results: Optional[List[Dict[str, Any]]] = None
     starred: Optional[bool] = None
@@ -210,6 +240,7 @@ async def register(body: RegisterIn):
         "trader_type": None,
         "prop_firms": [],
         "rules": {},
+        "journal_preferences": {},
     }
     await db.users.insert_one(doc)
     token = make_token(user_id)
@@ -237,6 +268,8 @@ async def update_profile(body: ProfileIn, user=Depends(get_current_user)):
     updates = {"name": body.name.strip(), "trader_type": body.trader_type}
     if body.rules is not None:
         updates["rules"] = body.rules
+    if body.journal_preferences is not None:
+        updates["journal_preferences"] = body.journal_preferences
     await db.users.update_one({"id": user["id"]}, {"$set": updates})
     return await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
 
@@ -257,6 +290,7 @@ async def save_onboarding(body: OnboardingIn, user=Depends(get_current_user)):
             "prop_firms": body.prop_firms,
             "num_accounts": body.num_accounts,
             "rules": body.rules,
+            "journal_preferences": body.journal_preferences,
             "onboarded": True,
         }},
     )
@@ -348,10 +382,11 @@ async def create_trade(body: TradeIn, user=Depends(get_current_user)):
     t["created_at"] = now_utc()
     await db.trades.insert_one(t)
     # Update account balance
-    await db.accounts.update_one(
-        {"id": body.account_id, "user_id": user["id"]},
-        {"$inc": {"balance": body.pnl}},
-    )
+    if body.pnl is not None:
+        await db.accounts.update_one(
+            {"id": body.account_id, "user_id": user["id"]},
+            {"$inc": {"balance": body.pnl}},
+        )
     t.pop("_id", None)
     return t
 
@@ -362,7 +397,7 @@ async def delete_trade(tid: str, user=Depends(get_current_user)):
     if trade:
         await db.accounts.update_one(
             {"id": trade["account_id"], "user_id": user["id"]},
-            {"$inc": {"balance": -trade.get("pnl", 0)}},
+            {"$inc": {"balance": -float(trade.get("pnl") or 0)}},
         )
         await db.trades.delete_one({"id": tid, "user_id": user["id"]})
     return {"ok": True}
@@ -373,7 +408,7 @@ async def update_trade(tid: str, body: TradeUpdate, user=Depends(get_current_use
     trade = await db.trades.find_one({"id": tid, "user_id": user["id"]})
     if not trade:
         raise HTTPException(404, "Trade not found")
-    updates = body.model_dump(exclude_none=True)
+    updates = body.model_dump(exclude_unset=True)
     if not updates:
         raise HTTPException(400, "No changes supplied")
     new_account_id = updates.get("account_id", trade["account_id"])
@@ -381,8 +416,8 @@ async def update_trade(tid: str, body: TradeUpdate, user=Depends(get_current_use
         target = await db.accounts.find_one({"id": new_account_id, "user_id": user["id"]})
         if not target:
             raise HTTPException(404, "Target account not found")
-    old_pnl = float(trade.get("pnl", 0))
-    new_pnl = float(updates.get("pnl", old_pnl))
+    old_pnl = float(trade.get("pnl") or 0)
+    new_pnl = float(updates.get("pnl") or 0) if "pnl" in updates else old_pnl
     if new_account_id == trade["account_id"]:
         delta = new_pnl - old_pnl
         if delta:
@@ -408,8 +443,8 @@ async def dashboard(user=Depends(get_current_user)):
     total_payouts = sum(p.get("amount", 0) for p in payouts)
     estimated_payout = max(0, total_profit * 0.8)
 
-    wins = [t for t in trades if t.get("pnl", 0) > 0]
-    losses = [t for t in trades if t.get("pnl", 0) < 0]
+    wins = [t for t in trades if (t.get("pnl") or 0) > 0]
+    losses = [t for t in trades if (t.get("pnl") or 0) < 0]
     winrate = (len(wins) / len(trades) * 100) if trades else 0
     avg_win = (sum(t["pnl"] for t in wins) / len(wins)) if wins else 0
     avg_loss = (sum(t["pnl"] for t in losses) / len(losses)) if losses else 0
@@ -427,7 +462,7 @@ async def dashboard(user=Depends(get_current_user)):
     equity = []
     running = 0
     for t in sorted_trades:
-        running += t.get("pnl", 0)
+        running += t.get("pnl") or 0
         equity.append({"date": t.get("date"), "equity": round(running, 2)})
 
     # By setup
@@ -436,8 +471,8 @@ async def dashboard(user=Depends(get_current_user)):
         s = t.get("setup") or "Unspecified"
         setups.setdefault(s, {"trades": 0, "pnl": 0, "wins": 0})
         setups[s]["trades"] += 1
-        setups[s]["pnl"] += t.get("pnl", 0)
-        if t.get("pnl", 0) > 0:
+        setups[s]["pnl"] += t.get("pnl") or 0
+        if (t.get("pnl") or 0) > 0:
             setups[s]["wins"] += 1
     for s in setups.values():
         s["winrate"] = round(s["wins"] / max(s["trades"], 1) * 100, 1)
@@ -450,8 +485,8 @@ async def dashboard(user=Depends(get_current_user)):
         s = t.get("session") or "Unspecified"
         sessions.setdefault(s, {"trades": 0, "pnl": 0, "wins": 0})
         sessions[s]["trades"] += 1
-        sessions[s]["pnl"] += t.get("pnl", 0)
-        if t.get("pnl", 0) > 0:
+        sessions[s]["pnl"] += t.get("pnl") or 0
+        if (t.get("pnl") or 0) > 0:
             sessions[s]["wins"] += 1
     for s in sessions.values():
         s["winrate"] = round(s["wins"] / max(s["trades"], 1) * 100, 1)
@@ -536,7 +571,7 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
     ctx_lines = [f"Trader: {user.get('name')} ({user.get('trader_type') or 'unspecified'})"]
     ctx_lines.append(f"Accounts: {len(accounts)} | Total balance: {sum(a.get('balance',0) for a in accounts):.2f}")
     if trades:
-        wins = [t for t in trades if t.get("pnl", 0) > 0]
+        wins = [t for t in trades if (t.get("pnl") or 0) > 0]
         wr = len(wins) / len(trades) * 100
         plan_pct = sum(1 for t in trades if t.get("plan_respected")) / len(trades) * 100
         ctx_lines.append(f"Last {len(trades)} trades — winrate {wr:.1f}%, plan-respect {plan_pct:.1f}%")
@@ -594,13 +629,13 @@ async def trading_dna(user=Depends(get_current_user)):
     by_setup: Dict[str, float] = {}
     by_emotion: Dict[str, float] = {}
     for t in trades:
-        by_session[t.get("session") or "?"] = by_session.get(t.get("session") or "?", 0) + t.get("pnl", 0)
-        by_setup[t.get("setup") or "?"] = by_setup.get(t.get("setup") or "?", 0) + t.get("pnl", 0)
-        by_emotion[t.get("emotion") or "?"] = by_emotion.get(t.get("emotion") or "?", 0) + t.get("pnl", 0)
+        by_session[t.get("session") or "?"] = by_session.get(t.get("session") or "?", 0) + (t.get("pnl") or 0)
+        by_setup[t.get("setup") or "?"] = by_setup.get(t.get("setup") or "?", 0) + (t.get("pnl") or 0)
+        by_emotion[t.get("emotion") or "?"] = by_emotion.get(t.get("emotion") or "?", 0) + (t.get("pnl") or 0)
     best_session = max(by_session.items(), key=lambda x: x[1])[0] if by_session else None
     best_setup = max(by_setup.items(), key=lambda x: x[1])[0] if by_setup else None
     best_emotion = max(by_emotion.items(), key=lambda x: x[1])[0] if by_emotion else None
-    avg_pnl = sum(t.get("pnl", 0) for t in trades) / len(trades)
+    avg_pnl = sum((t.get("pnl") or 0) for t in trades) / len(trades)
     trader_type = "Sniper" if len(trades) < 50 and avg_pnl > 0 else ("Volume Trader" if len(trades) >= 100 else "Developing")
     return {
         "trader_type": trader_type,

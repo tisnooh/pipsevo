@@ -2,15 +2,18 @@ import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { auth } from "@/lib/api";
 import {
-  Bell, Check, ChevronRight, CreditCard, Crown, Globe2, LockKeyhole,
+  Bell, BookOpen, Check, ChevronRight, CreditCard, Crown, Globe2, LockKeyhole,
   ListChecks, Mail, Save, ShieldCheck, SlidersHorizontal, User, Volume2
 } from "lucide-react";
 import { toast } from "sonner";
 import TradingRulesEditor, { normalizeTradingRules } from "@/components/TradingRulesEditor";
+import JournalPreferencesEditor from "@/components/JournalPreferencesEditor";
+import { normalizeJournalPreferences } from "@/lib/journalPreferences";
 
 const sections = [
   { id: "profile", label: "Mon profil", subtitle: "Identité et marché", icon: User },
   { id: "rules", label: "Règles de trading", subtitle: "Limites et check-list", icon: ListChecks },
+  { id: "journal", label: "Préférences du journal", subtitle: "Listes et favoris", icon: BookOpen },
   { id: "preferences", label: "Préférences", subtitle: "Affichage et trading", icon: SlidersHorizontal },
   { id: "notifications", label: "Notifications", subtitle: "Alertes et résumés", icon: Bell },
   { id: "security", label: "Sécurité", subtitle: "Accès au compte", icon: ShieldCheck },
@@ -40,12 +43,13 @@ function Toggle({ checked, onChange, label, description, icon: Icon }) {
 export default function Settings() {
   const { user, setUser } = useAuth();
   const stored = getStoredSettings();
-  const [active, setActive] = useState("profile");
+  const [active, setActive] = useState(()=>new URLSearchParams(window.location.search).get("section") || "profile");
   const [name, setName] = useState(user?.name || "");
   const [traderType, setTraderType] = useState(user?.trader_type || "futures");
   const [saving, setSaving] = useState(false);
   const [savingRules, setSavingRules] = useState(false);
   const [tradingRules, setTradingRules] = useState(()=>normalizeTradingRules(user?.rules));
+  const [journalPreferences, setJournalPreferences] = useState(()=>normalizeJournalPreferences(user?.journal_preferences));
   const [preferences, setPreferences] = useState({
     currency: stored.currency || "USD",
     timezone: stored.timezone || "Europe/Paris",
@@ -88,6 +92,20 @@ export default function Settings() {
     } finally { setSavingRules(false); }
   };
 
+  const saveJournalPreferences = async () => {
+    setSavingRules(true);
+    try {
+      const nextRules={...normalizeTradingRules(tradingRules),configured:true};
+      const nextPreferences=normalizeJournalPreferences(journalPreferences);
+      const { data }=await auth.update({name:name || user?.name || "Trader",trader_type:traderType,rules:nextRules,journal_preferences:nextPreferences});
+      setUser(data);
+      setJournalPreferences(nextPreferences);
+      toast.success("Préférences du journal enregistrées");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Impossible de sauvegarder les préférences");
+    } finally { setSavingRules(false); }
+  };
+
   const initials = (user?.name || user?.email || "P E").split(" ").map(x=>x[0]).join("").slice(0,2).toUpperCase();
 
   return <div className="max-w-[1500px] mx-auto p-4 sm:p-7 space-y-5">
@@ -125,6 +143,8 @@ export default function Settings() {
           <div className="p-5 sm:p-6"><TradingRulesEditor value={tradingRules} onChange={setTradingRules}/></div>
           <div className="flex justify-end border-t border-white/[0.06] bg-white/[0.015] p-4 sm:px-6"><button type="button" onClick={saveRules} disabled={savingRules} className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"><Save className="h-4 w-4"/>{savingRules ? "Sauvegarde…" : "Enregistrer mes règles"}</button></div>
         </section>}
+
+        {active === "journal" && <section className="card-elev overflow-hidden"><div className="border-b border-white/[0.06] p-5 sm:p-6"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#4F8CFF]/12 text-[#8FB4FF]"><BookOpen className="h-5 w-5"/></span><div><h2 className="font-semibold">Préférences du journal</h2><p className="mt-1 text-xs leading-relaxed text-[#7E8798]">Personnalise les choix rapides utilisés dans Nouveau trade. Les anciens trades conservent toujours leur valeur historique.</p></div></div></div><div className="p-5 sm:p-6"><JournalPreferencesEditor value={journalPreferences} onChange={setJournalPreferences} checklist={tradingRules.pre_trade_checklist} onChecklistChange={items=>setTradingRules(current=>({...current,pre_trade_checklist:items}))}/></div><div className="sticky bottom-0 flex justify-end border-t border-white/[0.06] bg-[#0A0C14]/95 p-4 backdrop-blur sm:px-6"><button type="button" onClick={saveJournalPreferences} disabled={savingRules} className="btn-primary inline-flex w-full items-center justify-center gap-2 disabled:opacity-50 sm:w-auto"><Save className="h-4 w-4"/>{savingRules?"Sauvegarde…":"Enregistrer les préférences"}</button></div></section>}
 
         {active === "preferences" && <section className="card-elev overflow-hidden">
           <div className="border-b border-white/[0.06] p-5 sm:p-6"><h2 className="font-semibold">Préférences de trading</h2><p className="mt-1 text-xs text-[#7E8798]">Adapte les montants, horaires et l’affichage à ta façon de travailler.</p></div>

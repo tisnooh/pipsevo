@@ -179,11 +179,11 @@ export default function Dashboard() {
 
           <div className="md:hidden p-4 space-y-2">
             {filtered.map(t => {
-              const positive = Number(t.pnl) >= 0;
+              const hasPnl = typeof t.pnl === "number"; const positive = hasPnl && t.pnl >= 0;
               const directionLong = String(t.direction).toLowerCase() === "long";
               const accountName = t.account || accList.find(a=>a.id===t.account_id)?.firm || "Compte";
               return <div key={t.id} className="rounded-2xl border border-white/[0.07] bg-[#0B0E17] p-4 transition active:border-[#7C4DFF]/40">
-                <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3 min-w-0"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#15182A] text-xs font-bold text-[#B58BFF]">{String(t.instrument || "?").slice(0,2)}</span><div className="min-w-0"><div className="font-semibold truncate">{t.instrument}</div><div className="text-[11px] text-[#6B7280] mt-0.5">{t.date} · {accountName}</div></div></div><div className="text-right"><div className="font-mono font-semibold" style={{color: positive ? "#00E676" : "#FF5252"}}>{positive?"+":"-"}${Math.abs(Number(t.pnl) || 0).toFixed(2)}</div><div className="text-[10px] text-[#6B7280] mt-0.5">{(t.r ?? (Number(t.pnl)/100)).toFixed?.(2) ?? (t.r ?? (Number(t.pnl)/100))}R</div></div></div>
+                <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3 min-w-0"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#15182A] text-xs font-bold text-[#B58BFF]">{String(t.instrument || "?").slice(0,2)}</span><div className="min-w-0"><div className="font-semibold truncate">{t.instrument}</div><div className="text-[11px] text-[#6B7280] mt-0.5">{t.date} · {accountName}</div></div></div><div className="text-right"><div className="font-mono font-semibold" style={{color:!hasPnl?"#9CA3AF":positive?"#00E676":"#FF5252"}}>{hasPnl?`${positive?"+":"-"}$${Math.abs(t.pnl).toFixed(2)}`:"—"}</div><div className="text-[10px] text-[#6B7280] mt-0.5">{typeof t.r==="number"?`${t.r.toFixed(2)}R`:"—"}</div></div></div>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.05]"><span className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${directionLong ? "bg-[#00E676]/10 text-[#00E676]" : "bg-[#FF5252]/10 text-[#FF7272]"}`}>{directionLong ? "Achat · Long" : "Vente · Short"}</span><span className="text-[11px] text-[#7E8798]">{t.duration || t.session || "—"}</span></div>
               </div>;
             })}
@@ -195,14 +195,14 @@ export default function Dashboard() {
               <thead className="bg-white/[0.025] text-[#71798A] text-[10px] uppercase tracking-[.12em] font-mono"><tr><th className="text-left px-4 py-3 font-normal">Date</th><th className="text-left px-3 font-normal">Actif</th><th className="text-left px-3 font-normal">Direction</th><th className="text-right px-3 font-normal">Résultat</th><th className="text-right px-3 font-normal">R Multiple</th><th className="text-left px-3 font-normal">Durée</th><th className="text-left px-3 font-normal">Compte</th><th className="text-left px-4 font-normal">Tags</th></tr></thead>
               <tbody>
                 {filtered.map(t => {
-                  const positive = Number(t.pnl) >= 0;
+                  const hasPnl = typeof t.pnl === "number"; const positive = hasPnl && t.pnl >= 0;
                   const directionLong = String(t.direction).toLowerCase() === "long";
                   return <tr key={t.id} className="group border-t border-white/[0.055] transition-colors hover:bg-white/[0.025]">
                     <td className="px-4 py-3.5 text-xs text-[#8B93A3] whitespace-nowrap">{t.date}</td>
                     <td className="px-3 font-semibold"><span className="inline-flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-[#15182A] text-[9px] text-[#B58BFF] group-hover:bg-[#7C4DFF]/15">{String(t.instrument || "?").slice(0,2)}</span>{t.instrument}</span></td>
                     <td className="px-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium ${directionLong ? "bg-[#00E676]/10 text-[#00E676]" : "bg-[#FF5252]/10 text-[#FF7272]"}`}>{directionLong ? "Achat · Long" : "Vente · Short"}</span></td>
-                    <td className="px-3 text-right font-mono font-semibold" style={{ color: positive ? "#00E676" : "#FF5252" }}>{positive?"+":"-"}${Math.abs(Number(t.pnl) || 0).toFixed(2)}</td>
-                    <td className="px-3 text-right font-mono text-[#B5BBC9]">{(t.r ?? (Number(t.pnl)/100)).toFixed?.(2) ?? (t.r ?? (Number(t.pnl)/100))}R</td>
+                    <td className="px-3 text-right font-mono font-semibold" style={{ color: !hasPnl ? "#9CA3AF" : positive ? "#00E676" : "#FF5252" }}>{hasPnl?`${positive?"+":"-"}$${Math.abs(t.pnl).toFixed(2)}`:"—"}</td>
+                    <td className="px-3 text-right font-mono text-[#B5BBC9]">{typeof t.r==="number"?`${t.r.toFixed(2)}R`:"—"}</td>
                     <td className="px-3 text-xs text-[#8B93A3]">{t.duration || t.session || "—"}</td>
                     <td className="px-3 text-xs text-[#B5BBC9]"><span className="rounded-lg border border-white/[0.07] bg-white/[0.025] px-2 py-1">{t.account || (accList.find(a=>a.id===t.account_id)?.firm) || "—"}</span></td>
                     <td className="px-4 space-x-1">{(t.tags || (t.setup ? [t.setup] : [])).slice(0,2).map((tag,i) => <span key={i} className="text-[9px] px-2 py-1 rounded-md bg-[#7C4DFF]/10 text-[#C8AEFF] inline-block">{tag}</span>)}</td>

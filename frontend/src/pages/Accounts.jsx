@@ -3,13 +3,9 @@ import { accounts } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Activity, Edit3, Plus, RefreshCw, Shield, Trash2, X } from "lucide-react";
+import { PROP_FIRMS, marketKeys } from "@/lib/journalPreferences";
 
-const PROP_FIRMS = [
-  { name: "Topstep", markets: ["futures"] }, { name: "Apex Trader Funding", markets: ["futures"] },
-  { name: "Take Profit Trader", markets: ["futures"] }, { name: "FTMO", markets: ["cfd"] },
-  { name: "The5ers", markets: ["cfd"] }, { name: "FundedNext", markets: ["futures", "cfd"] },
-];
-const blank = { name: "Combine", firm: "", balance: 50000, initial_balance: 50000, profit_target: 3000, max_drawdown: 2000, daily_loss_limit: 1000, status: "active" };
+const blank = { name: "Combine", firm: "", market_type: "futures", balance: 50000, initial_balance: 50000, profit_target: 3000, max_drawdown: 2000, daily_loss_limit: 1000, status: "active" };
 
 export default function Accounts() {
   const { user } = useAuth();
@@ -22,18 +18,18 @@ export default function Accounts() {
   const [deleting, setDeleting] = useState("");
   const [error, setError] = useState("");
   const traderType = user?.trader_type || "futures";
-  const availableFirms = useMemo(() => { const markets = traderType === "both" ? ["futures","cfd"] : [traderType]; return PROP_FIRMS.filter(f => f.markets.some(m=>markets.includes(m))); }, [traderType]);
+  const availableFirms = useMemo(() => { const markets = marketKeys(traderType); return PROP_FIRMS.filter(f => f.markets.some(m=>markets.includes(m))); }, [traderType]);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
-    try { const { data } = await accounts.list(); setList(data); if (new URLSearchParams(window.location.search).get("new")==="1") { setEditing(null); setForm({...blank,firm:availableFirms[0]?.name||""}); setOpen(true); window.history.replaceState({},"","/app/accounts"); } }
+    try { const { data } = await accounts.list(); setList(data); if (new URLSearchParams(window.location.search).get("new")==="1") { setEditing(null); setForm({...blank,firm:availableFirms[0]?.name||"",market_type:traderType === "both" ? availableFirms[0]?.markets[0] || "futures" : traderType}); setOpen(true); window.history.replaceState({},"","/app/accounts"); } }
     catch (e) { setError(e.response?.data?.detail || "Impossible de charger les comptes."); }
     finally { setLoading(false); }
-  }, [availableFirms]);
+  }, [availableFirms, traderType]);
   useEffect(() => { load(); }, [load]);
 
   const showCreate = () => {
-    setEditing(null); setForm({...blank, firm: availableFirms[0]?.name || ""}); setOpen(true);
+    setEditing(null); setForm({...blank, firm: availableFirms[0]?.name || "", market_type:traderType === "both" ? availableFirms[0]?.markets[0] || "futures" : traderType}); setOpen(true);
   };
   const showEdit = (account) => { setEditing(account); setForm({...account}); setOpen(true); };
   const close = () => { if (!saving) { setOpen(false); setEditing(null); } };
@@ -65,7 +61,7 @@ export default function Accounts() {
         <div className="mt-5"><div className="flex justify-between text-[10px] text-[#9CA3AF] mb-1.5"><span>Objectif ${Number(a.profit_target).toLocaleString()}</span><span>{targetPct.toFixed(0)}%</span></div><div className="h-2 rounded-full bg-white/5 overflow-hidden"><div className="h-full bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF]" style={{width:`${targetPct}%`}}/></div></div>
         <div className="grid grid-cols-2 gap-2 mt-4"><Metric icon={Shield} label="Santé" value={`${a.health_score ?? 0}/100`} color="#00E676"/><Metric icon={Activity} label="Survie" value={`${a.survival_score ?? 0}%`} color="#4F8CFF"/></div><div className="mt-3 flex justify-between text-[10px] text-[#7E8798]"><span>Drawdown utilisé</span><span className="font-mono text-white">${ddUsed.toLocaleString()} / ${Number(a.max_drawdown).toLocaleString()}</span></div>
       </article>})}</div>}
-    {open && <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={close}><form onClick={e=>e.stopPropagation()} onSubmit={save} className="card-elev p-5 sm:p-7 w-full max-w-lg space-y-4 max-h-[92vh] overflow-y-auto"><div className="flex justify-between items-center"><div><h2 className="text-xl font-bold">{editing ? "Modifier le compte" : "Nouveau compte"}</h2><p className="text-xs text-[#7E8798] mt-1">Les montants servent au calcul du risque et des objectifs.</p></div><button type="button" onClick={close} aria-label="Fermer" className="grid w-9 h-9 place-items-center rounded-xl hover:bg-white/5"><X className="w-4 h-4"/></button></div><Fld label="Nom du compte" value={form.name} onChange={v=>setForm({...form,name:v})}/><label className="block text-xs text-[#9CA3AF]">Prop firm<select required value={form.firm} onChange={e=>setForm({...form,firm:e.target.value})} className="w-full mt-2 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#7C4DFF]">{availableFirms.map(f=><option key={f.name} value={f.name}>{f.name}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><Fld label="Solde actuel ($)" type="number" min="0" value={form.balance} onChange={v=>setForm({...form,balance:v})}/><Fld label="Solde initial ($)" type="number" min="1" value={form.initial_balance} onChange={v=>setForm({...form,initial_balance:v})}/><Fld label="Profit target ($)" type="number" min="1" value={form.profit_target} onChange={v=>setForm({...form,profit_target:v})}/><Fld label="Max drawdown ($)" type="number" min="1" value={form.max_drawdown} onChange={v=>setForm({...form,max_drawdown:v})}/><div className="col-span-2"><Fld label="Limite de perte quotidienne ($)" type="number" min="0" value={form.daily_loss_limit || 0} onChange={v=>setForm({...form,daily_loss_limit:v})}/></div></div><div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2"><button type="button" onClick={close} className="btn-ghost">Annuler</button><button disabled={saving} className="btn-primary disabled:opacity-50">{saving ? "Enregistrement…" : editing ? "Enregistrer les modifications" : "Créer le compte"}</button></div></form></div>}
+    {open && <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={close}><form onClick={e=>e.stopPropagation()} onSubmit={save} className="card-elev p-5 sm:p-7 w-full max-w-lg space-y-4 max-h-[92vh] overflow-y-auto"><div className="flex justify-between items-center"><div><h2 className="text-xl font-bold">{editing ? "Modifier le compte" : "Nouveau compte"}</h2><p className="text-xs text-[#7E8798] mt-1">Les montants servent au calcul du risque et des objectifs.</p></div><button type="button" onClick={close} aria-label="Fermer" className="grid w-9 h-9 place-items-center rounded-xl hover:bg-white/5"><X className="w-4 h-4"/></button></div><Fld label="Nom du compte" value={form.name} onChange={v=>setForm({...form,name:v})}/><label className="block text-xs text-[#9CA3AF]">Prop firm<select required value={form.firm} onChange={e=>{const firm=availableFirms.find(item=>item.name===e.target.value);setForm({...form,firm:e.target.value,market_type:firm?.markets.includes(form.market_type)?form.market_type:firm?.markets[0]||form.market_type})}} className="w-full mt-2 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#7C4DFF]">{availableFirms.map(f=><option key={f.name} value={f.name}>{f.name}</option>)}</select></label><label className="block text-xs text-[#9CA3AF]">Type de marché<select required value={form.market_type || "futures"} onChange={e=>setForm({...form,market_type:e.target.value})} className="w-full mt-2 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#7C4DFF]">{(availableFirms.find(item=>item.name===form.firm)?.markets || marketKeys(traderType)).map(market=><option key={market} value={market}>{market === "futures" ? "Futures" : "CFD / Forex"}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><Fld label="Solde actuel ($)" type="number" min="0" value={form.balance} onChange={v=>setForm({...form,balance:v})}/><Fld label="Solde initial ($)" type="number" min="1" value={form.initial_balance} onChange={v=>setForm({...form,initial_balance:v})}/><Fld label="Profit target ($)" type="number" min="1" value={form.profit_target} onChange={v=>setForm({...form,profit_target:v})}/><Fld label="Max drawdown ($)" type="number" min="1" value={form.max_drawdown} onChange={v=>setForm({...form,max_drawdown:v})}/><div className="col-span-2"><Fld label="Limite de perte quotidienne ($)" type="number" min="0" value={form.daily_loss_limit || 0} onChange={v=>setForm({...form,daily_loss_limit:v})}/></div></div><div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2"><button type="button" onClick={close} className="btn-ghost">Annuler</button><button disabled={saving} className="btn-primary disabled:opacity-50">{saving ? "Enregistrement…" : editing ? "Enregistrer les modifications" : "Créer le compte"}</button></div></form></div>}
   </div>;
 }
 const Metric=({icon:Icon,label,value,color})=><div className="rounded-xl bg-black/25 border border-white/[0.06] p-3"><div className="text-[9px] text-[#7E8798] uppercase flex items-center gap-1"><Icon className="w-3 h-3" style={{color}}/>{label}</div><div className="font-mono font-bold mt-1">{value}</div></div>;

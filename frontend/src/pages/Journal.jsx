@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Star, Edit2, Trash2, Camera, Check, ListChecks, Plus } from "lucide-react"
+import { Star, Edit2, Trash2, Camera, Check, Plus } from "lucide-react"
 import { AreaChart, Area, ResponsiveContainer } from "recharts"
 import { trades as tradesAPI, accounts as accAPI } from "@/lib/api"
 import { toast } from "sonner"
 import { useAuth } from "@/context/AuthContext"
 import { normalizeTradingRules } from "@/components/TradingRulesEditor"
+import TradeFormModal from "@/components/TradeFormModal"
+import { createEmptyTradeForm, hydrateTradeForm } from "@/lib/tradeFormModel"
 
 const miniChartData = [
   { t: 1, v: 1.0784 }, { t: 2, v: 1.0790 }, { t: 3, v: 1.0785 },
@@ -27,15 +29,9 @@ export function JournalPage() {
   const [checklistChecks, setChecklistChecks] = useState({})
   const [accountFilter, setAccountFilter] = useState("")
   const [days, setDays] = useState("30")
-  const [form, setForm] = useState({
-    instrument: "", direction: "long", pnl: "", r: "",
-    account_id: "", date: new Date().toISOString().slice(0, 10),
-    session: "", setup: "", emotion: "", plan_respected: true,
-    entry: "", exit_price: "", stop: "", take_profit: "", size: "1",
-    notes: "", duration: ""
-  })
+  const [form, setForm] = useState(()=>createEmptyTradeForm(null))
   const userRules = normalizeTradingRules(user?.rules)
-  const activeChecklist = [...userRules.pre_trade_checklist, ...userRules.custom_rules].filter(item=>item.enabled)
+  const activeChecklist = userRules.pre_trade_checklist.filter(item=>item.enabled !== false)
 
   const load = async () => {
     setLoading(true)
@@ -51,21 +47,11 @@ export function JournalPage() {
 
   useEffect(() => { load() }, [])
 
-  const createTrade = async (e) => {
-    e.preventDefault()
+  const saveTrade = async (payload) => {
     setSaving(true)
-    const nullableNumber = (value) => value === "" || value === null || value === undefined ? null : Number(value)
     try {
-      const payload = {
-        ...form,
-        pnl: Number(form.pnl), r: nullableNumber(form.r) || 0,
-        entry: nullableNumber(form.entry) || 0, exit_price: nullableNumber(form.exit_price),
-        stop: nullableNumber(form.stop), take_profit: nullableNumber(form.take_profit),
-        size: nullableNumber(form.size) || 1,
-        tags: form.setup ? [form.setup] : [],
-        checklist_results: activeChecklist.map(item=>({id:item.id,label:item.label,checked:Boolean(checklistChecks[item.id])})),
-      }
       if (editingTrade) await tradesAPI.update(editingTrade.id, payload); else await tradesAPI.create(payload)
+      localStorage.setItem("pipsevo_last_trade_choices",JSON.stringify({account_id:payload.account_id,session:payload.session,setups:payload.setups,emotion:payload.emotion,emotion_intensity:payload.emotion_intensity,duration:payload.duration,market_type:payload.market_type}))
       toast.success(editingTrade ? "Trade mis à jour" : "Trade ajouté")
       setOpenForm(false)
       setEditingTrade(null)
@@ -78,14 +64,17 @@ export function JournalPage() {
     if (!accounts.length) { toast.error("Ajoute d’abord un compte de trading"); return }
     setEditingTrade(null)
     setChecklistChecks({})
-    setForm({ instrument:"",direction:"long",pnl:"",r:"",account_id:accounts[0].id,date:new Date().toISOString().slice(0,10),session:"",setup:"",emotion:"",plan_respected:true,entry:"",exit_price:"",stop:"",take_profit:"",size:"1",notes:"",duration:"" })
+    let last={};try{last=JSON.parse(localStorage.getItem("pipsevo_last_trade_choices"))||{}}catch{}
+    const account=accounts.find(item=>item.id===last.account_id&&(item.status||"active")==="active") || accounts.find(item=>(item.status||"active")==="active") || accounts[0]
+    setForm(createEmptyTradeForm(account,last))
     setOpenForm(true)
   }
 
   const openEditTrade = (trade) => {
     setEditingTrade(trade)
     setChecklistChecks(Object.fromEntries((trade.checklist_results || []).map(item=>[item.id,Boolean(item.checked)])))
-    setForm({ instrument:trade.instrument||"",direction:trade.direction||"long",pnl:trade.pnl??"",r:trade.r??"",account_id:trade.account_id||accounts[0]?.id||"",date:trade.date||new Date().toISOString().slice(0,10),session:trade.session||"",setup:trade.setup||"",emotion:trade.emotion||"",plan_respected:trade.plan_respected!==false,entry:trade.entry??"",exit_price:trade.exit_price??"",stop:trade.stop??"",take_profit:trade.take_profit??"",size:trade.size??"1",notes:trade.notes||"",duration:trade.duration||"" })
+    const account=accounts.find(item=>item.id===trade.account_id) || accounts[0]
+    setForm(hydrateTradeForm(trade,account))
     setOpenForm(true)
   }
 
@@ -111,8 +100,11 @@ export function JournalPage() {
     asset: t.instrument || t.asset || "—",
     direction: t.direction === "long" ? "Achat (Long)" : t.direction === "short" ? "Vente (Short)" : t.direction,
     win: (t.pnl ?? 0) > 0,
-    result: t.pnl !== undefined ? `${t.pnl >= 0 ? "+" : ""}$${Math.abs(t.pnl).toFixed(2)}` : "—",
-    rLabel: t.r !== undefined ? `${t.r >= 0 ? "+" : ""}${t.r.toFixed(2)}R` : "—",
+    toneClass: typeof t.pnl !== "number" || t.pnl === 0 ? "text-[#9CA3AF]" : t.pnl > 0 ? "text-[#00E676]" : "text-[#FF5252]",
+    chartColor: typeof t.pnl !== "number" || t.pnl === 0 ? "#7C4DFF" : t.pnl > 0 ? "#00E676" : "#FF5252",
+    statusLabel: ({winner:"Gagnant",loser:"Perdant",breakeven:"Break-even",partial:"Partiellement clôturé",open:"Position ouverte",cancelled:"Annulé"})[t.result_status] || (t.pnl > 0 ? "Gagnant" : t.pnl < 0 ? "Perdant" : "Break-even"),
+    result: typeof t.pnl === "number" ? `${t.pnl >= 0 ? "+" : ""}$${Math.abs(t.pnl).toFixed(2)}` : t.result_status === "open" ? "Ouverte" : "—",
+    rLabel: typeof t.r === "number" ? `${t.r >= 0 ? "+" : ""}${t.r.toFixed(2)}R` : "—",
     account: accounts.find(a => a.id === t.account_id)
       ? `${accounts.find(a => a.id === t.account_id).firm} $${(accounts.find(a => a.id === t.account_id).initial_balance / 1000).toFixed(0)}K`
       : "—",
@@ -129,12 +121,12 @@ export function JournalPage() {
   const filtered = activeFilter === "Tous les trades" || activeFilter === "Tous"
     ? byAccountAndDate
     : activeFilter === "Positions ouvertes"
-    ? byAccountAndDate.filter(t => t.exit_price === null || t.exit_price === undefined)
+    ? byAccountAndDate.filter(t => t.result_status === "open" || t.exit_price === null || t.exit_price === undefined)
     : byAccountAndDate.filter(t => t.starred)
 
   // KPIs calculés depuis les vraies données
-  const wins = filtered.filter(t => t.win)
-  const losses = filtered.filter(t => !t.win)
+  const wins = filtered.filter(t => typeof t.pnl === "number" && t.pnl > 0)
+  const losses = filtered.filter(t => typeof t.pnl === "number" && t.pnl < 0)
   const totalPnl = filtered.reduce((s, t) => s + (t.pnl || 0), 0)
   const winRate = filtered.length ? Math.round((wins.length / filtered.length) * 100) : 0
   const avgWin = wins.length ? wins.reduce((s, t) => s + (t.pnl || 0), 0) / wins.length : 0
@@ -253,9 +245,9 @@ export function JournalPage() {
                 <button aria-label={trade.starred?"Retirer des favoris":"Ajouter aux favoris"} onClick={(e)=>toggleFavorite(trade,e)}><Star className={`w-3.5 h-3.5 transition-colors ${trade.starred ? "text-yellow-400 fill-yellow-400" : "text-[#374151] hover:text-yellow-400"}`}/></button>
                 <span className="text-[#9CA3AF] text-[10px]">{trade.dateLabel}</span>
                 <span className="text-white font-medium">{trade.asset}</span>
-                <span className={trade.win ? "text-[#00E676]" : "text-[#FF5252]"}>{trade.direction}</span>
-                <span className={`font-medium ${trade.win ? "text-[#00E676]" : "text-[#FF5252]"}`}>{trade.result}</span>
-                <span className={trade.win ? "text-[#00E676]" : "text-[#FF5252]"}>{trade.rLabel}</span>
+                <span className={trade.toneClass}>{trade.direction}</span>
+                <span className={`font-medium ${trade.toneClass}`}>{trade.result}</span>
+                <span className={trade.toneClass}>{trade.rLabel}</span>
                 <span className="text-[#9CA3AF]">{trade.duration || "—"}</span>
                 <span className="text-[#9CA3AF] text-[10px] truncate">{trade.account}</span>
                 <div className="flex gap-1 flex-wrap">
@@ -290,10 +282,8 @@ export function JournalPage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <span className="text-base font-bold text-white">{t.asset}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                    t.win ? "bg-[#00E676]/20 text-[#00E676]" : "bg-[#FF5252]/20 text-[#FF5252]"
-                  }`}>
-                    {t.win ? "Gagnant" : "Perdant"}
+                  <span className={`px-2 py-0.5 rounded-full bg-white/[0.05] text-[10px] font-medium ${t.toneClass}`}>
+                    {t.statusLabel}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
@@ -306,12 +296,12 @@ export function JournalPage() {
 
               {/* Direction + values */}
               <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#1E2430]">
-                <span className={`text-xs font-medium ${t.win ? "text-[#00E676]" : "text-[#FF5252]"}`}>
+                <span className={`text-xs font-medium ${t.toneClass}`}>
                   {t.direction === "Achat (Long)" ? "📈" : "📉"} {t.direction}
                 </span>
                 <div className="text-right">
-                  <div className={`text-sm font-bold ${t.win ? "text-[#00E676]" : "text-[#FF5252]"}`}>{t.rLabel}</div>
-                  <div className={`text-sm font-bold ${t.win ? "text-[#00E676]" : "text-[#FF5252]"}`}>{t.result}</div>
+                  <div className={`text-sm font-bold ${t.toneClass}`}>{t.rLabel}</div>
+                  <div className={`text-sm font-bold ${t.toneClass}`}>{t.result}</div>
                 </div>
               </div>
 
@@ -373,11 +363,11 @@ export function JournalPage() {
                         <AreaChart data={miniChartData}>
                           <defs>
                             <linearGradient id="miniGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor={t.win ? "#00E676" : "#FF5252"} stopOpacity={0.3} />
-                              <stop offset="95%" stopColor={t.win ? "#00E676" : "#FF5252"} stopOpacity={0} />
+                              <stop offset="5%" stopColor={t.chartColor} stopOpacity={0.3} />
+                              <stop offset="95%" stopColor={t.chartColor} stopOpacity={0} />
                             </linearGradient>
                           </defs>
-                          <Area type="monotone" dataKey="v" stroke={t.win ? "#00E676" : "#FF5252"} strokeWidth={1.5} fill="url(#miniGrad)" />
+                          <Area type="monotone" dataKey="v" stroke={t.chartColor} strokeWidth={1.5} fill="url(#miniGrad)" />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
@@ -424,94 +414,7 @@ export function JournalPage() {
       })()}
 
       {/* Modal: Nouveau trade */}
-      {openForm && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setOpenForm(false)}>
-          <form
-            onClick={(e) => e.stopPropagation()}
-            onSubmit={createTrade}
-            className="rounded-xl border border-[#1E2430] bg-[#0A0C14] p-4 sm:p-6 w-full max-w-lg space-y-4 max-h-[90vh] overflow-y-auto"
-          >
-            <h2 className="text-xl font-bold text-white">{editingTrade ? "Modifier le trade" : "Nouveau trade"}</h2>
-
-            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-              <Fld label="Instrument" value={form.instrument} onChange={(v) => setForm({ ...form, instrument: v })} placeholder="EURUSD" required />
-              <div>
-                <label className="text-[10px] font-mono uppercase text-[#9CA3AF]">Direction</label>
-                <select value={form.direction} onChange={(e) => setForm({ ...form, direction: e.target.value })}
-                  className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-[#7C4DFF] text-white">
-                  <option value="long">Achat (Long)</option>
-                  <option value="short">Vente (Short)</option>
-                </select>
-              </div>
-              <Fld label="P&L ($)" type="number" value={form.pnl} onChange={(v) => setForm({ ...form, pnl: v })} placeholder="320" required />
-              <Fld label="R Multiple" type="number" value={form.r} onChange={(v) => setForm({ ...form, r: v })} placeholder="1.32" />
-              <Fld label="Date" type="date" value={form.date} onChange={(v) => setForm({ ...form, date: v })} required />
-              <Fld label="Durée" value={form.duration} onChange={(v) => setForm({ ...form, duration: v })} placeholder="2h 15m" />
-              <Fld label="Entrée" type="number" value={form.entry} onChange={(v) => setForm({ ...form, entry: v })} placeholder="1.07845" />
-              <Fld label="Sortie" type="number" value={form.exit_price} onChange={(v) => setForm({ ...form, exit_price: v })} placeholder="1.08123" />
-              <Fld label="Stop Loss" type="number" value={form.stop} onChange={(v) => setForm({ ...form, stop: v })} placeholder="1.07610" />
-              <Fld label="Take Profit" type="number" value={form.take_profit} onChange={(v) => setForm({ ...form, take_profit: v })} placeholder="1.08250" />
-            </div>
-
-            <div>
-              <label className="text-[10px] font-mono uppercase text-[#9CA3AF]">Compte</label>
-              <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}
-                className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-[#7C4DFF] text-white">
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.firm} — {a.name}</option>)}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Fld label="Session" value={form.session} onChange={(v) => setForm({ ...form, session: v })} placeholder="London" />
-              <Fld label="Setup" value={form.setup} onChange={(v) => setForm({ ...form, setup: v })} placeholder="FVG, Breakout…" />
-              <Fld label="Émotion" value={form.emotion} onChange={(v) => setForm({ ...form, emotion: v })} placeholder="Calme" />
-            </div>
-
-            <div>
-              <label className="text-[10px] font-mono uppercase text-[#9CA3AF]">Notes</label>
-              <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-[#7C4DFF] text-white h-20 resize-none"
-                placeholder="Décris ton setup, ta gestion…" />
-            </div>
-
-            {activeChecklist.length > 0 && <section className="rounded-2xl border border-[#7C4DFF]/20 bg-[#7C4DFF]/[0.05] p-4">
-              <div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#7C4DFF]/15 text-[#B58BFF]"><ListChecks className="h-4 w-4"/></span><div><div className="text-sm font-semibold">Check-list avant trade</div><p className="mt-1 text-[10px] leading-relaxed text-[#7E8798]">Coche les règles respectées. Elles seront enregistrées avec ce trade.</p></div></div>
-              <div className="mt-3 space-y-2">{activeChecklist.map(item=><button type="button" key={item.id} onClick={()=>setChecklistChecks(current=>({...current,[item.id]:!current[item.id]}))} className="flex w-full items-center gap-3 rounded-xl border border-white/[0.06] bg-[#0B0E18] p-3 text-left"><span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border transition ${checklistChecks[item.id] ? "border-[#00E676] bg-[#00E676] text-[#06130C]" : "border-white/15 text-transparent"}`}><Check className="h-3 w-3"/></span><span className={`text-xs ${checklistChecks[item.id] ? "text-[#D6DAE4]" : "text-[#8B93A3]"}`}>{item.label}</span></button>)}</div>
-            </section>}
-
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="plan" checked={form.plan_respected} onChange={(e) => setForm({ ...form, plan_respected: e.target.checked })} className="rounded" />
-              <label htmlFor="plan" className="text-xs text-[#9CA3AF]">Plan respecté</label>
-            </div>
-
-            <div className="flex gap-3">
-              <button type="button" disabled={saving} onClick={() => {setOpenForm(false);setEditingTrade(null)}}
-                className="flex-1 py-2.5 rounded-xl text-xs font-medium border border-[#1E2430] text-[#9CA3AF] hover:border-[#7C4DFF]/50 transition-all">
-                Annuler
-              </button>
-              <button type="submit" disabled={saving || !form.account_id}
-                className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-white transition-all"
-                style={{ background: "linear-gradient(135deg, #7C4DFF, #4F8CFF)" }}>
-                {saving ? "Enregistrement…" : editingTrade ? "Enregistrer" : "Ajouter le trade"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      {openForm && <TradeFormModal form={form} setForm={setForm} accounts={accounts} user={user} checklist={activeChecklist} checklistChecks={checklistChecks} setChecklistChecks={setChecklistChecks} editingTrade={editingTrade} saving={saving} onClose={()=>{if(!saving){setOpenForm(false);setEditingTrade(null)}}} onSave={saveTrade}/>}
     </div>
   )
 }
-
-const Fld = ({ label, value, onChange, type = "text", placeholder, required }) => (
-  <div>
-    <label className="text-[10px] font-mono uppercase text-[#9CA3AF]">{label}</label>
-    <input
-      type={type}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      required={required}
-      className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-[#7C4DFF] text-white"
-    />
-  </div>
-)

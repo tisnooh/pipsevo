@@ -1,13 +1,6 @@
 import React, { useState } from "react";
 import { Check, ListChecks, Plus, ShieldCheck, Trash2 } from "lucide-react";
-
-export const DEFAULT_PRE_TRADE_CHECKLIST = [
-  { id: "plan", label: "Le setup respecte mon plan de trading", enabled: true },
-  { id: "risk", label: "Le risque et la taille de position sont calculés", enabled: true },
-  { id: "levels", label: "L’entrée, le stop et l’objectif sont définis", enabled: true },
-  { id: "news", label: "J’ai vérifié les annonces économiques", enabled: true },
-  { id: "emotion", label: "Mon état émotionnel est stable", enabled: true },
-];
+import { DEFAULT_CHECKLIST } from "@/lib/journalPreferences";
 
 export const DEFAULT_TRADING_RULES = {
   max_trades: 3,
@@ -16,7 +9,7 @@ export const DEFAULT_TRADING_RULES = {
   stop_after_loss: 2,
   min_rr: 1.5,
   max_session_minutes: 240,
-  pre_trade_checklist: DEFAULT_PRE_TRADE_CHECKLIST,
+  pre_trade_checklist: DEFAULT_CHECKLIST,
   custom_rules: [],
   configured: true,
 };
@@ -24,7 +17,7 @@ export const DEFAULT_TRADING_RULES = {
 export const normalizeTradingRules = (rules = {}) => ({
   ...DEFAULT_TRADING_RULES,
   ...rules,
-  pre_trade_checklist: Array.isArray(rules.pre_trade_checklist) ? rules.pre_trade_checklist : DEFAULT_PRE_TRADE_CHECKLIST,
+  pre_trade_checklist: Array.isArray(rules.pre_trade_checklist) ? rules.pre_trade_checklist : DEFAULT_CHECKLIST,
   custom_rules: Array.isArray(rules.custom_rules) ? rules.custom_rules : [],
 });
 
