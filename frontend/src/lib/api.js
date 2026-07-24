@@ -8,11 +8,20 @@ export const api = axios.create({ baseURL: API });
 const response = (data) => ({ data });
 const fail = (message, status = 400, original) => {
   const error = original instanceof Error ? original : new Error(message);
+  if (original?.code) error.code = original.code;
   error.response = { status, data: { detail: message } };
   return error;
 };
 const check = (error, fallback) => {
-  if (error) throw fail(error.message || fallback, error.status || 400, error);
+  if (!error) return;
+  const authMessages = {
+    over_email_send_rate_limit: "Le quota temporaire d'e-mails est atteint. Réessaie dans environ une heure.",
+    email_address_invalid: "Cette adresse e-mail n'est pas acceptée. Vérifie-la ou utilise une autre adresse.",
+    user_already_exists: "Un compte existe déjà avec cette adresse e-mail.",
+    weak_password: "Ce mot de passe est trop faible. Utilise au moins 8 caractères, une majuscule et un chiffre.",
+  };
+  const message = authMessages[error.code] || error.message || fallback;
+  throw fail(message, error.status || (error.code === "over_email_send_rate_limit" ? 429 : 400), error);
 };
 const numberOrNull = (value) => value === "" || value === undefined || value === null ? null : Number(value);
 const numeric = (row, keys) => {
