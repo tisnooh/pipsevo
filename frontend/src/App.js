@@ -6,6 +6,7 @@ import { I18nProvider } from "@/context/I18nContext";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import VerifyEmail from "@/pages/VerifyEmail";
 import Onboarding from "@/pages/Onboarding";
 import AppShell from "@/pages/AppShell";
 import Dashboard from "@/pages/Dashboard";
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/pricing" element={<PricingPage />} />

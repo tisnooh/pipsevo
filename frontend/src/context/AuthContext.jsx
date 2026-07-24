@@ -11,12 +11,23 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let active = true;
-    auth.me().then(r => { if (active) setUser(r.data); }).catch(() => {
+    const refreshUser = () => auth.me().then(r => {
+      if (active) {
+        setUser(r.data);
+        sessionStorage.removeItem("pipsevo_pending_email");
+      }
+    }).catch(() => {
       localStorage.removeItem("pipsevo_token");
       if (active) setUser(null);
     }).finally(() => { if (active) setLoading(false); });
+    refreshUser();
     const { data: listener } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT" && active) setUser(null);
+      if (event === "SIGNED_IN" && active) {
+        // Supabase traite le lien de confirmation de manière asynchrone.
+        // Sortir du callback évite de bloquer le client avant de charger le profil.
+        window.setTimeout(refreshUser, 0);
+      }
     });
     return () => { active = false; listener.subscription.unsubscribe(); };
   }, []);
@@ -36,7 +47,12 @@ export function AuthProvider({ children }) {
   const register = async (email, password, name) => {
     const { data } = await auth.register({ email, password, name });
     if (data.token) localStorage.setItem("pipsevo_token", data.token);
+    sessionStorage.removeItem("pipsevo_pending_email");
     setUser(data.user);
+    return data;
+  };
+  const resendConfirmation = async (email) => {
+    const { data } = await auth.resendConfirmation(email);
     return data;
   };
   const logout = async () => {
@@ -45,7 +61,7 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  return <AuthCtx.Provider value={{ user, setUser, loading, login, register, logout }}>{children}</AuthCtx.Provider>;
+  return <AuthCtx.Provider value={{ user, setUser, loading, login, register, resendConfirmation, logout }}>{children}</AuthCtx.Provider>;
 }
 
 export const useAuth = () => useContext(AuthCtx);

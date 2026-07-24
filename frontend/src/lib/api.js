@@ -71,11 +71,20 @@ export const auth = {
   register: async ({ email, password, name }) => {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(), password,
-      options: { data: { name: name.trim() }, emailRedirectTo: `${window.location.origin}/login` },
+      options: { data: { name: name.trim() }, emailRedirectTo: `${window.location.origin}/onboarding` },
     });
     check(error, "Inscription impossible");
     if (!data.session) return response({ token: null, user: null, requires_email_confirmation: true, email });
     return response({ token: data.session.access_token, user: await loadCurrentUser() });
+  },
+  resendConfirmation: async (email) => {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: email.trim(),
+      options: { emailRedirectTo: `${window.location.origin}/onboarding` },
+    });
+    check(error, "Impossible de renvoyer l'e-mail de confirmation");
+    return response({ ok: true });
   },
   login: async ({ email, password }) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });

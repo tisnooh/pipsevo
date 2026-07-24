@@ -163,6 +163,14 @@ const EN = new Map([
   ["Bientôt disponible", "Coming soon"], ["Rejoindre la bêta", "Join the beta"], ["Politique de confidentialité", "Privacy policy"],
   ["Mise à jour : 13 juillet 2026", "Updated: July 13, 2026"], ["Gérer mes préférences de cookies", "Manage my cookie preferences"],
   ["Guides PipsEvo", "PipsEvo guides"], ["Centre d'aide", "Help center"], ["Trouve rapidement la bonne ressource.", "Quickly find the right resource."],
+  ["Dernière étape", "Final step"], ["Vérifie ton e-mail.", "Check your email."],
+  ["Nous avons envoyé un lien d'activation à", "We sent an activation link to"], ["ton adresse e-mail", "your email address"],
+  ["Clique sur ce lien pour activer ton compte et commencer l'onboarding.", "Click the link to activate your account and start onboarding."],
+  ["Vérifie aussi le dossier spam ou courrier indésirable.", "Also check your spam or junk folder."],
+  ["Le lien te connectera automatiquement à PipsEvo.", "The link will sign you in to PipsEvo automatically."],
+  ["Tu seras ensuite dirigé vers la personnalisation de ton profil.", "You will then be taken to profile setup."],
+  ["Adresse e-mail", "Email address"], ["Envoi…", "Sending…"], ["Renvoyer l'e-mail", "Resend email"],
+  ["Modifier mon adresse", "Change my email"], ["J'ai déjà confirmé", "I've already confirmed"],
 ]);
 
 const originalText = new WeakMap();
@@ -179,6 +187,7 @@ function translateText(value) {
     .replace(/^(\d+) compte(s?) suivi(s?)$/, "$1 tracked account$2")
     .replace(/^(\d+) trades sur la période$/, "$1 trades in this period")
     .replace(/^Étape (\d+) \/ (\d+)$/, "Step $1 / $2")
+    .replace(/^Renvoyer dans (\d+)s$/, "Resend in $1s")
     .replace(/^Plan respecté sur ([\d.,]+)% des trades\. Consulte ta discipline\.$/, "Plan followed on $1% of trades. Review your discipline.")
     .replace(/^Ajoute ton premier compte pour commencer le suivi\.$/, "Add your first account to start tracking.")
     .replace(/^Journalise ton premier trade pour activer les analyses\.$/, "Log your first trade to activate analytics.");
