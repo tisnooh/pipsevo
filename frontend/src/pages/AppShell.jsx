@@ -174,7 +174,7 @@ export default function AppShell() {
 
         <div className="border-t border-white/5 px-3 py-3 text-xs text-[#9CA3AF] shrink-0">
           <button
-            onClick={() => { logout(); window.location.href = "/"; }}
+            onClick={async () => { await logout(); window.location.href = "/"; }}
             className="flex items-center gap-2 hover:text-[#FF5252]"
             data-testid="sidebar-logout"
           >
@@ -193,7 +193,7 @@ export default function AppShell() {
           notifications={buildNotifications(summary, settings, t)}
           onNotifications={()=>setNotificationsOpen(v=>!v)}
           onNavigate={(to)=>nav(to)}
-          onLogout={()=>{ logout(); window.location.href = "/"; }}
+          onLogout={async()=>{ await logout(); window.location.href = "/"; }}
         />
         <Outlet />
       </div>
