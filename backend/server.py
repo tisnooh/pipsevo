@@ -3,6 +3,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import ASCENDING, DESCENDING
+from pymongo.errors import DuplicateKeyError
 import os
 import logging
 import uuid
@@ -14,6 +16,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 import anthropic
 import asyncio
+import requests
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -27,10 +30,58 @@ JWT_ALG = os.environ.get('JWT_ALGORITHM', 'HS256')
 JWT_EXP_HOURS = int(os.environ.get('JWT_EXPIRE_HOURS', '168'))
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 client_ai = anthropic.Anthropic(api_key=EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
+SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://zwnrmnoutwhazhgoomoi.supabase.co').rstrip('/')
+SUPABASE_PUBLISHABLE_KEY = os.environ.get(
+    'SUPABASE_PUBLISHABLE_KEY',
+    'sb_publishable_HkC7wGQyOhDuUJFINnwE-g_U-Nxwt1a',
+)
 
 app = FastAPI(title="PipsEvo API")
 api = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
+
+
+async def ensure_database_indexes():
+    """Create the indexes required for data integrity and common user queries."""
+    await db.users.create_index([("id", ASCENDING)], unique=True, name="users_id_unique")
+    await db.users.create_index([("email", ASCENDING)], unique=True, name="users_email_unique")
+
+    await db.accounts.create_index([("id", ASCENDING)], unique=True, name="accounts_id_unique")
+    await db.accounts.create_index(
+        [("user_id", ASCENDING), ("created_at", DESCENDING)],
+        name="accounts_user_created",
+    )
+    await db.accounts.create_index(
+        [("user_id", ASCENDING), ("status", ASCENDING)],
+        name="accounts_user_status",
+    )
+
+    await db.trades.create_index([("id", ASCENDING)], unique=True, name="trades_id_unique")
+    await db.trades.create_index(
+        [("user_id", ASCENDING), ("date", DESCENDING)],
+        name="trades_user_date",
+    )
+    await db.trades.create_index(
+        [("user_id", ASCENDING), ("account_id", ASCENDING), ("date", DESCENDING)],
+        name="trades_user_account_date",
+    )
+
+    await db.payouts.create_index([("id", ASCENDING)], unique=True, name="payouts_id_unique")
+    await db.payouts.create_index(
+        [("user_id", ASCENDING), ("date", DESCENDING)],
+        name="payouts_user_date",
+    )
+
+    await db.ai_reports.create_index([("id", ASCENDING)], unique=True, name="ai_reports_id_unique")
+    await db.ai_reports.create_index(
+        [("user_id", ASCENDING), ("created_at", DESCENDING)],
+        name="ai_reports_user_created",
+    )
+
+    await db.contact_messages.create_index(
+        [("status", ASCENDING), ("created_at", DESCENDING)],
+        name="contact_status_created",
+    )
 
 
 def now_utc():
@@ -60,15 +111,98 @@ def make_token(user_id: str) -> str:
 async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depends(security)):
     if not creds:
         raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Compatibilité temporaire : les anciens JWT Mongo restent valides pendant
+    # le basculement, puis les nouveaux jetons sont validés par Supabase Auth.
     try:
         payload = pyjwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
         user_id = payload["sub"]
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+        if user:
+            return user
     except Exception:
+        pass
+
+    if not SUPABASE_URL or not SUPABASE_PUBLISHABLE_KEY:
         raise HTTPException(status_code=401, detail="Invalid token")
-    user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
+
+    headers = {
+        "apikey": SUPABASE_PUBLISHABLE_KEY,
+        "Authorization": f"Bearer {creds.credentials}",
+    }
+    try:
+        auth_response = await asyncio.to_thread(
+            requests.get,
+            f"{SUPABASE_URL}/auth/v1/user",
+            headers=headers,
+            timeout=10,
+        )
+        if auth_response.status_code != 200:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        auth_user = auth_response.json()
+        profile_response = await asyncio.to_thread(
+            requests.get,
+            f"{SUPABASE_URL}/rest/v1/profiles",
+            headers={**headers, "Accept": "application/json"},
+            params={"id": f"eq.{auth_user['id']}", "select": "*"},
+            timeout=10,
+        )
+        profile_response.raise_for_status()
+        profiles = profile_response.json()
+    except HTTPException:
+        raise
+    except Exception:
+        logging.exception("Supabase authentication validation failed")
+        raise HTTPException(status_code=503, detail="Authentication service unavailable")
+
+    if not profiles:
+        raise HTTPException(status_code=401, detail="User profile not found")
+    return {
+        **profiles[0],
+        "id": auth_user["id"],
+        "email": auth_user.get("email") or profiles[0].get("email"),
+        "_supabase_token": creds.credentials,
+    }
+
+
+async def supabase_select(table: str, token: str, params: Dict[str, str]):
+    headers = {
+        "apikey": SUPABASE_PUBLISHABLE_KEY,
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
+    response = await asyncio.to_thread(
+        requests.get,
+        f"{SUPABASE_URL}/rest/v1/{table}",
+        headers=headers,
+        params=params,
+        timeout=15,
+    )
+    if response.status_code >= 400:
+        logging.error("Supabase read failed for %s: %s", table, response.text[:300])
+        raise HTTPException(502, "Unable to read trading data")
+    return response.json()
+
+
+async def supabase_insert(table: str, token: str, payload: Dict[str, Any]):
+    headers = {
+        "apikey": SUPABASE_PUBLISHABLE_KEY,
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+    response = await asyncio.to_thread(
+        requests.post,
+        f"{SUPABASE_URL}/rest/v1/{table}",
+        headers=headers,
+        json=payload,
+        timeout=15,
+    )
+    if response.status_code >= 400:
+        logging.error("Supabase insert failed for %s: %s", table, response.text[:300])
+        raise HTTPException(502, "Unable to persist AI report")
+    rows = response.json()
+    return rows[0] if rows else payload
 
 
 # ============= MODELS =============
@@ -135,14 +269,14 @@ class TradeIn(BaseModel):
     result_status: Optional[str] = "closed"
     market_type: Optional[str] = None
     setup: Optional[str] = None
-    setups: List[str] = []
+    setups: List[str] = Field(default_factory=list)
     session: Optional[str] = None  # London | NY | Asia
     emotion: Optional[str] = None
     emotion_secondary: Optional[str] = None
     emotion_intensity: Optional[str] = None
     notes: Optional[str] = None
     plan_respected: bool = True
-    screenshots: List[str] = []
+    screenshots: List[str] = Field(default_factory=list)
     r: Optional[float] = None
     size: float = 1
     duration: Optional[str] = None
@@ -151,11 +285,11 @@ class TradeIn(BaseModel):
     exit_time: Optional[str] = None
     point_value: Optional[float] = None
     commission: Optional[float] = 0
-    mistakes: List[str] = []
+    mistakes: List[str] = Field(default_factory=list)
     exit_reason: Optional[str] = None
     plan_exception_reason: Optional[str] = None
-    tags: List[str] = []
-    checklist_results: List[Dict[str, Any]] = []
+    tags: List[str] = Field(default_factory=list)
+    checklist_results: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class TradeUpdate(BaseModel):
@@ -242,7 +376,11 @@ async def register(body: RegisterIn):
         "rules": {},
         "journal_preferences": {},
     }
-    await db.users.insert_one(doc)
+    try:
+        await db.users.insert_one(doc)
+    except DuplicateKeyError:
+        # The unique email index also protects against two simultaneous signups.
+        raise HTTPException(400, "Email already registered")
     token = make_token(user_id)
     return {"token": token, "user": {k: v for k, v in doc.items() if k not in ("password_hash", "_id")}}
 
@@ -324,8 +462,11 @@ async def create_account(body: PropAccountIn, user=Depends(get_current_user)):
 
 @api.delete("/accounts/{aid}")
 async def delete_account(aid: str, user=Depends(get_current_user)):
-    await db.accounts.delete_one({"id": aid, "user_id": user["id"]})
+    result = await db.accounts.delete_one({"id": aid, "user_id": user["id"]})
+    if not result.deleted_count:
+        raise HTTPException(404, "Account not found")
     await db.trades.delete_many({"account_id": aid, "user_id": user["id"]})
+    await db.payouts.delete_many({"account_id": aid, "user_id": user["id"]})
     return {"ok": True}
 
 
@@ -565,8 +706,15 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
     if not EMERGENT_LLM_KEY:
         raise HTTPException(503, "AI Coach unavailable: missing key")
 
-    accounts = await db.accounts.find({"user_id": user["id"]}, {"_id": 0}).to_list(50)
-    trades = await db.trades.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(100)
+    if user.get("_supabase_token"):
+        token = user["_supabase_token"]
+        accounts, trades = await asyncio.gather(
+            supabase_select("accounts", token, {"user_id": f"eq.{user['id']}", "select": "*", "limit": "50"}),
+            supabase_select("trades", token, {"user_id": f"eq.{user['id']}", "select": "*", "order": "date.desc", "limit": "100"}),
+        )
+    else:
+        accounts = await db.accounts.find({"user_id": user["id"]}, {"_id": 0}).to_list(50)
+        trades = await db.trades.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(100)
 
     # Build compact context
     ctx_lines = [f"Trader: {user.get('name')} ({user.get('trader_type') or 'unspecified'})"]
@@ -609,6 +757,10 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
         "tag": body.context_tag,
         "created_at": now_utc(),
     }
+    if user.get("_supabase_token"):
+        report.pop("id", None)
+        report["model"] = "claude-sonnet-4-6"
+        return await supabase_insert("ai_reports", user["_supabase_token"], report)
     await db.ai_reports.insert_one(report)
     report.pop("_id", None)
     return report
@@ -659,6 +811,16 @@ async def root():
     return {"app": "PipsEvo", "status": "ok"}
 
 
+@api.get("/health")
+async def health():
+    try:
+        await db.command("ping")
+    except Exception:
+        logging.exception("Database health check failed")
+        raise HTTPException(503, "Database unavailable")
+    return {"app": "PipsEvo", "api": "ok", "database": "ok"}
+
+
 app.include_router(api)
 
 app.add_middleware(
@@ -670,6 +832,13 @@ app.add_middleware(
 )
 
 logging.basicConfig(level=logging.INFO)
+
+
+@app.on_event("startup")
+async def startup_db():
+    await db.command("ping")
+    await ensure_database_indexes()
+    logging.info("MongoDB connection and indexes are ready")
 
 
 @app.on_event("shutdown")
