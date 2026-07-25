@@ -6,6 +6,7 @@ import { Logo } from "@/components/Logo";
 import { Candle } from "@/components/CandleArt";
 import { ArrowRight } from "lucide-react";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { AUTH_CONFIG, hasCompletedOnboarding } from "@/config/auth";
 
 export default function Login() {
   const { login } = useAuth();
@@ -20,7 +21,7 @@ export default function Login() {
     try {
       const u = await login(email, password);
       toast.success(`Bon retour, ${u.name || u.email}`);
-      nav(u.onboarded ? "/app/dashboard" : "/onboarding");
+      nav(hasCompletedOnboarding(u) ? AUTH_CONFIG.authenticatedHomePath : AUTH_CONFIG.postSignUpPath, { replace: true });
     } catch (err) { toast.error(err.response?.data?.detail || "Connexion impossible"); }
     finally { setLoading(false); }
   };

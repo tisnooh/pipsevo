@@ -6,6 +6,7 @@ Le schéma principal, les politiques RLS, le calcul atomique du solde des compte
 
 - `REACT_APP_SUPABASE_URL`
 - `REACT_APP_SUPABASE_PUBLISHABLE_KEY`
+- `REACT_APP_REQUIRE_EMAIL_CONFIRMATION=false` pendant la bêta. Pour le lancement officiel, activer également « Confirm email » dans Supabase Auth puis passer cette variable à `true`.
 - `REACT_APP_BACKEND_URL`
 
 La clé publishable est la seule clé Supabase autorisée dans le navigateur.

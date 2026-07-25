@@ -12,6 +12,10 @@ import { normalizeJournalPreferences } from "@/lib/journalPreferences";
 import { useI18n } from "@/context/I18nContext";
 import { readSettings, writeSettings } from "@/lib/preferences";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Link } from "react-router-dom";
+import CommercialBanner from "@/components/CommercialBanner";
+import { BILLING_CONFIG, COMMERCIAL_PHASES, FEATURES, PLANS, effectivePlan, formatBillingPrice, launchOfferCopy } from "@/config/billing";
+import { captureCommercialEvent } from "@/lib/commercialAnalytics";
 
 const sections = [
   { id: "profile", label: "Mon profil", subtitle: "Identité et marché", icon: User },
@@ -155,9 +159,26 @@ export default function Settings() {
 
         {active === "security" && <section className="card-elev overflow-hidden"><div className="border-b border-white/[0.06] p-5 sm:p-6"><h2 className="font-semibold">Sécurité du compte</h2><p className="mt-1 text-xs text-[#7E8798]">Protège tes données et surveille tes accès.</p></div><div className="space-y-3 p-5 sm:p-6"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-white/[0.07] bg-[#0B0E18] p-4"><div className="flex gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#00E676]/10 text-[#00E676]"><LockKeyhole className="h-4 w-4"/></span><div><div className="text-sm font-medium">Mot de passe</div><div className="mt-1 text-xs text-[#7E8798]">La modification sécurisée n’est pas encore disponible dans cette version.</div></div></div><button disabled title="Fonction indisponible pendant la bêta" className="rounded-xl border border-white/10 px-4 py-2 text-xs text-[#6B7280] cursor-not-allowed">Indisponible</button></div><div className="flex items-center justify-between gap-4 rounded-2xl border border-white/[0.07] bg-[#0B0E18] p-4"><div><div className="flex items-center gap-2 text-sm font-medium"><span className="h-2 w-2 rounded-full bg-[#00E676]"/>Session actuelle</div><div className="mt-1 text-xs text-[#7E8798]">Navigateur actuel · dernière activité maintenant</div></div><span className="rounded-full bg-[#00E676]/10 px-2.5 py-1 text-[10px] text-[#00E676]">Active</span></div></div></section>}
 
-        {active === "billing" && <section className="card-elev overflow-hidden glow-purple"><div className="relative border-b border-white/[0.06] p-5 sm:p-7"><Crown className="absolute -right-5 -top-7 h-32 w-32 text-[#7C4DFF]/15"/><div className="relative"><span className="rounded-full border border-[#7C4DFF]/30 bg-[#7C4DFF]/10 px-3 py-1 text-[10px] font-medium text-[#C8AEFF]">PLAN ACTUEL · BÊTA</span><h2 className="mt-4 text-xl font-bold">Accès bêta</h2><div className="mt-2 flex items-end gap-2"><span className="text-3xl font-bold font-mono">0 €</span><span className="pb-1 text-sm text-[#7E8798]">aujourd’hui</span></div><p className="mt-3 text-sm text-[#8B93A3]">Aucune carte bancaire enregistrée et aucun prélèvement pendant la bêta.</p></div></div><div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6">{["Comptes multiples","Coach IA selon disponibilité","Trading DNA","Analyses avancées","Rapports détaillés","Support bêta"].map(f=><div key={f} className="flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-[#0B0E18] p-3 text-xs"><span className="grid h-5 w-5 place-items-center rounded-full bg-[#00E676]/10"><Check className="h-3 w-3 text-[#00E676]"/></span>{f}</div>)}</div><div className="border-t border-white/[0.06] p-5 sm:p-6"><button disabled title="Paiement indisponible pendant la bêta" className="btn-primary w-full sm:w-auto cursor-not-allowed opacity-50">Facturation indisponible</button><p className="mt-2 text-xs text-[#7E8798]">Une offre Pro à 19,99 €/mois est envisagée après la bêta. Le prix et les conditions seront confirmés avant toute facturation.</p></div></section>}
+        {active === "billing" && <BillingSettings user={user}/>}
       </main>
     </div>
+  </div>;
+}
+
+function BillingSettings({ user }) {
+  const phase=BILLING_CONFIG.currentPhase;
+  const planId=effectivePlan(user);
+  const plan=PLANS[planId] || PLANS.beta;
+  const isBeta=phase===COMMERCIAL_PHASES.BETA;
+  const launch=launchOfferCopy();
+  const enabled=Object.entries(FEATURES).filter(([,access])=>access[planId]).map(([feature])=>({dashboard:"Dashboard principal",manualJournal:"Journal manuel",basicAnalytics:"Statistiques essentielles",disciplineScore:"Score de discipline",manualPayouts:"Payouts manuels",screenshots:"Captures d’écran",multipleAccounts:"Comptes multiples",csvImport:"Import CSV avancé",aiCoach:"Coach IA",advancedAnalytics:"Analyses avancées",automaticReports:"Rapports automatiques",advancedExports:"Exports avancés",premiumAutomations:"Automatisations premium"}[feature]||feature));
+  return <div className="space-y-4">
+    <CommercialBanner placement="settings_billing"/>
+    <section className="card-elev overflow-hidden glow-purple">
+      <div className="relative border-b border-white/[0.06] p-5 sm:p-7"><Crown className="absolute -right-5 -top-7 h-32 w-32 text-[#7C4DFF]/15"/><div className="relative"><span className="rounded-full border border-[#7C4DFF]/30 bg-[#7C4DFF]/10 px-3 py-1 text-[10px] font-medium uppercase text-[#C8AEFF]">Phase · {phase.replace("_"," ")}</span><h2 className="mt-4 text-xl font-bold">{plan.name}</h2><div className="mt-2 flex items-end gap-2"><span className="text-3xl font-bold font-numeric">{formatBillingPrice(plan.price)}</span><span className="pb-1 text-sm text-[#7E8798]">{isBeta?"aujourd’hui":"/mois"}</span></div><div className="mt-4 grid gap-2 text-xs text-[#9CA3AF] sm:grid-cols-3"><div><span className="block text-[#6B7280]">Statut</span>{user?.subscription_status || "Accès bêta"}</div><div><span className="block text-[#6B7280]">Renouvellement</span>{user?.current_period_end ? new Date(user.current_period_end).toLocaleDateString("fr-FR") : "Aucun"}</div><div><span className="block text-[#6B7280]">Paiement</span>{isBeta?"Non requis":"Non configuré"}</div></div><p className="mt-4 max-w-2xl text-sm leading-relaxed text-[#8B93A3]">{isBeta?"Ton accès gratuit prendra fin lors du lancement officiel. Tu seras informé avant tout changement. Aucun prélèvement automatique ne peut être déclenché.":phase===COMMERCIAL_PHASES.LAUNCH_OFFER?`${launch.title} ${launch.detail}`:"Gère ici ton offre dès que la facturation sécurisée sera connectée."}</p></div></div>
+      <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6">{enabled.map(f=><div key={f} className="flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-[#0B0E18] p-3 text-xs"><span className="grid h-5 w-5 place-items-center rounded-full bg-[#00E676]/10"><Check className="h-3 w-3 text-[#00E676]"/></span>{f}</div>)}</div>
+      <div className="flex flex-col gap-3 border-t border-white/[0.06] p-5 sm:flex-row sm:items-center sm:p-6"><Link to="/pricing" onClick={()=>captureCommercialEvent("pricing_viewed",{source:"settings"})} className="btn-primary text-center">Voir les offres</Link><button disabled title="Stripe n’est pas encore connecté" className="btn-ghost cursor-not-allowed opacity-50">Gérer ou annuler l’abonnement</button><p className="text-xs text-[#7E8798] sm:ml-auto">La gestion sera activée avec le portail de paiement sécurisé.</p></div>
+    </section>
   </div>;
 }
 

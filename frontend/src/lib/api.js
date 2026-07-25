@@ -1,5 +1,6 @@
 import axios from "axios";
 import { supabase } from "@/lib/supabase";
+import { AUTH_CONFIG } from "@/config/auth";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
@@ -50,32 +51,73 @@ api.interceptors.response.use((value) => value, async (error) => {
   return Promise.reject(error);
 });
 
-const loadCurrentUser = async () => {
+const wait = (duration) => new Promise((resolve) => window.setTimeout(resolve, duration));
+
+const loadCurrentUserOnce = async () => {
   const authUser = await currentAuthUser();
   const [{ data: profile, error: profileError }, { data: subscription, error: subscriptionError }] = await Promise.all([
-    supabase.from("profiles").select("*").eq("id", authUser.id).single(),
+    supabase.from("profiles").select("*").eq("id", authUser.id).maybeSingle(),
     supabase.from("subscriptions").select("*").eq("user_id", authUser.id).maybeSingle(),
   ]);
   check(profileError, "Profil introuvable");
+  if (!profile) throw fail("Le profil est encore en cours de création.", 503);
   check(subscriptionError, "Abonnement indisponible");
+  const onboardingCompleted = Boolean(profile.onboarding_completed ?? profile.onboarded);
   return {
     ...profile,
     id: authUser.id,
     email: authUser.email || profile.email,
+    onboarding_completed: onboardingCompleted,
+    // Alias conservé pendant la transition de l'ancien schéma.
+    onboarded: onboardingCompleted,
     plan: subscription?.plan || "free",
     subscription_status: subscription?.status || "inactive",
+    current_period_end: subscription?.current_period_end || null,
+    joined_during_beta: subscription?.joined_during_beta || false,
+    launch_offer_eligible: subscription?.launch_offer_eligible || false,
+    launch_offer_used: subscription?.launch_offer_used || false,
+    subscription_started_at: subscription?.subscription_started_at || null,
+    launch_offer_expires_at: subscription?.launch_offer_expires_at || null,
+    cancel_at_period_end: subscription?.cancel_at_period_end || false,
   };
+};
+
+const loadCurrentUser = async ({ retries = 0 } = {}) => {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await loadCurrentUserOnce();
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) await wait(120 * (attempt + 1));
+    }
+  }
+  throw lastError;
 };
 
 export const auth = {
   register: async ({ email, password, name }) => {
+    const cleanEmail = email.trim();
+    const displayName = name.trim();
+    const options = {
+      data: { display_name: displayName, onboarding_completed: false },
+    };
+    if (AUTH_CONFIG.requireEmailConfirmation) {
+      options.emailRedirectTo = `${window.location.origin}${AUTH_CONFIG.postSignUpPath}`;
+    }
     const { data, error } = await supabase.auth.signUp({
-      email: email.trim(), password,
-      options: { data: { name: name.trim() }, emailRedirectTo: `${window.location.origin}/onboarding` },
+      email: cleanEmail,
+      password,
+      options,
     });
     check(error, "Inscription impossible");
-    if (!data.session) return response({ token: null, user: null, requires_email_confirmation: true, email });
-    return response({ token: data.session.access_token, user: await loadCurrentUser() });
+    if (!data.session) {
+      if (!AUTH_CONFIG.requireEmailConfirmation) {
+        throw fail("La confirmation e-mail est encore active dans Supabase. La configuration bêta doit être synchronisée.", 503);
+      }
+      return response({ token: null, user: null, requires_email_confirmation: true, email: cleanEmail });
+    }
+    return response({ token: data.session.access_token, user: await loadCurrentUser({ retries: 5 }) });
   },
   resendConfirmation: async (email) => {
     const { error } = await supabase.auth.resend({
@@ -89,16 +131,23 @@ export const auth = {
   login: async ({ email, password }) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     check(error, "E-mail ou mot de passe incorrect");
-    return response({ token: data.session.access_token, user: await loadCurrentUser() });
+    return response({ token: data.session.access_token, user: await loadCurrentUser({ retries: 3 }) });
   },
-  me: async () => response(await loadCurrentUser()),
+  me: async () => response(await loadCurrentUser({ retries: 3 })),
   update: async (values) => {
     const user = await currentAuthUser();
-    const allowed = ["name", "trader_type", "prop_firms", "num_accounts", "onboarded", "rules", "journal_preferences", "app_preferences"];
+    const allowed = ["name", "trader_type", "prop_firms", "num_accounts", "onboarded", "onboarding_completed", "rules", "journal_preferences", "app_preferences"];
     const payload = Object.fromEntries(Object.entries(values).filter(([key]) => allowed.includes(key)));
     const { error } = await supabase.from("profiles").update(payload).eq("id", user.id);
     check(error, "Impossible de sauvegarder le profil");
-    return response(await loadCurrentUser());
+    const metadata = {};
+    if (payload.name) metadata.display_name = payload.name;
+    if ("onboarding_completed" in payload) metadata.onboarding_completed = Boolean(payload.onboarding_completed);
+    if (Object.keys(metadata).length) {
+      const { error: metadataError } = await supabase.auth.updateUser({ data: metadata });
+      check(metadataError, "Le profil a été sauvegardé, mais ses métadonnées n'ont pas pu être synchronisées");
+    }
+    return response(await loadCurrentUser({ retries: 2 }));
   },
   logout: async () => {
     const { error } = await supabase.auth.signOut();
@@ -293,7 +342,7 @@ export const dna = async () => {
     best_session: best(sessions), best_setup: best(setups), best_emotion: best(emotions), trades_logged: rows.length,
   });
 };
-export const onboarding = (values) => auth.update({ ...values, onboarded: true });
+export const onboarding = (values) => auth.update({ ...values, onboarded: true, onboarding_completed: true });
 
 export const coach = {
   ask: (question, tag) => api.post("/coach/ask", { question, context_tag: tag || "overall" }),

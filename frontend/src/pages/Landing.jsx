@@ -6,6 +6,7 @@ import { Logo } from "@/components/Logo";
 import { Candle, DashboardMock } from "@/components/CandleArt";
 import { openCookieSettings } from "@/components/CookieConsent";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { PLANS, formatBillingPrice } from "@/config/billing";
 
 const fade = {
   hidden: { opacity: 0, y: 30 },
@@ -361,28 +362,29 @@ export default function Landing() {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-10 sm:mb-12">
             <div className="text-[11px] font-mono uppercase tracking-widest text-[#B58BFF] mb-3">TARIFS</div>
-            <h2 className="text-4xl font-bold text-gradient">Gratuit pendant la bêta.</h2>
-            <p className="text-[#9CA3AF] mt-3">Aucune carte bancaire et aucun prélèvement pendant cette période.</p>
+            <h2 className="text-4xl font-bold text-gradient">Gratuit pendant la bêta. Plus puissant au lancement.</h2>
+            <p className="text-[#9CA3AF] mt-3">Commence avec les outils essentiels. Les fonctionnalités avancées, l’automatisation et l’IA arriveront progressivement avec PipsEvo Pro.</p>
           </div>
           <div className="grid md:grid-cols-2 gap-5">
             <div className="card-elev p-6 sm:p-8 glow-purple border-[#7C4DFF]/40">
               <div className="text-sm font-mono uppercase text-[#B58BFF]">Accès bêta</div>
               <div className="text-4xl sm:text-5xl font-bold mt-4 font-mono">0 €</div>
-              <div className="text-sm text-[#9CA3AF] mt-2">Toutes les fonctions actuellement disponibles</div>
+              <div className="text-sm text-[#9CA3AF] mt-2">Dashboard, journal manuel, statistiques essentielles et discipline.</div>
               <div className="mt-8 space-y-3 text-sm">
-                {["Comptes et trades manuels", "Journal et statistiques", "Discipline et payouts", "Atlas selon disponibilité du service IA"].map(x => <div key={x} className="flex gap-2 text-[#B5BBC9]"><Check className="w-4 h-4 text-[#00E676] shrink-0"/> {x}</div>)}
+                {["Gestion limitée des comptes", "Journal et ajout manuel de trades", "PnL, win rate et risk/reward", "Sessions, setups, émotions et payouts manuels"].map(x => <div key={x} className="flex gap-2 text-[#B5BBC9]"><Check className="w-4 h-4 text-[#00E676] shrink-0"/> {x}</div>)}
               </div>
               <Link to="/register" className="btn-primary block text-center mt-8">Rejoindre la bêta</Link>
             </div>
             <div className="card-elev p-6 sm:p-8 relative opacity-80" data-testid="pricing-pro">
               <div className="absolute -top-3 right-6 text-[10px] font-mono uppercase tracking-widest border border-white/10 bg-[#111322] rounded-full px-3 py-1 text-[#9CA3AF]">APRÈS LA BÊTA</div>
-              <div className="text-sm font-mono uppercase text-[#9CA3AF]">Offre Pro prévue</div>
-              <div className="text-4xl sm:text-5xl font-bold mt-4 font-mono">19,99 €<span className="text-base text-[#9CA3AF]">/mois</span></div>
-              <div className="text-sm text-[#9CA3AF] mt-2">Le prix final sera confirmé avant tout paiement.</div>
+              <div className="text-sm font-mono uppercase text-[#9CA3AF]">Tarifs prévus au lancement</div>
+              <div className="mt-4 text-2xl font-bold font-numeric">Essential · {formatBillingPrice(PLANS.essential.price)}<span className="text-sm text-[#9CA3AF]">/mois</span></div>
+              <div className="mt-3 text-2xl font-bold font-numeric text-[#C8AEFF]">Pro · {formatBillingPrice(PLANS.pro.price)}<span className="text-sm text-[#9CA3AF]">/mois</span></div>
+              <div className="text-sm text-[#9CA3AF] mt-3">Les utilisateurs bêta bénéficieront d’une offre de lancement exclusive.</div>
               <div className="mt-8 space-y-3 text-sm">
-                {["Comptes illimités", "Coach Atlas", "Imports avancés prévus", "Rapports et support prioritaires"].map(x => <div key={x} className="flex gap-2 text-[#B5BBC9]"><Check className="w-4 h-4 text-[#6B7280] shrink-0"/> {x}</div>)}
+                {["Essential : jusqu’à 2 comptes", "Pro : plusieurs comptes", "Imports, analyses et rapports avancés", "Coach IA et automatisations premium"].map(x => <div key={x} className="flex gap-2 text-[#B5BBC9]"><Check className="w-4 h-4 text-[#6B7280] shrink-0"/> {x}</div>)}
               </div>
-              <button disabled className="btn-ghost block w-full text-center mt-8 cursor-not-allowed opacity-60" data-testid="pricing-pro-cta">Bientôt disponible</button>
+              <Link to="/pricing" className="btn-ghost block w-full text-center mt-8" data-testid="pricing-pro-cta">Comparer les plans</Link>
             </div>
           </div>
         </div>

@@ -4,6 +4,9 @@ import { toast } from "sonner";
 import { Sparkles, Send, Brain, AlertTriangle, Target, Clock, Shield, Trophy } from "lucide-react";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { useI18n } from "@/context/I18nContext";
+import { useAuth } from "@/context/AuthContext";
+import { canUseFeature } from "@/config/billing";
+import { FeatureGate } from "@/components/FeatureGate";
 
 const PRESETS = [
   { fr:"Analyse mon mois", en:"Analyze my month" },
@@ -17,13 +20,18 @@ const PRESETS = [
 export default function AICoach() {
   const { date } = useAppSettings();
   const { language } = useI18n();
+  const { user } = useAuth();
+  const hasCoachAccess = canUseFeature(user, "aiCoach");
   const [q, setQ] = useState("");
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState(null);
   const [initialLoading, setInitialLoading] = useState(true);
 
-  useEffect(() => { Promise.all([coach.history(),dashboard()]).then(([h,d])=>{setHistory(h.data);setSummary(d.data)}).catch(()=>toast.error("Impossible de charger l’analyse")).finally(()=>setInitialLoading(false)); }, []);
+  useEffect(() => {
+    if (!hasCoachAccess) { setInitialLoading(false); return; }
+    Promise.all([coach.history(),dashboard()]).then(([h,d])=>{setHistory(h.data);setSummary(d.data)}).catch(()=>toast.error("Impossible de charger l’analyse")).finally(()=>setInitialLoading(false));
+  }, [hasCoachAccess]);
   const insights = summary?.kpis?.total_trades ? [
     { I: AlertTriangle, t: "Respect du plan", d: `${summary.metrics.plan_respect_rate}% des trades respectent le plan`, c: summary.metrics.plan_respect_rate>=80?"#00E676":"#FFB855" },
     { I: Trophy, t: "Meilleur setup", d: summary.best_setup || "Pas encore déterminé", c: "#00E676" },
@@ -54,7 +62,7 @@ export default function AICoach() {
         </div>
       </div>
 
-      <div className="card-elev p-6 glow-purple">
+      {!hasCoachAccess ? <FeatureGate feature="aiCoach" label="le coach IA complet" className="block w-full"><div className="card-elev p-6 glow-purple"><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-[#B58BFF]"/><div><div className="font-semibold">Atlas est en préparation</div><p className="mt-1 text-xs text-[#9CA3AF]">Aperçu de la future analyse comportementale, sans signal de trading.</p></div></div></div></FeatureGate> : <div className="card-elev p-6 glow-purple">
         <div className="flex gap-2">
           <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Pose ta question à Atlas…" data-testid="coach-input" className="flex-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#7C4DFF]" onKeyDown={(e)=>e.key==="Enter"&&ask()} />
           <button onClick={()=>ask()} disabled={loading} className="btn-primary inline-flex items-center gap-2 text-sm" data-testid="coach-ask"><Send className="w-4 h-4"/>{loading?"…":"Envoyer"}</button>
@@ -62,9 +70,9 @@ export default function AICoach() {
         <div className="flex flex-wrap gap-2 mt-4">
           {PRESETS.map(p => { const label=p[language] || p.fr; return <button key={p.fr} onClick={()=>ask(label)} disabled={loading} data-testid={`coach-preset-${p.fr.slice(0,8)}`} className="text-xs px-3 py-1.5 rounded-full border border-white/10 hover:border-[#7C4DFF]/40 text-[#B5BBC9] hover:text-white transition">{label}</button> })}
         </div>
-      </div>
+      </div>}
 
-      {initialLoading ? <div className="grid md:grid-cols-5 gap-3">{Array.from({length:5}).map((_,i)=><div key={i} className="h-28 card-flat animate-pulse"/>)}</div> : insights.length ? <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-3">
+      {hasCoachAccess && (initialLoading ? <div className="grid md:grid-cols-5 gap-3">{Array.from({length:5}).map((_,i)=><div key={i} className="h-28 card-flat animate-pulse"/>)}</div> : insights.length ? <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-3">
         {insights.map(i => (
           <div key={i.t} className="card-flat p-4">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: `${i.c}22` }}><i.I className="w-4 h-4" style={{ color: i.c }}/></div>
@@ -72,9 +80,9 @@ export default function AICoach() {
             <div className="text-xs text-[#9CA3AF] mt-1">{i.d}</div>
           </div>
         ))}
-      </div> : <div className="rounded-2xl border border-dashed border-white/10 p-5 text-center text-xs text-[#7E8798]">Les cartes d’insight apparaîtront après l’ajout de tes premiers trades.</div>}
+      </div> : <div className="rounded-2xl border border-dashed border-white/10 p-5 text-center text-xs text-[#7E8798]">Les cartes d’insight apparaîtront après l’ajout de tes premiers trades.</div>)}
 
-      <div className="space-y-3">
+      {hasCoachAccess && <div className="space-y-3">
         {history.length === 0 && !loading && (
           <div className="card-elev p-12 text-center">
             <Sparkles className="w-8 h-8 mx-auto text-[#B58BFF] mb-3"/>
@@ -88,7 +96,7 @@ export default function AICoach() {
             <div className="text-sm text-[#B5BBC9] whitespace-pre-wrap leading-relaxed">{r.answer}</div>
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }

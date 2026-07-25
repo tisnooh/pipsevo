@@ -44,13 +44,14 @@ export default function Onboarding() {
   const canFinish = rulesTiming === "later" || (Number(rules.max_trades) >= 1 && Number(rules.daily_loss_limit) > 0 && Number(rules.max_risk_pct) > 0 && Number(rules.max_risk_pct) <= 10 && Number(rules.stop_after_loss) >= 1 && Number(rules.min_rr) > 0 && Number(rules.max_session_minutes) >= 15);
 
   const finish = async () => {
+    if (loading) return;
     setLoading(true);
     try {
       const savedRules = rulesTiming === "later" ? { ...DEFAULT_TRADING_RULES, configured: false, assets } : { ...normalizeTradingRules(rules), configured: true, assets };
-      await onboarding({ trader_type: traderType, prop_firms: firms, num_accounts: +numAccounts, rules: savedRules, journal_preferences: journalPreferences });
-      setUser({ ...user, onboarded: true, trader_type: traderType, prop_firms: firms, rules: savedRules, journal_preferences: journalPreferences });
+      const { data: updatedUser } = await onboarding({ trader_type: traderType, prop_firms: firms, num_accounts: +numAccounts, rules: savedRules, journal_preferences: journalPreferences });
+      setUser(updatedUser || { ...user, onboarded: true, onboarding_completed: true, trader_type: traderType, prop_firms: firms, rules: savedRules, journal_preferences: journalPreferences });
       toast.success(rulesTiming === "later" ? "Profil créé — complète tes règles quand tu veux" : "Tes règles sont enregistrées");
-      nav("/app/dashboard");
+      nav("/app/dashboard", { replace: true });
     } catch (error) { toast.error(error.response?.data?.detail || "Impossible de terminer la configuration") } finally { setLoading(false); }
   };
 

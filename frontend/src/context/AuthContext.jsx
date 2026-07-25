@@ -11,29 +11,67 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let active = true;
-    const refreshUser = () => auth.me().then(r => {
-      if (active) {
-        setUser(r.data);
-        sessionStorage.removeItem("pipsevo_pending_email");
+
+    const sessionFallbackUser = (session) => ({
+      id: session.user.id,
+      email: session.user.email,
+      name: session.user.user_metadata?.display_name || session.user.email?.split("@")[0] || "Trader",
+      onboarding_completed: false,
+      onboarded: false,
+      profile_loading_error: true,
+    });
+
+    const refreshUser = async (knownSession = null) => {
+      const sessionResult = knownSession
+        ? { data: { session: knownSession }, error: null }
+        : await supabase.auth.getSession();
+
+      if (!active) return;
+      if (sessionResult.error || !sessionResult.data.session) {
+        localStorage.removeItem("pipsevo_token");
+        setUser(null);
+        setLoading(false);
+        return;
       }
-    }).catch(() => {
-      localStorage.removeItem("pipsevo_token");
-      if (active) setUser(null);
-    }).finally(() => { if (active) setLoading(false); });
+
+      try {
+        const result = await auth.me();
+        if (!active) return;
+        setUser(result.data);
+        sessionStorage.removeItem("pipsevo_pending_email");
+      } catch (error) {
+        // Une session Supabase valide ne doit jamais être transformée en déconnexion
+        // simplement parce que le profil met quelques instants à devenir disponible.
+        if (active) setUser((current) => current || sessionFallbackUser(sessionResult.data.session));
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
     refreshUser();
-    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT" && active) setUser(null);
-      if (event === "SIGNED_IN" && active) {
-        // Supabase traite le lien de confirmation de manière asynchrone.
-        // Sortir du callback évite de bloquer le client avant de charger le profil.
-        window.setTimeout(refreshUser, 0);
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" && active) {
+        localStorage.removeItem("pipsevo_token");
+        setUser(null);
+        setLoading(false);
+      }
+      if (["INITIAL_SESSION", "SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event) && session && active) {
+        // Sortir du callback évite de bloquer le client Supabase pendant le chargement du profil.
+        window.setTimeout(() => refreshUser(session), 0);
       }
     });
-    return () => { active = false; listener.subscription.unsubscribe(); };
+
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
-    const expire = () => { setUser(null); toast.error("Ta session a expiré. Reconnecte-toi pour continuer."); };
+    const expire = () => {
+      setUser(null);
+      toast.error("Ta session a expiré. Reconnecte-toi pour continuer.");
+    };
     window.addEventListener("pipsevo:session-expired", expire);
     return () => window.removeEventListener("pipsevo:session-expired", expire);
   }, []);
@@ -44,6 +82,7 @@ export function AuthProvider({ children }) {
     setUser(data.user);
     return data.user;
   };
+
   const register = async (email, password, name) => {
     const { data } = await auth.register({ email, password, name });
     if (data.token) localStorage.setItem("pipsevo_token", data.token);
@@ -51,10 +90,12 @@ export function AuthProvider({ children }) {
     setUser(data.user);
     return data;
   };
+
   const resendConfirmation = async (email) => {
     const { data } = await auth.resendConfirmation(email);
     return data;
   };
+
   const logout = async () => {
     await auth.logout();
     localStorage.removeItem("pipsevo_token");

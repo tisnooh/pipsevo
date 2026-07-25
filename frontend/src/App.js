@@ -23,13 +23,14 @@ import MarketTerminal from "@/pages/MarketTerminal";
 import { FAQPage, ContactPage, PricingPage, LegalPage, PlatformsPage, BlogPage, HelpPage, AffiliatePage } from "@/pages/SupportPages";
 import CookieConsent from "@/components/CookieConsent";
 import RouteSEO from "@/components/RouteSEO";
+import { AUTH_CONFIG, hasCompletedOnboarding } from "@/config/auth";
 import "@/index.css";
 
 function Protected() {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center text-white">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (!user.onboarded) return <Navigate to="/onboarding" replace />;
+  if (!hasCompletedOnboarding(user)) return <Navigate to="/onboarding" replace />;
   return <AppShell />;
 }
 
@@ -37,8 +38,23 @@ function OnboardingGate({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center text-white">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.onboarded) return <Navigate to="/app/dashboard" replace />;
+  if (hasCompletedOnboarding(user)) return <Navigate to={AUTH_CONFIG.authenticatedHomePath} replace />;
   return children;
+}
+
+function AuthEntryGate({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-white">Loading…</div>;
+  if (!user) return children;
+  return <Navigate to={hasCompletedOnboarding(user) ? AUTH_CONFIG.authenticatedHomePath : AUTH_CONFIG.postSignUpPath} replace />;
+}
+
+function VerifyEmailGate() {
+  const { user, loading } = useAuth();
+  if (AUTH_CONFIG.requireEmailConfirmation) return <VerifyEmail />;
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-white">Loading…</div>;
+  if (!user) return <Navigate to="/register" replace />;
+  return <Navigate to={hasCompletedOnboarding(user) ? AUTH_CONFIG.authenticatedHomePath : AUTH_CONFIG.postSignUpPath} replace />;
 }
 
 export default function App() {
@@ -51,9 +67,9 @@ export default function App() {
         <Toaster theme="dark" position="top-right" />
         <Routes>
           <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/login" element={<AuthEntryGate><Login /></AuthEntryGate>} />
+          <Route path="/register" element={<AuthEntryGate><Register /></AuthEntryGate>} />
+          <Route path="/verify-email" element={<VerifyEmailGate />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/pricing" element={<PricingPage />} />

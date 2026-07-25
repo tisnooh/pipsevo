@@ -7,6 +7,7 @@ import { dashboard } from "@/lib/api";
 import { useI18n } from "@/context/I18nContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { applyDocumentPreferences, readSettings, SETTINGS_EVENT } from "@/lib/preferences";
+import { BILLING_CONFIG, COMMERCIAL_PHASES } from "@/config/billing";
 
 const NAV_LINKS = [
   { to: "/app/dashboard", fr: "Aperçu", en: "Overview", icon: Home, testid: "nav-dashboard" },
@@ -160,14 +161,14 @@ export default function AppShell() {
         {/* Upgrade card */}
         <div className="px-3 mt-3 mb-2 shrink-0">
           <div className="card-flat p-4">
-            <div className="text-sm font-semibold">Passe à Pro</div>
-            <div className="text-[10px] text-[#9CA3AF] mt-1">Plus d'analyses. Plus d'insights.<br />Plus de payouts.</div>
+            <div className="text-sm font-semibold">{BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Bêta gratuite":"Découvre les offres"}</div>
+            <div className="text-[10px] text-[#9CA3AF] mt-1">{BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Les fonctions essentielles sont gratuites. Les outils avancés arrivent au lancement.":"Compare Essential et Pro sans engagement."}</div>
             <button
-              onClick={() => { closeMobile(); nav("/app/settings"); }}
+              onClick={() => { closeMobile(); nav("/pricing"); }}
               className="mt-3 w-full text-xs py-2 rounded-lg bg-gradient-to-r from-[#7C4DFF] to-[#5A2DFF] hover:opacity-90 transition font-semibold"
               data-testid="sidebar-upgrade"
             >
-              Mettre à niveau →
+              {BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Voir la roadmap →":"Voir les tarifs →"}
             </button>
           </div>
         </div>

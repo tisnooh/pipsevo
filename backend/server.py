@@ -799,11 +799,15 @@ async def trading_dna(user=Depends(get_current_user)):
     }
 
 
-# ============= STRIPE (mock for now, full integration queued) =============
+# ============= BILLING (disabled until Stripe is configured) =============
 @api.post("/billing/checkout")
 async def billing_checkout(plan: str, user=Depends(get_current_user)):
-    # MOCK: Full Stripe integration queued for next iteration
-    return {"checkout_url": None, "message": "Stripe checkout coming in next release", "plan": plan}
+    if plan not in {"essential", "pro"}:
+        raise HTTPException(status_code=400, detail="Formule inconnue.")
+    # TODO(billing): create the Stripe Checkout Session server-side, attach
+    # user.id as metadata, then let a signed webhook update subscriptions.
+    # Never return a fabricated checkout URL while the provider is absent.
+    raise HTTPException(status_code=503, detail="La facturation sécurisée n’est pas encore disponible.")
 
 
 @api.get("/")

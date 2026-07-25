@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, Mail, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/Logo";
@@ -6,6 +6,8 @@ import { contact } from "@/lib/api";
 import { toast } from "sonner";
 import { openCookieSettings } from "@/components/CookieConsent";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { BILLING_CONFIG, COMMERCIAL_PHASES, PLANS, formatBillingPrice, launchOfferCopy } from "@/config/billing";
+import { captureCommercialEvent } from "@/lib/commercialAnalytics";
 
 const faqs = [
   ["Comment ajouter mes trades ?", "Depuis le Journal, clique sur Nouveau trade, choisis ton compte puis renseigne le résultat et le contexte du trade."],
@@ -31,11 +33,42 @@ export function ContactPage(){
   const [form,setForm]=useState({name:"",email:"",subject:"",message:""}); const [sending,setSending]=useState(false);
   const submit=async(e)=>{e.preventDefault();setSending(true);try{await contact(form);toast.success("Message envoyé");setForm({name:"",email:"",subject:"",message:""})}catch(e){toast.error(e.response?.data?.detail || "Envoi impossible")}finally{setSending(false)}};
   const field=(k,label,type="text",autoComplete)=><label htmlFor={`contact-${k}`} className="block text-xs text-[#9CA3AF]">{label}<input id={`contact-${k}`} name={k} type={type} autoComplete={autoComplete} required value={form[k]} onChange={e=>setForm({...form,[k]:e.target.value})} className="mt-2 w-full bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#7C4DFF]"/></label>;
-  return <PublicLayout title="Contacte-nous" subtitle="Une question, une difficulté ou une suggestion ? Notre équipe te répond."><div className="grid md:grid-cols-3 gap-5"><div className="card-elev p-6 space-y-4"><Mail className="text-[#B58BFF]"/><div><div className="font-semibold">Support</div><div className="text-sm text-[#9CA3AF] mt-1">Réponse habituelle sous 1 à 2 jours ouvrés.</div></div><a href="mailto:support@pipsevo.app" className="text-sm text-[#B58BFF] hover:text-white">support@pipsevo.app</a></div><form onSubmit={submit} className="card-elev p-6 md:col-span-2 space-y-4">{field("name","Ton nom","text","name")}{field("email","Ton e-mail","email","email")}{field("subject","Sujet")}<label htmlFor="contact-message" className="block text-xs text-[#9CA3AF]">Message<textarea id="contact-message" name="message" required minLength={10} value={form.message} onChange={e=>setForm({...form,message:e.target.value})} rows={6} className="mt-2 w-full bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#7C4DFF] resize-y"/></label><button disabled={sending} className="btn-primary w-full disabled:opacity-50">{sending?"Envoi…":"Envoyer le message"}</button><p className="text-[10px] text-[#6B7280]">Les informations envoyées servent uniquement à traiter ta demande.</p></form></div></PublicLayout>;
+  return <PublicLayout title="Contacte-nous" subtitle="Une question, une difficulté ou une suggestion ? Notre équipe te répond."><div className="grid md:grid-cols-3 gap-5"><div className="card-elev p-6 space-y-4"><Mail className="text-[#B58BFF]"/><div><div className="font-semibold">Support</div><div className="text-sm text-[#9CA3AF] mt-1">Réponse habituelle sous 1 à 2 jours ouvrés.</div></div><a href="mailto:tyachatfr@gmail.com" className="text-sm text-[#B58BFF] hover:text-white">tyachatfr@gmail.com</a></div><form onSubmit={submit} className="card-elev p-6 md:col-span-2 space-y-4">{field("name","Ton nom","text","name")}{field("email","Ton e-mail","email","email")}{field("subject","Sujet")}<label htmlFor="contact-message" className="block text-xs text-[#9CA3AF]">Message<textarea id="contact-message" name="message" required minLength={10} value={form.message} onChange={e=>setForm({...form,message:e.target.value})} rows={6} className="mt-2 w-full bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#7C4DFF] resize-y"/></label><button disabled={sending} className="btn-primary w-full disabled:opacity-50">{sending?"Envoi…":"Envoyer le message"}</button><p className="text-[10px] text-[#6B7280]">Les informations envoyées servent uniquement à traiter ta demande.</p></form></div></PublicLayout>;
 }
 
-export function PricingPage(){return <PublicLayout title="Gratuit pendant la bêta" subtitle="Aucune carte bancaire et aucun prélèvement pendant la période bêta."><div className="grid md:grid-cols-2 gap-5 max-w-3xl mx-auto"><Plan current name="Accès bêta" price="0 €" note="Toutes les fonctions actuellement disponibles" items={["Comptes et trades manuels","Journal et statistiques","Discipline et payouts","Atlas selon disponibilité"]}/><Plan name="Pro — après la bêta" price="19,99 €/mois" note="Prix prévu, confirmé avant toute facturation" disabled items={["Comptes illimités","Atlas","Imports avancés prévus","Support prioritaire"]}/></div><p className="max-w-2xl mx-auto text-center text-xs text-[#6B7280] mt-6">Aucun abonnement payant ne peut actuellement être souscrit sur PipsEvo.</p></PublicLayout>}
-const Plan=({name,price,note,items,current,disabled})=><div className={`card-elev p-7 ${current?"glow-purple border-[#7C4DFF]/40":""} ${disabled?"opacity-75":""}`}><div className="text-[#B58BFF] font-mono uppercase text-xs">{name}</div><div className="text-4xl font-bold mt-3">{price}</div><div className="text-xs text-[#9CA3AF] mt-2">{note}</div><div className="space-y-3 mt-6">{items.map(x=><div key={x} className="flex gap-2 text-sm"><Check className={`w-4 h-4 ${current?"text-[#00E676]":"text-[#6B7280]"}`}/>{x}</div>)}</div>{disabled?<button disabled className="btn-ghost w-full mt-7 opacity-60 cursor-not-allowed">Bientôt disponible</button>:<Link to="/register" className="btn-primary block text-center mt-7">Rejoindre la bêta</Link>}</div>;
+export function PricingPage(){
+  const phase=BILLING_CONFIG.currentPhase;
+  const isBeta=phase===COMMERCIAL_PHASES.BETA;
+  const isLaunch=phase===COMMERCIAL_PHASES.LAUNCH_OFFER;
+  const launch=launchOfferCopy();
+  useEffect(()=>captureCommercialEvent("pricing_viewed",{phase}),[phase]);
+  const title=isBeta?"La bêta est gratuite":isLaunch?"L’offre de lancement PipsEvo":"Choisis ton plan PipsEvo";
+  const subtitle=isBeta?"Profite gratuitement des fonctionnalités essentielles de PipsEvo pendant la phase bêta.":isLaunch?`${launch.title} ${launch.detail}`:"Deux formules claires, sans engagement et adaptées à ton rythme.";
+  return <PublicLayout title={title} subtitle={subtitle}>
+    {isBeta&&<div className="mx-auto mb-8 max-w-3xl rounded-2xl border border-[#00E676]/20 bg-[#00E676]/[0.05] p-5 text-center"><div className="text-xs font-mono uppercase tracking-[.2em] text-[#00E676]">Bêta gratuite</div><p className="mt-2 text-sm text-[#B5BBC9]">PipsEvo est actuellement disponible gratuitement pendant sa phase bêta. Certaines fonctionnalités avancées et automatiques seront disponibles lors du lancement officiel.</p></div>}
+    {isLaunch&&<div className="mx-auto mb-8 max-w-3xl rounded-2xl border border-[#7C4DFF]/30 bg-gradient-to-r from-[#7C4DFF]/10 to-[#4F8CFF]/10 p-5 text-center"><div className="text-xs font-mono uppercase tracking-[.2em] text-[#C8AEFF]">Offre réservée aux utilisateurs ayant rejoint la bêta</div><p className="mt-2 text-sm text-white">Sans engagement. Annulation possible à tout moment.</p>{BILLING_CONFIG.launchOfferEndDate&&<p className="mt-2 text-xs text-[#9CA3AF]">Offre valable jusqu’au {new Date(BILLING_CONFIG.launchOfferEndDate).toLocaleDateString("fr-FR")}.</p>}</div>}
+    <div className="mb-5 text-center text-xs font-mono uppercase tracking-[.2em] text-[#7E8798]">{isBeta?"Tarifs prévus après la bêta":"Abonnements mensuels"}</div>
+    <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-2">
+      <Plan plan={PLANS.essential} phase={phase}/><Plan plan={PLANS.pro} phase={phase} recommended/>
+    </div>
+    <div className="mx-auto mt-7 max-w-3xl rounded-2xl border border-white/[0.07] bg-[#0B0E18] p-5 text-center text-sm text-[#9CA3AF]">{isBeta?"Les utilisateurs bêta recevront une offre spéciale au lancement officiel. Aucune carte bancaire requise.":"Le paiement n’est pas encore activé. Aucun prélèvement ne sera effectué sans ton consentement explicite."}</div>
+  </PublicLayout>;
+}
+const Plan=({plan,phase,recommended=false})=>{
+  const unavailable=phase===COMMERCIAL_PHASES.BETA;
+  const event=plan.id==="pro"?"pro_clicked":"essential_clicked";
+  const launchPro=phase===COMMERCIAL_PHASES.LAUNCH_OFFER&&plan.id==="pro";
+  return <article className={`card-elev relative flex h-full flex-col p-6 sm:p-7 ${recommended?"glow-purple border-[#7C4DFF]/45":""}`}>
+    {recommended&&<span className="absolute right-5 top-5 rounded-full border border-[#7C4DFF]/35 bg-[#7C4DFF]/15 px-2.5 py-1 text-[9px] font-semibold tracking-wider text-[#C8AEFF]">RECOMMANDÉ</span>}
+    <div className="pr-24 text-[#B58BFF] font-mono uppercase text-xs">{plan.name}</div>
+    <div className="mt-4 flex flex-wrap items-end gap-2"><span className="text-4xl font-bold font-numeric">{launchPro?formatBillingPrice(BILLING_CONFIG.prices.betaLaunch):formatBillingPrice(plan.price)}</span><span className="pb-1 text-sm text-[#9CA3AF]">/mois</span></div>
+    {launchPro&&<p className="mt-2 text-xs text-[#C8AEFF]">Premier mois, puis {formatBillingPrice(BILLING_CONFIG.prices.pro)}/mois.</p>}
+    <p className="mt-4 min-h-10 text-sm leading-relaxed text-[#9CA3AF]">{plan.description}</p>
+    <div className="mt-6 flex-1 space-y-3">{plan.features.map(x=><div key={x} className="flex gap-2 text-sm text-[#D0D4DE]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#00E676]"/>{x}</div>)}</div>
+    <button type="button" disabled onClick={()=>captureCommercialEvent(event,{phase})} title={unavailable?"Disponible après la bêta":"Paiement en cours de préparation"} className={`${recommended?"btn-primary":"btn-ghost"} mt-7 w-full cursor-not-allowed opacity-60`}>{unavailable?"Disponible après la bêta":launchPro?`Profiter de l’offre à ${formatBillingPrice(BILLING_CONFIG.prices.betaLaunch)}`:`Choisir ${plan.id==="pro"?"Pro":"Essential"}`}</button>
+    {!unavailable&&<p className="mt-2 text-center text-[10px] text-[#7E8798]">Paiement bientôt disponible — aucun débit aujourd’hui.</p>}
+  </article>;
+};
 
 const legal = {
   privacy:{title:"Politique de confidentialité",intro:"Comprendre quelles données sont utilisées et garder le contrôle sur tes choix.",sections:[
@@ -43,7 +76,7 @@ const legal = {
     ["Finalités","Ces données servent à authentifier ton compte, fournir les tableaux de bord, calculer tes statistiques et répondre aux demandes adressées au support. Elles ne sont pas vendues."],
     ["Statistiques facultatives","PostHog n’est chargé qu’après ton accord. L’autocapture et l’enregistrement de session sont désactivés. Tu peux refuser ou modifier ce choix à tout moment."],
     ["Hébergement et prestataires","Le frontend est hébergé par Vercel et l’API par Render. Certains traitements peuvent également dépendre du fournisseur de base de données et du service IA utilisé par Atlas."],
-    ["Conservation et droits","Les données sont conservées pour fournir le service tant que le compte est actif. Tu peux demander l’accès, la rectification, l’export ou la suppression de tes informations en contactant support@pipsevo.app."],
+    ["Conservation et droits","Les données sont conservées pour fournir le service tant que le compte est actif. Tu peux demander l’accès, la rectification, l’export ou la suppression de tes informations en contactant tyachatfr@gmail.com."],
   ]},
   terms:{title:"Conditions d’utilisation",intro:"Règles applicables à l’utilisation de la version bêta de PipsEvo.",sections:[
     ["Objet du service","PipsEvo est un outil de journalisation et d’analyse comportementale. Il ne fournit ni conseil financier, ni signal, ni recommandation d’achat ou de vente."],
@@ -56,7 +89,7 @@ const legal = {
     ["Protection du compte","Les mots de passe sont hachés et ne sont pas enregistrés en clair. Les routes privées exigent un jeton d’authentification."],
     ["Transport et accès","Les services déployés utilisent HTTPS. Les données d’un utilisateur sont filtrées par son identifiant côté API."],
     ["Bonnes pratiques","Utilise un mot de passe unique, ne partage jamais ton jeton de connexion et déconnecte-toi des appareils partagés."],
-    ["Signalement","En cas d’activité suspecte ou de vulnérabilité, contacte support@pipsevo.app sans publier les détails sensibles."],
+    ["Signalement","En cas d’activité suspecte ou de vulnérabilité, contacte tyachatfr@gmail.com sans publier les détails sensibles."],
     ["Limites actuelles","La double authentification et la gestion avancée des sessions ne sont pas encore disponibles pendant la bêta."],
   ]},
   affiliate:{title:"Conditions du programme partenaire",intro:"Le programme n’est pas encore ouvert commercialement.",sections:[
