@@ -1,5 +1,5 @@
 import axios from "axios";
-import { supabase } from "@/lib/supabase";
+import { supabase, SUPABASE_AUTH_STORAGE_KEY } from "@/lib/supabase";
 import { AUTH_CONFIG } from "@/config/auth";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
@@ -170,22 +170,16 @@ export const auth = {
     return response({ ok: true });
   },
   deleteAccount: async (confirmation) => {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    check(sessionError, "Impossible de vérifier la session");
-    const accessToken = sessionData?.session?.access_token;
-    if (!accessToken) throw fail("Ta session a expiré. Reconnecte-toi avant de supprimer le compte.", 401);
-
-    // Fermer la session locale tant que l'utilisateur existe encore évite de
-    // conserver un jeton orphelin après la suppression côté serveur.
-    const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
-    check(signOutError, "Impossible de fermer la session avant la suppression");
-
     const { data, error } = await supabase.functions.invoke("delete-account", {
       body: { confirmation },
-      headers: { Authorization: `Bearer ${accessToken}` },
     });
     check(error, "Impossible de supprimer le compte");
     if (!data?.ok) throw fail(data?.error || "Impossible de supprimer le compte", 400);
+
+    // Le compte n'existe plus : l'API Auth peut donc répondre 403 au sign-out.
+    // La clé est celle configurée par PipsEvo dans le client Supabase.
+    await supabase.auth.signOut({ scope: "local" });
+    localStorage.removeItem(SUPABASE_AUTH_STORAGE_KEY);
     return response({ ok: true });
   },
 };
