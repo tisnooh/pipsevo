@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext"
 import { normalizeTradingRules } from "@/components/TradingRulesEditor"
 import TradeFormModal from "@/components/TradeFormModal"
 import { createEmptyTradeForm, hydrateTradeForm } from "@/lib/tradeFormModel"
+import CsvExportButton from "@/components/CsvExportButton"
 
 const miniChartData = [
   { t: 1, v: 1.0784 }, { t: 2, v: 1.0790 }, { t: 3, v: 1.0785 },
@@ -95,7 +96,9 @@ export function JournalPage() {
   }
 
   // Normalize trade fields
-  const normalize = (t) => ({
+  const normalize = (t) => {
+    const linkedAccount = accounts.find(a => a.id === t.account_id)
+    return ({
     ...t,
     asset: t.instrument || t.asset || "—",
     direction: t.direction === "long" ? "Achat (Long)" : t.direction === "short" ? "Vente (Short)" : t.direction,
@@ -105,12 +108,14 @@ export function JournalPage() {
     statusLabel: ({winner:"Gagnant",loser:"Perdant",breakeven:"Break-even",partial:"Partiellement clôturé",open:"Position ouverte",cancelled:"Annulé"})[t.result_status] || (t.pnl > 0 ? "Gagnant" : t.pnl < 0 ? "Perdant" : "Break-even"),
     result: typeof t.pnl === "number" ? `${t.pnl >= 0 ? "+" : ""}$${Math.abs(t.pnl).toFixed(2)}` : t.result_status === "open" ? "Ouverte" : "—",
     rLabel: typeof t.r === "number" ? `${t.r >= 0 ? "+" : ""}${t.r.toFixed(2)}R` : "—",
-    account: accounts.find(a => a.id === t.account_id)
-      ? `${accounts.find(a => a.id === t.account_id).firm} $${(accounts.find(a => a.id === t.account_id).initial_balance / 1000).toFixed(0)}K`
+    account_name: linkedAccount?.name || "",
+    account_firm: linkedAccount?.firm || "",
+    account: linkedAccount
+      ? `${linkedAccount.firm} $${(linkedAccount.initial_balance / 1000).toFixed(0)}K`
       : "—",
     tags: t.tags || (t.setup ? [t.setup] : []),
     dateLabel: t.date || "—",
-  })
+  })}
 
   const normalized = tradeList.map(normalize)
 
@@ -158,6 +163,7 @@ export function JournalPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF]"><option value="">Tous les comptes</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
             <select value={days} onChange={e=>setDays(e.target.value)} className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF]"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option><option value="3650">Toute la période</option></select>
+            <CsvExportButton rows={filtered} type="trades" filename="pipsevo-trades-filtres" className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#B5BBC9] hover:border-[#7C4DFF]/50 hover:text-white"/>
             <button
               onClick={openNewTrade}
               className="px-4 py-1.5 rounded-lg text-xs font-medium text-white flex items-center gap-1.5"

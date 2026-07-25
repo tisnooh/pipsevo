@@ -149,14 +149,33 @@ export const auth = {
     }
     return response(await loadCurrentUser({ retries: 2 }));
   },
-  logout: async () => {
-    const { error } = await supabase.auth.signOut();
+  logout: async (scope = "local") => {
+    const { error } = await supabase.auth.signOut({ scope });
     check(error, "Déconnexion impossible");
     return response({ ok: true });
   },
   resetPassword: async (email) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/reset-password` });
     check(error, "Impossible d’envoyer le lien de réinitialisation");
+    return response({ ok: true });
+  },
+  updatePassword: async (password) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    check(error, "Impossible de modifier le mot de passe");
+    return response({ ok: true });
+  },
+  signOutOtherSessions: async () => {
+    const { error } = await supabase.auth.signOut({ scope: "others" });
+    check(error, "Impossible de déconnecter les autres appareils");
+    return response({ ok: true });
+  },
+  deleteAccount: async (confirmation) => {
+    const { data, error } = await supabase.functions.invoke("delete-account", {
+      body: { confirmation },
+    });
+    check(error, "Impossible de supprimer le compte");
+    if (!data?.ok) throw fail(data?.error || "Impossible de supprimer le compte", 400);
+    await supabase.auth.signOut({ scope: "local" });
     return response({ ok: true });
   },
 };
@@ -272,6 +291,39 @@ export const payouts = {
     const { error } = await supabase.from("payouts").delete().eq("id", id).eq("user_id", user.id);
     check(error, "Impossible de supprimer le payout");
     return response({ ok: true });
+  },
+};
+
+const fetchAllOwnedRows = async (table, userId, orderColumn = "created_at") => {
+  const pageSize = 1000;
+  const rows = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase.from(table).select("*").eq("user_id", userId)
+      .order(orderColumn, { ascending: false }).order("id", { ascending: true }).range(from, from + pageSize - 1);
+    check(error, `Impossible d’exporter les données de ${table}`);
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  return rows;
+};
+
+export const dataExports = {
+  all: async () => {
+    const user = await currentAuthUser();
+    const [profile, accountRows, tradeRows, payoutRows, aiReports] = await Promise.all([
+      loadCurrentUser({ retries: 2 }),
+      fetchAllOwnedRows("accounts", user.id),
+      fetchAllOwnedRows("trades", user.id, "date"),
+      fetchAllOwnedRows("payouts", user.id, "date"),
+      fetchAllOwnedRows("ai_reports", user.id),
+    ]);
+    return response({
+      profile,
+      accounts: accountRows.map(enrichAccount),
+      trades: tradeRows.map(normalizeTrade),
+      payouts: payoutRows.map(normalizePayout),
+      aiReports,
+    });
   },
 };
 

@@ -96,13 +96,20 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const logout = async () => {
-    await auth.logout();
+  const logout = async (scope = "local") => {
+    await auth.logout(scope);
     localStorage.removeItem("pipsevo_token");
     setUser(null);
   };
 
-  return <AuthCtx.Provider value={{ user, setUser, loading, login, register, resendConfirmation, logout }}>{children}</AuthCtx.Provider>;
+  const deleteAccount = async (confirmation) => {
+    await auth.deleteAccount(confirmation);
+    localStorage.removeItem("pipsevo_token");
+    sessionStorage.removeItem("pipsevo_pending_email");
+    setUser(null);
+  };
+
+  return <AuthCtx.Provider value={{ user, setUser, loading, login, register, resendConfirmation, logout, deleteAccount }}>{children}</AuthCtx.Provider>;
 }
 
 export const useAuth = () => useContext(AuthCtx);

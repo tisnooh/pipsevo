@@ -50,7 +50,7 @@ export const PLANS = Object.freeze({
       "Comparaison de comptes",
       "Rapports automatiques",
       "Coach IA et détection d’erreurs récurrentes",
-      "Exports CSV et PDF",
+      "Exports PDF et rapports avancés",
       "Automatisations et support prioritaires",
     ],
   },

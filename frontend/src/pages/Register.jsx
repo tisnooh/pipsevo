@@ -5,13 +5,14 @@ import { useAuth } from "@/context/AuthContext";
 import { Logo } from "@/components/Logo";
 import { ArrowRight, BarChart3, CheckCircle2, Eye, EyeOff, ShieldCheck, Sparkles } from "lucide-react";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { passwordValidation } from "@/lib/passwordSecurity";
 
 export default function Register() {
   const { register } = useAuth(); const nav = useNavigate();
   const [name,setName]=useState(""); const [email,setEmail]=useState(""); const [password,setPassword]=useState("");
   const [loading,setLoading]=useState(false); const [showPassword,setShowPassword]=useState(false);
-  const strength=useMemo(()=>[password.length>=6,/[A-Z]/.test(password),/\d/.test(password)].filter(Boolean).length,[password]);
-  const submit=async(e)=>{e.preventDefault();if(loading)return;if(password.length<6)return toast.error("Mot de passe min. 6 caractères");setLoading(true);try{const result=await register(email,password,name);if(result.requires_email_confirmation){sessionStorage.setItem("pipsevo_pending_email",email.trim());nav("/verify-email",{state:{email:email.trim()}});return}toast.success("Compte créé. Configurons ton profil.");nav("/onboarding",{replace:true})}catch(err){toast.error(err.response?.data?.detail||"Inscription impossible")}finally{setLoading(false)}};
+  const strength=useMemo(()=>Object.values(passwordValidation(password).checks).filter(Boolean).length,[password]);
+  const submit=async(e)=>{e.preventDefault();if(loading)return;const validation=passwordValidation(password);if(!validation.valid)return toast.error(validation.message);setLoading(true);try{const result=await register(email,password,name);if(result.requires_email_confirmation){sessionStorage.setItem("pipsevo_pending_email",email.trim());nav("/verify-email",{state:{email:email.trim()}});return}toast.success("Compte créé. Configurons ton profil.");nav("/onboarding",{replace:true})}catch(err){toast.error(err.response?.data?.detail||"Inscription impossible")}finally{setLoading(false)}};
   const field="w-full mt-2 bg-[#0A0D18]/90 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder:text-[#4B5563] focus:border-[#7C4DFF]/70 focus:ring-4 focus:ring-[#7C4DFF]/10 outline-none transition";
   return <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden px-4 py-6 sm:p-8 flex items-center justify-center">
     <div className="absolute right-4 top-4 z-20 sm:right-7 sm:top-7"><LanguageSwitcher compact /></div>

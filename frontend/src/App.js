@@ -7,6 +7,8 @@ import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import VerifyEmail from "@/pages/VerifyEmail";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import Onboarding from "@/pages/Onboarding";
 import AppShell from "@/pages/AppShell";
 import Dashboard from "@/pages/Dashboard";
@@ -70,6 +72,8 @@ export default function App() {
           <Route path="/login" element={<AuthEntryGate><Login /></AuthEntryGate>} />
           <Route path="/register" element={<AuthEntryGate><Register /></AuthEntryGate>} />
           <Route path="/verify-email" element={<VerifyEmailGate />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/pricing" element={<PricingPage />} />

@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { auth } from "@/lib/api";
+import { auth, dataExports } from "@/lib/api";
 import {
-  Bell, BookOpen, Check, ChevronRight, CreditCard, Crown, Globe2, LockKeyhole,
-  ListChecks, Mail, Save, ShieldCheck, SlidersHorizontal, User, Volume2
+  AlertTriangle, Bell, BookOpen, Check, ChevronRight, CreditCard, Crown, DatabaseBackup, Download, Globe2, KeyRound,
+  ListChecks, Loader2, LogOut, Mail, MonitorSmartphone, Save, ShieldCheck, SlidersHorizontal, Trash2, User, Volume2
 } from "lucide-react";
 import { toast } from "sonner";
 import TradingRulesEditor, { normalizeTradingRules } from "@/components/TradingRulesEditor";
@@ -12,10 +12,16 @@ import { normalizeJournalPreferences } from "@/lib/journalPreferences";
 import { useI18n } from "@/context/I18nContext";
 import { readSettings, writeSettings } from "@/lib/preferences";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import CommercialBanner from "@/components/CommercialBanner";
 import { BILLING_CONFIG, COMMERCIAL_PHASES, FEATURES, PLANS, effectivePlan, formatBillingPrice, launchOfferCopy } from "@/config/billing";
 import { captureCommercialEvent } from "@/lib/commercialAnalytics";
+import { downloadFullDataExport } from "@/lib/dataExport";
+import { passwordValidation } from "@/lib/passwordSecurity";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const sections = [
   { id: "profile", label: "Mon profil", subtitle: "Identité et marché", icon: User },
@@ -24,6 +30,7 @@ const sections = [
   { id: "preferences", label: "Préférences", subtitle: "Affichage et trading", icon: SlidersHorizontal },
   { id: "notifications", label: "Notifications", subtitle: "Alertes et résumés", icon: Bell },
   { id: "security", label: "Sécurité", subtitle: "Accès au compte", icon: ShieldCheck },
+  { id: "data", label: "Mes données", subtitle: "Export et portabilité", icon: DatabaseBackup },
   { id: "billing", label: "Abonnement", subtitle: "Plan et facturation", icon: CreditCard },
 ];
 
@@ -48,6 +55,7 @@ export default function Settings() {
   const [traderType, setTraderType] = useState(user?.trader_type || "futures");
   const [saving, setSaving] = useState(false);
   const [savingRules, setSavingRules] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
   const [tradingRules, setTradingRules] = useState(()=>normalizeTradingRules(user?.rules));
   const [journalPreferences, setJournalPreferences] = useState(()=>normalizeJournalPreferences(user?.journal_preferences));
   const [preferences, setPreferences] = useState({
@@ -106,6 +114,20 @@ export default function Settings() {
     } finally { setSavingRules(false); }
   };
 
+  const exportAllData = async () => {
+    if (exportingData) return;
+    setExportingData(true);
+    try {
+      const { data } = await dataExports.all();
+      const filename = downloadFullDataExport({ ...data, settings: readSettings() });
+      toast.success(`Archive créée : ${filename}`);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || error.message || "Impossible d’exporter tes données");
+    } finally {
+      setExportingData(false);
+    }
+  };
+
   const initials = (user?.name || user?.email || "P E").split(" ").map(x=>x[0]).join("").slice(0,2).toUpperCase();
 
   return <div className="max-w-[1500px] mx-auto p-4 sm:p-7 space-y-5">
@@ -157,12 +179,116 @@ export default function Settings() {
 
         {active === "notifications" && <section className="card-elev overflow-hidden"><div className="border-b border-white/[0.06] p-5 sm:p-6"><h2 className="font-semibold">Notifications</h2><p className="mt-1 text-xs text-[#7E8798]">Choisis les informations que PipsEvo doit te signaler.</p></div><div className="space-y-3 p-5 sm:p-6"><Toggle checked={notifications.daily} onChange={v=>setNotifications({...notifications,daily:v})} label="Résumé quotidien" description="Reçois un résumé de tes trades, de ton P&L et de ta discipline." icon={Mail}/><Toggle checked={notifications.risk} onChange={v=>setNotifications({...notifications,risk:v})} label="Alertes de risque" description="Sois averti lorsque ton drawdown ou tes limites approchent d’un seuil critique." icon={ShieldCheck}/><Toggle checked={notifications.payout} onChange={v=>setNotifications({...notifications,payout:v})} label="Objectifs de payout" description="Suis la progression de tes objectifs et les dates estimées de payout." icon={Bell}/><Toggle checked={notifications.product} onChange={v=>setNotifications({...notifications,product:v})} label="Nouveautés PipsEvo" description="Découvre les nouvelles fonctionnalités et améliorations importantes." icon={Volume2}/></div><div className="flex justify-end border-t border-white/[0.06] p-4 sm:px-6"><button onClick={()=>persistLocal("Notifications enregistrées")} className="btn-primary inline-flex items-center gap-2"><Save className="h-4 w-4"/>Enregistrer</button></div></section>}
 
-        {active === "security" && <section className="card-elev overflow-hidden"><div className="border-b border-white/[0.06] p-5 sm:p-6"><h2 className="font-semibold">Sécurité du compte</h2><p className="mt-1 text-xs text-[#7E8798]">Protège tes données et surveille tes accès.</p></div><div className="space-y-3 p-5 sm:p-6"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-white/[0.07] bg-[#0B0E18] p-4"><div className="flex gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#00E676]/10 text-[#00E676]"><LockKeyhole className="h-4 w-4"/></span><div><div className="text-sm font-medium">Mot de passe</div><div className="mt-1 text-xs text-[#7E8798]">La modification sécurisée n’est pas encore disponible dans cette version.</div></div></div><button disabled title="Fonction indisponible pendant la bêta" className="rounded-xl border border-white/10 px-4 py-2 text-xs text-[#6B7280] cursor-not-allowed">Indisponible</button></div><div className="flex items-center justify-between gap-4 rounded-2xl border border-white/[0.07] bg-[#0B0E18] p-4"><div><div className="flex items-center gap-2 text-sm font-medium"><span className="h-2 w-2 rounded-full bg-[#00E676]"/>Session actuelle</div><div className="mt-1 text-xs text-[#7E8798]">Navigateur actuel · dernière activité maintenant</div></div><span className="rounded-full bg-[#00E676]/10 px-2.5 py-1 text-[10px] text-[#00E676]">Active</span></div></div></section>}
+        {active === "security" && <SecuritySettings />}
+
+        {active === "data" && <AccountDataSettings user={user} exportAllData={exportAllData} exportingData={exportingData} />}
 
         {active === "billing" && <BillingSettings user={user}/>}
       </main>
     </div>
   </div>;
+}
+
+function SecuritySettings() {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [endingOthers, setEndingOthers] = useState(false);
+  const [endingAll, setEndingAll] = useState(false);
+
+  const changePassword = async (event) => {
+    event.preventDefault();
+    if (savingPassword) return;
+    const validation = passwordValidation(password);
+    if (!validation.valid) return toast.error(validation.message);
+    if (password !== confirmation) return toast.error("Les mots de passe ne correspondent pas.");
+    setSavingPassword(true);
+    try {
+      await auth.updatePassword(password);
+      await auth.signOutOtherSessions();
+      setPassword("");
+      setConfirmation("");
+      toast.success("Mot de passe modifié. Les autres sessions ont été fermées.");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Impossible de modifier le mot de passe");
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const signOutOthers = async () => {
+    if (endingOthers) return;
+    setEndingOthers(true);
+    try {
+      await auth.signOutOtherSessions();
+      toast.success("Les autres appareils ont été déconnectés.");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Impossible de déconnecter les autres appareils");
+    } finally {
+      setEndingOthers(false);
+    }
+  };
+
+  const signOutEverywhere = async () => {
+    if (endingAll) return;
+    setEndingAll(true);
+    try {
+      await logout("global");
+      navigate("/login", { replace: true });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Impossible de fermer les sessions");
+      setEndingAll(false);
+    }
+  };
+
+  return <section className="card-elev overflow-hidden">
+    <div className="border-b border-white/[0.06] p-5 sm:p-6"><h2 className="font-semibold">Sécurité du compte</h2><p className="mt-1 text-xs text-[#7E8798]">Modifie ton mot de passe et garde le contrôle sur tes connexions.</p></div>
+    <div className="space-y-4 p-5 sm:p-6">
+      <form onSubmit={changePassword} className="rounded-2xl border border-white/[0.07] bg-[#0B0E18] p-4 sm:p-5">
+        <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#00E676]/10 text-[#00E676]"><KeyRound className="h-4 w-4" /></span><div><div className="text-sm font-medium">Changer le mot de passe</div><div className="mt-1 text-xs text-[#7E8798]">8 caractères minimum, avec une majuscule et un chiffre.</div></div></div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-xs text-[#9CA3AF]">Nouveau mot de passe<input type="password" autoComplete="new-password" required value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0D1020] px-4 py-3 text-white outline-none focus:border-[#7C4DFF]" /></label><label className="text-xs text-[#9CA3AF]">Confirmation<input type="password" autoComplete="new-password" required value={confirmation} onChange={(event) => setConfirmation(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0D1020] px-4 py-3 text-white outline-none focus:border-[#7C4DFF]" /></label></div>
+        <button type="submit" disabled={savingPassword} className="btn-primary mt-4 inline-flex w-full items-center justify-center gap-2 disabled:opacity-60 sm:w-auto">{savingPassword && <Loader2 className="h-4 w-4 animate-spin" />}{savingPassword ? "Modification…" : "Modifier le mot de passe"}</button>
+      </form>
+      <div className="rounded-2xl border border-white/[0.07] bg-[#0B0E18] p-4 sm:p-5">
+        <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#4F8CFF]/10 text-[#8FB4FF]"><MonitorSmartphone className="h-4 w-4" /></span><div><div className="flex items-center gap-2 text-sm font-medium">Session actuelle <span className="rounded-full bg-[#00E676]/10 px-2 py-0.5 text-[9px] text-[#00E676]">Active</span></div><div className="mt-1 text-xs text-[#7E8798]">Ce navigateur · dernière activité maintenant</div></div></div>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row"><button type="button" onClick={signOutOthers} disabled={endingOthers} className="btn-ghost inline-flex items-center justify-center gap-2 disabled:opacity-60">{endingOthers && <Loader2 className="h-4 w-4 animate-spin" />}Déconnecter les autres appareils</button><button type="button" onClick={signOutEverywhere} disabled={endingAll} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#FF4D5E]/25 px-4 py-2.5 text-xs text-[#FF7A87] transition hover:bg-[#FF4D5E]/10 disabled:opacity-60"><LogOut className="h-4 w-4" />Déconnecter tous les appareils</button></div>
+      </div>
+    </div>
+  </section>;
+}
+
+function AccountDataSettings({ user, exportAllData, exportingData }) {
+  const navigate = useNavigate();
+  const { deleteAccount } = useAuth();
+  const [confirmation, setConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const removeAccount = async (event) => {
+    event.preventDefault();
+    if (confirmation !== "SUPPRIMER" || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteAccount(confirmation);
+      toast.success("Ton compte et tes données ont été supprimés.");
+      navigate("/", { replace: true });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || error.message || "Impossible de supprimer le compte");
+      setDeleting(false);
+    }
+  };
+
+  return <section className="card-elev overflow-hidden">
+    <div className="border-b border-white/[0.06] p-5 sm:p-6"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#4F8CFF]/12 text-[#8FB4FF]"><DatabaseBackup className="h-5 w-5" /></span><div><h2 className="font-semibold">Portabilité de mes données</h2><p className="mt-1 text-xs leading-relaxed text-[#7E8798]">Télécharge une copie complète des données liées à ton compte PipsEvo.</p></div></div></div>
+    <div className="space-y-4 p-5 sm:p-6">
+      <div className="rounded-2xl border border-white/[0.07] bg-[#0B0E18] p-4 sm:p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="text-sm font-medium">Exporter toutes mes données</div><p className="mt-1 max-w-2xl text-xs leading-relaxed text-[#7E8798]">L’archive ZIP contient des fichiers CSV séparés pour ton profil, tes préférences, tes comptes, tes trades, tes payouts et tes analyses Atlas. Seules tes données personnelles accessibles par ta session sont incluses.</p></div><button type="button" onClick={exportAllData} disabled={exportingData} className="btn-primary inline-flex w-full shrink-0 items-center justify-center gap-2 disabled:opacity-50 sm:w-auto"><Download className="h-4 w-4" />{exportingData ? "Préparation…" : "Télécharger mon archive"}</button></div></div>
+      <div className="rounded-xl border border-[#00E676]/15 bg-[#00E676]/[0.04] p-3 text-[11px] leading-relaxed text-[#8FAE9D]">Format UTF-8 compatible Excel. Les données de démonstration et les secrets d’authentification ne sont jamais inclus.</div>
+      <div className="rounded-2xl border border-[#FF4D5E]/20 bg-[#FF4D5E]/[0.035] p-4 sm:p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#FF4D5E]/10 text-[#FF7A87]"><AlertTriangle className="h-5 w-5" /></span><div><div className="text-sm font-medium">Supprimer définitivement mon compte</div><p className="mt-1 max-w-2xl text-xs leading-relaxed text-[#9B7C83]">Cette action supprime le profil {user?.email}, les comptes, trades, payouts, analyses Atlas et captures associés. Elle est irréversible. Exporte d’abord ton archive si tu souhaites conserver une copie.</p></div></div>
+        <AlertDialog><AlertDialogTrigger asChild><button type="button" className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#FF4D5E]/30 px-4 py-2.5 text-xs text-[#FF7A87] transition hover:bg-[#FF4D5E]/10 sm:w-auto"><Trash2 className="h-4 w-4" />Supprimer mon compte</button></AlertDialogTrigger><AlertDialogContent className="mx-4 max-w-md border-white/10 bg-[#0A0C14] text-white"><form onSubmit={removeAccount}><AlertDialogHeader><AlertDialogTitle>Confirmer la suppression définitive</AlertDialogTitle><AlertDialogDescription className="text-[#9CA3AF]">Saisis <strong className="text-white">SUPPRIMER</strong> pour confirmer. Aucun retour arrière ne sera possible.</AlertDialogDescription></AlertDialogHeader><input autoFocus value={confirmation} onChange={(event) => setConfirmation(event.target.value.toUpperCase())} aria-label="Confirmation de suppression" className="mt-5 w-full rounded-xl border border-[#FF4D5E]/25 bg-[#0D1020] px-4 py-3 text-white outline-none focus:border-[#FF4D5E]" placeholder="SUPPRIMER" /><AlertDialogFooter className="mt-5"><AlertDialogCancel type="button" className="border-white/10 bg-transparent text-white hover:bg-white/5">Annuler</AlertDialogCancel><AlertDialogAction type="submit" disabled={confirmation !== "SUPPRIMER" || deleting} className="bg-[#D63D4C] text-white hover:bg-[#ED4B5B] disabled:opacity-40">{deleting ? "Suppression…" : "Supprimer définitivement"}</AlertDialogAction></AlertDialogFooter></form></AlertDialogContent></AlertDialog>
+      </div>
+    </div>
+  </section>;
 }
 
 function BillingSettings({ user }) {

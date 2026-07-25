@@ -3,6 +3,7 @@ import { payouts, accounts as accAPI, dashboard } from "@/lib/api";
 import { toast } from "sonner";
 import { Plus, Banknote, Calendar, TrendingUp, Trash2, RefreshCw, X } from "lucide-react";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import CsvExportButton from "@/components/CsvExportButton";
 
 export default function Payouts() {
   const { settings, money, date } = useAppSettings();
@@ -48,6 +49,10 @@ export default function Payouts() {
 
   const estimated = +sim.daily * +sim.days;
   const gap = estimated - Number(sim.target || 0);
+  const payoutExportRows = list.map((payout) => {
+    const account = accs.find((item) => item.id === payout.account_id);
+    return { ...payout, account_name: account?.name || "", account_firm: account?.firm || "" };
+  });
 
   return (
     <div className="p-4 sm:p-7 space-y-5">
@@ -56,7 +61,7 @@ export default function Payouts() {
           <h1 className="text-2xl sm:text-3xl font-bold">Payouts</h1>
           <p className="text-sm text-[#9CA3AF] mt-1">Suis tes retraits et projette ton prochain payout.</p>
         </div>
-        <button onClick={()=>accs.length ? setOpen(true) : toast.error("Ajoute d’abord un compte")} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 w-full sm:w-auto" data-testid="add-payout-btn"><Plus className="w-4 h-4"/> Enregistrer un payout</button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row"><CsvExportButton rows={payoutExportRows} type="payouts" filename="pipsevo-payouts" className="btn-ghost w-full py-2.5 text-sm sm:w-auto"/><button onClick={()=>accs.length ? setOpen(true) : toast.error("Ajoute d’abord un compte")} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 w-full sm:w-auto" data-testid="add-payout-btn"><Plus className="w-4 h-4"/> Enregistrer un payout</button></div>
       </div>
       {error && <div className="rounded-2xl border border-[#FF5252]/25 bg-[#FF5252]/10 p-4 text-sm text-[#FF8A8A] flex justify-between gap-3"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 text-xs"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
       {loading && <div className="grid sm:grid-cols-3 gap-4">{Array.from({length:3}).map((_,i)=><div key={i} className="h-28 card-elev animate-pulse"/>)}</div>}
