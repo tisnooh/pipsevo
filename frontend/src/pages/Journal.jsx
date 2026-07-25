@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Star, Edit2, Trash2, Camera, Check, Plus } from "lucide-react"
+import { Star, Edit2, Trash2, Camera, Check, Plus, Upload } from "lucide-react"
 import { AreaChart, Area, ResponsiveContainer } from "recharts"
 import { trades as tradesAPI, accounts as accAPI } from "@/lib/api"
 import { toast } from "sonner"
@@ -9,6 +9,7 @@ import { normalizeTradingRules } from "@/components/TradingRulesEditor"
 import TradeFormModal from "@/components/TradeFormModal"
 import { createEmptyTradeForm, hydrateTradeForm } from "@/lib/tradeFormModel"
 import CsvExportButton from "@/components/CsvExportButton"
+import TradeCsvImportModal from "@/components/TradeCsvImportModal"
 
 const miniChartData = [
   { t: 1, v: 1.0784 }, { t: 2, v: 1.0790 }, { t: 3, v: 1.0785 },
@@ -25,6 +26,7 @@ export function JournalPage() {
   const [activeFilter, setActiveFilter] = useState("Tous les trades")
   const [loading, setLoading] = useState(true)
   const [openForm, setOpenForm] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
   const [saving, setSaving] = useState(false)
   const [checklistChecks, setChecklistChecks] = useState({})
@@ -164,6 +166,7 @@ export function JournalPage() {
             <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF]"><option value="">Tous les comptes</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
             <select value={days} onChange={e=>setDays(e.target.value)} className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF]"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option><option value="3650">Toute la période</option></select>
             <CsvExportButton rows={filtered} type="trades" filename="pipsevo-trades-filtres" className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#B5BBC9] hover:border-[#7C4DFF]/50 hover:text-white"/>
+            <button type="button" onClick={()=>setImportOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] px-3 py-1.5 text-xs text-[#B5BBC9] hover:border-[#7C4DFF]/50 hover:text-white"><Upload className="h-3.5 w-3.5"/>Importer</button>
             <button
               onClick={openNewTrade}
               className="px-4 py-1.5 rounded-lg text-xs font-medium text-white flex items-center gap-1.5"
@@ -421,6 +424,7 @@ export function JournalPage() {
 
       {/* Modal: Nouveau trade */}
       {openForm && <TradeFormModal form={form} setForm={setForm} accounts={accounts} user={user} checklist={activeChecklist} checklistChecks={checklistChecks} setChecklistChecks={setChecklistChecks} editingTrade={editingTrade} saving={saving} onClose={()=>{if(!saving){setOpenForm(false);setEditingTrade(null)}}} onSave={saveTrade}/>}
+      {importOpen && <TradeCsvImportModal accounts={accounts} existingTrades={tradeList} onClose={()=>setImportOpen(false)} onImported={load}/>}
     </div>
   )
 }

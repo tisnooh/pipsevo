@@ -234,7 +234,7 @@ export const accounts = {
 
 const tradeNumbers = ["entry", "stop", "take_profit", "exit_price", "pnl", "r", "size", "duration_minutes", "point_value", "commission"];
 const cleanTrade = (values) => {
-  const allowed = ["account_id", "date", "instrument", "direction", "entry", "stop", "take_profit", "exit_price", "pnl", "result_status", "market_type", "setup", "setups", "session", "emotion", "emotion_secondary", "emotion_intensity", "notes", "plan_respected", "screenshots", "r", "size", "duration", "duration_minutes", "entry_time", "exit_time", "point_value", "commission", "mistakes", "exit_reason", "plan_exception_reason", "tags", "checklist_results", "starred"];
+  const allowed = ["account_id", "date", "instrument", "direction", "entry", "stop", "take_profit", "exit_price", "pnl", "result_status", "market_type", "setup", "setups", "session", "emotion", "emotion_secondary", "emotion_intensity", "notes", "plan_respected", "screenshots", "r", "size", "duration", "duration_minutes", "entry_time", "exit_time", "point_value", "commission", "mistakes", "exit_reason", "plan_exception_reason", "tags", "checklist_results", "starred", "import_batch_id", "import_source", "import_fingerprint", "external_trade_id"];
   const payload = Object.fromEntries(Object.entries(values).filter(([key]) => allowed.includes(key)));
   tradeNumbers.forEach((key) => { if (key in payload) payload[key] = numberOrNull(payload[key]); });
   ["entry_time", "exit_time"].forEach((key) => { if (payload[key] === "") payload[key] = null; });
@@ -271,6 +271,50 @@ export const trades = {
     const user = await currentAuthUser();
     const { error } = await supabase.from("trades").delete().eq("id", id).eq("user_id", user.id);
     check(error, "Impossible de supprimer le trade");
+    return response({ ok: true });
+  },
+  importCsv: async ({ fileName, rows, totalRows, skippedRows = 0, errorRows = 0 }) => {
+    const user = await currentAuthUser();
+    const { data: batch, error: batchError } = await supabase.from("trade_imports").insert({
+      user_id: user.id,
+      file_name: fileName,
+      total_rows: totalRows,
+      skipped_rows: skippedRows,
+      error_rows: errorRows,
+    }).select().single();
+    check(batchError, "Impossible de démarrer l’import");
+    const imported = [];
+    try {
+      for (let index = 0; index < rows.length; index += 200) {
+        const payload = rows.slice(index, index + 200).map(values => ({
+          ...cleanTrade(values),
+          user_id: user.id,
+          import_batch_id: batch.id,
+          import_source: "csv",
+        }));
+        const { data, error } = await supabase.from("trades").insert(payload).select();
+        check(error, `Échec de l’import à partir de la ligne ${index + 1}`);
+        imported.push(...(data || []).map(normalizeTrade));
+      }
+      const { error: completeError } = await supabase.from("trade_imports").update({
+        status: "completed",
+        imported_rows: imported.length,
+        completed_at: new Date().toISOString(),
+      }).eq("id", batch.id).eq("user_id", user.id);
+      check(completeError, "Les trades sont importés, mais le rapport n’a pas pu être finalisé");
+      return response({ batch: { ...batch, status: "completed", imported_rows: imported.length }, trades: imported });
+    } catch (error) {
+      await supabase.from("trades").delete().eq("import_batch_id", batch.id).eq("user_id", user.id);
+      await supabase.from("trade_imports").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", batch.id).eq("user_id", user.id);
+      throw error;
+    }
+  },
+  rollbackImport: async (batchId) => {
+    const user = await currentAuthUser();
+    const { error: deleteError } = await supabase.from("trades").delete().eq("import_batch_id", batchId).eq("user_id", user.id);
+    check(deleteError, "Impossible d’annuler cet import");
+    const { error: batchError } = await supabase.from("trade_imports").update({ status: "rolled_back", completed_at: new Date().toISOString() }).eq("id", batchId).eq("user_id", user.id);
+    check(batchError, "Les trades sont supprimés, mais le rapport n’a pas pu être mis à jour");
     return response({ ok: true });
   },
 };

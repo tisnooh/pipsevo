@@ -21,7 +21,7 @@ export default function Backtest() {
   const valid = +form.capital > 0 && +form.trades >= 1 && +form.trades <= 5000 && +form.winrate >= 0 && +form.winrate <= 100 && +form.gain > 0 && +form.loss > 0 && +form.risk > 0 && +form.risk <= 10;
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   return <div className="p-4 sm:p-7 space-y-5">
-    <div><h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2"><FlaskConical className="text-[#B58BFF]"/>Backtest</h1><p className="text-sm text-[#9CA3AF] mt-1">Simule une stratégie avec un risque composé.</p></div>
+    <div><h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2"><FlaskConical className="text-[#B58BFF]"/>Simulateur de stratégie</h1><p className="text-sm text-[#9CA3AF] mt-1">Teste des hypothèses avec un risque composé. Ce module n’utilise pas encore de données de marché historiques.</p></div>
     <div className="grid lg:grid-cols-3 gap-4">
       <form onSubmit={e=>{e.preventDefault();setRan(true)}} className="card-elev p-6 space-y-4">
         {[["capital",`Capital initial (${settings.currency})`,100],['trades','Nombre de trades',1],['winrate','Win rate (%)',1],['gain','Gain moyen (R)',0.1],['loss','Perte moyenne (R)',0.1],['risk','Risque par trade (%)',0.1]].map(([k,l,s])=><label key={k} className="block text-xs text-[#9CA3AF]">{l}<input type="number" min={k==='winrate'?0:0.01} max={k==='winrate'?100:k==='risk'?10:k==='trades'?5000:undefined} step={s} value={form[k]} onChange={e=>set(k,e.target.value)} className="mt-1 w-full bg-[#0D1020] border border-white/10 rounded-xl px-3 py-2.5 text-white"/></label>)}
@@ -29,7 +29,7 @@ export default function Backtest() {
         <div className="flex gap-2"><button disabled={!valid} className="btn-primary flex-1 inline-flex justify-center items-center gap-2 disabled:opacity-40"><Play className="w-4 h-4"/>Simuler</button><button type="button" title="Réinitialiser" onClick={()=>{setForm(initial);setRan(false)}} className="btn-ghost px-3"><RotateCcw className="w-4 h-4"/></button></div>
       </form>
       <div className="lg:col-span-2 space-y-4">
-        {!ran ? <div className="card-elev p-12 text-center text-[#9CA3AF]">Renseigne tes hypothèses puis lance la simulation.</div> : <>
+        {!ran ? <div className="card-elev p-12 text-center text-[#9CA3AF]"><div className="font-semibold text-white">Simulation statistique, pas Trade Replay</div><p className="mx-auto mt-2 max-w-xl text-sm">Renseigne tes hypothèses puis lance la simulation. Un vrai replay nécessitera une source officielle de bougies et ne sera activé qu’après connexion d’un fournisseur de données.</p></div> : <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Stat l="Capital final" v={money(result.final)} c="#B58BFF"/><Stat l="Profit net" v={money(result.profit,{signDisplay:"always"})} c={result.profit>=0?'#00E676':'#FF5252'}/><Stat l="Drawdown max" v={`${result.maxDd.toFixed(1)}%`} c="#FFB855"/><Stat l="Espérance" v={`${result.expectancy.toFixed(2)}R`} c={result.expectancy>=0?'#00E676':'#FF5252'}/>
           </div>

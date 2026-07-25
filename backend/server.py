@@ -695,6 +695,8 @@ COACH_SYSTEM = (
     "You analyze behavior, discipline, and decision-making only. "
     "You NEVER provide trading signals, market predictions, or specific entries/exits. "
     "Always answer in the same language as the trader's question (French or English). "
+    "Every claim about a specific trade must cite its evidence alias such as [T1]. "
+    "Never invent a trade, metric, prop-firm rule, or market fact that is not present in the context. "
     "Respond in clear sections: Summary, Discipline & Process, Emotional Patterns, "
     "Risk Management, and Concrete Action Plan. Be direct, specific, and use bullet points. "
     "Keep responses under 600 words."
@@ -708,15 +710,26 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
 
     if user.get("_supabase_token"):
         token = user["_supabase_token"]
-        accounts, trades = await asyncio.gather(
+        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        accounts, trades, recent_reports = await asyncio.gather(
             supabase_select("accounts", token, {"user_id": f"eq.{user['id']}", "select": "*", "limit": "50"}),
             supabase_select("trades", token, {"user_id": f"eq.{user['id']}", "select": "*", "order": "date.desc", "limit": "100"}),
+            supabase_select("ai_reports", token, {"user_id": f"eq.{user['id']}", "select": "id", "created_at": f"gte.{since}", "limit": "11"}),
         )
+        if len(recent_reports) >= 10:
+            raise HTTPException(429, "Atlas daily beta limit reached (10 analyses / 24h)")
     else:
         accounts = await db.accounts.find({"user_id": user["id"]}, {"_id": 0}).to_list(50)
         trades = await db.trades.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(100)
+        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        if await db.ai_reports.count_documents({"user_id": user["id"], "created_at": {"$gte": since}}) >= 10:
+            raise HTTPException(429, "Atlas daily beta limit reached (10 analyses / 24h)")
 
-    # Build compact context
+    if not trades:
+        raise HTTPException(422, "Ajoute au moins un trade réel avant de demander une analyse à Atlas")
+
+    # Build compact context and explicit evidence aliases.
+    evidence = []
     ctx_lines = [f"Trader: {user.get('name')} ({user.get('trader_type') or 'unspecified'})"]
     ctx_lines.append(f"Accounts: {len(accounts)} | Total balance: {sum(a.get('balance',0) for a in accounts):.2f}")
     if trades:
@@ -724,9 +737,22 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
         wr = len(wins) / len(trades) * 100
         plan_pct = sum(1 for t in trades if t.get("plan_respected")) / len(trades) * 100
         ctx_lines.append(f"Last {len(trades)} trades — winrate {wr:.1f}%, plan-respect {plan_pct:.1f}%")
-        for t in trades[:20]:
+        for index, t in enumerate(trades[:20], start=1):
+            alias = f"T{index}"
+            evidence.append({
+                "alias": alias,
+                "trade_id": t.get("id"),
+                "date": t.get("date"),
+                "instrument": t.get("instrument"),
+                "direction": t.get("direction"),
+                "pnl": t.get("pnl"),
+                "setup": t.get("setup"),
+                "session": t.get("session"),
+                "emotion": t.get("emotion"),
+                "plan_respected": t.get("plan_respected"),
+            })
             ctx_lines.append(
-                f"- {t.get('date')} {t.get('instrument')} {t.get('direction')} pnl={t.get('pnl')} "
+                f"[{alias}] {t.get('date')} {t.get('instrument')} {t.get('direction')} pnl={t.get('pnl')} "
                 f"setup={t.get('setup')} session={t.get('session')} emotion={t.get('emotion')} "
                 f"plan={t.get('plan_respected')}"
             )
@@ -755,6 +781,7 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
         "question": body.question,
         "answer": answer,
         "tag": body.context_tag,
+        "evidence": evidence,
         "created_at": now_utc(),
     }
     if user.get("_supabase_token"):

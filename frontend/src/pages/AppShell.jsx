@@ -3,18 +3,19 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { LogoMark } from "@/components/Logo";
-import { dashboard } from "@/lib/api";
+import { dashboard, accounts as accountsAPI, trades as tradesAPI } from "@/lib/api";
 import { useI18n } from "@/context/I18nContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { applyDocumentPreferences, readSettings, SETTINGS_EVENT } from "@/lib/preferences";
 import { BILLING_CONFIG, COMMERCIAL_PHASES } from "@/config/billing";
+import { evaluateRiskAlerts } from "@/lib/riskEngine";
 
 const NAV_LINKS = [
   { to: "/app/dashboard", fr: "Aperçu", en: "Overview", icon: Home, testid: "nav-dashboard" },
   { to: "/app/accounts", fr: "Comptes", en: "Accounts", icon: Wallet, testid: "nav-accounts" },
   { to: "/app/journal", fr: "Journal", en: "Journal", icon: BookOpen, testid: "nav-journal" },
   { to: "/app/markets", fr: "Marchés", en: "Markets", icon: BarChart3, testid: "nav-markets" },
-  { to: "/app/backtest", fr: "Backtest", en: "Backtest", icon: FlaskConical, testid: "nav-backtest" },
+  { to: "/app/backtest", fr: "Simulateur", en: "Simulator", icon: FlaskConical, testid: "nav-backtest" },
   { to: "/app/analytics", fr: "Statistiques", en: "Analytics", icon: BarChart3, testid: "nav-analytics" },
   { to: "/app/coach", fr: "Analyse IA", en: "AI Analysis", icon: Brain, testid: "nav-coach" },
   { to: "/app/discipline", fr: "Discipline", en: "Discipline", icon: Shield, testid: "nav-discipline" },
@@ -30,6 +31,7 @@ export default function AppShell() {
   const links = useMemo(() => NAV_LINKS.map(link => ({ ...link, label: t(link.fr, link.en) })), [t]);
   const [discipline, setDiscipline] = useState(0);
   const [summary, setSummary] = useState(null);
+  const [riskAlerts, setRiskAlerts] = useState([]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -37,8 +39,12 @@ export default function AppShell() {
   const [settings, setSettings] = useState(readSettings);
 
   useEffect(() => {
-    dashboard().then(r => { setDiscipline(r.data?.kpis?.discipline_score ?? 0); setSummary(r.data); }).catch(() => {});
-  }, []);
+    Promise.all([dashboard(), accountsAPI.list(), tradesAPI.list()]).then(([dashboardResponse, accountResponse, tradeResponse]) => {
+      setDiscipline(dashboardResponse.data?.kpis?.discipline_score ?? 0);
+      setSummary(dashboardResponse.data);
+      setRiskAlerts(evaluateRiskAlerts({ accounts: accountResponse.data, trades: tradeResponse.data, rules: user?.rules || {} }));
+    }).catch(() => {});
+  }, [user?.rules]);
 
   useEffect(() => {
     const applyPreferences = (event) => { const next = event.detail || readSettings(); setSettings(next); applyDocumentPreferences(next); };
@@ -197,7 +203,7 @@ export default function AppShell() {
           onMenuClick={() => setMobileOpen(true)}
           onSearch={()=>setSearchOpen(true)}
           notificationsOpen={notificationsOpen}
-          notifications={buildNotifications(summary, settings, t)}
+          notifications={buildNotifications(summary, settings, t, riskAlerts)}
           onNotifications={()=>setNotificationsOpen(v=>!v)}
           onNavigate={(to)=>nav(to)}
           onLogout={async()=>{ await logout(); window.location.href = "/"; }}
@@ -295,12 +301,13 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
   );
 }
 
-function buildNotifications(summary, settings, t) {
+function buildNotifications(summary, settings, t, riskAlerts = []) {
   if (!summary) return [];
   const out = [];
   if (settings.daily && !summary.kpis?.active_accounts) out.push({ text: t("Ajoute ton premier compte pour commencer le suivi.", "Add your first account to start tracking."), to: "/app/accounts" });
   else if (settings.daily && !summary.kpis?.total_trades) out.push({ text: t("Journalise ton premier trade pour activer les analyses.", "Log your first trade to activate analytics."), to: "/app/journal" });
   if (settings.risk && summary.metrics?.plan_respect_rate < 80 && summary.kpis?.total_trades) out.push({ text: t(`Plan respecté sur ${summary.metrics.plan_respect_rate}% des trades. Consulte ta discipline.`, `Plan followed on ${summary.metrics.plan_respect_rate}% of trades. Review your discipline.`), to: "/app/discipline" });
+  if (settings.risk) riskAlerts.slice(0, 3).forEach(alert => out.push({ text: alert.title, to: "/app/discipline" }));
   if (settings.payout && summary.kpis?.active_accounts && !summary.kpis?.total_payouts) out.push({ text: t("Configure ton objectif de payout pour suivre ta progression.", "Set your payout goal to track your progress."), to: "/app/payouts" });
   return out;
 }

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Plus, Banknote, Calendar, TrendingUp, Trash2, RefreshCw, X } from "lucide-react";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import CsvExportButton from "@/components/CsvExportButton";
+import { calculateSafeWithdrawal } from "@/lib/riskEngine";
 
 export default function Payouts() {
   const { settings, money, date } = useAppSettings();
@@ -14,6 +15,8 @@ export default function Payouts() {
   const today = new Date().toISOString().slice(0,10);
   const [form, setForm] = useState({ account_id: "", amount: 1000, date: today, note: "" });
   const [sim, setSim] = useState({ daily: 200, days: 20, target: 5000 });
+  const [safeAccountId, setSafeAccountId] = useState("");
+  const [safetyBuffer, setSafetyBuffer] = useState(20);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState("");
@@ -23,7 +26,10 @@ export default function Payouts() {
     setLoading(true); setError("");
     try { const [p, a, d] = await Promise.all([payouts.list(), accAPI.list(), dashboard()]);
       setList(p.data); setAccs(a.data); setKpi(d.data.kpis);
-      if (a.data.length > 0) setForm(f => f.account_id ? f : ({ ...f, account_id: a.data[0].id }));
+      if (a.data.length > 0) {
+        setForm(f => f.account_id ? f : ({ ...f, account_id: a.data[0].id }));
+        setSafeAccountId(current => current || a.data[0].id);
+      }
     } catch (e) { setError(e.response?.data?.detail || "Impossible de charger les payouts."); }
     finally { setLoading(false); }
   }, []);
@@ -32,6 +38,9 @@ export default function Payouts() {
   const create = async (e) => {
     e.preventDefault();
     if (!form.account_id) return toast.error("Ajoute d’abord un compte");
+    const selectedAccount = accs.find(account => account.id === form.account_id);
+    const safety = calculateSafeWithdrawal(selectedAccount, safetyBuffer);
+    if (safety && Number(form.amount) > safety.safeAmount && !window.confirm(`Ce retrait dépasse l’estimation de sécurité (${money(safety.safeAmount)}). Les règles exactes de ta prop firm ne sont pas vérifiées automatiquement. Continuer ?`)) return;
     setSaving(true);
     try {
       await payouts.create({ ...form, amount: +form.amount });
@@ -49,6 +58,8 @@ export default function Payouts() {
 
   const estimated = +sim.daily * +sim.days;
   const gap = estimated - Number(sim.target || 0);
+  const safeAccount = accs.find(account => account.id === safeAccountId);
+  const safeWithdrawal = calculateSafeWithdrawal(safeAccount, safetyBuffer);
   const payoutExportRows = list.map((payout) => {
     const account = accs.find((item) => item.id === payout.account_id);
     return { ...payout, account_name: account?.name || "", account_firm: account?.firm || "" };
@@ -74,8 +85,13 @@ export default function Payouts() {
 
       {/* Simulator */}
       <div className="grid lg:grid-cols-2 gap-4">
-        <div className="card-elev p-6">
-          <div className="text-sm font-semibold mb-4">Simulateur de payout</div>
+        <div className="card-elev p-6 space-y-6">
+          <div><div className="text-sm font-semibold">Retrait prudent par compte</div><p className="mt-1 text-xs leading-relaxed text-[#7E8798]">Estimation basée sur ton solde et ton drawdown configuré. Elle ne remplace pas les conditions d’éligibilité de la prop firm.</p></div>
+          {accs.length ? <>
+            <div className="grid gap-3 sm:grid-cols-2"><label className="text-xs text-[#9CA3AF]">Compte<select value={safeAccountId} onChange={event=>setSafeAccountId(event.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-[#0D1020] px-4 py-2.5 text-white"><option value="">Choisir un compte</option>{accs.map(account=><option key={account.id} value={account.id}>{account.firm} — {account.name}</option>)}</select></label><Fld label="Marge de sécurité (%)" type="number" value={safetyBuffer} onChange={setSafetyBuffer} testid="safe-buffer" /></div>
+            {safeWithdrawal && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><SimOut label="Retrait prudent" value={money(safeWithdrawal.safeAmount)} color="#00E676"/><SimOut label="Solde projeté" value={money(safeWithdrawal.projectedBalance)} color="#B58BFF"/><SimOut label="Plancher protégé" value={money(safeWithdrawal.protectedFloor)} color="#FFB855"/><SimOut label="Marge drawdown" value={money(safeWithdrawal.remainingDrawdown)} color="#4F8CFF"/></div>}
+          </> : <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-[#7E8798]">Ajoute un compte pour calculer une estimation.</div>}
+          <div className="border-t border-white/[0.07] pt-5"><div className="text-sm font-semibold mb-4">Projection d’objectif</div>
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <Fld label="Profit / jour" value={sim.daily} onChange={(v)=>setSim({...sim,daily:v})} testid="sim-daily" />
             <Fld label="Jours restants" value={sim.days} onChange={(v)=>setSim({...sim,days:v})} testid="sim-days" />
@@ -85,6 +101,7 @@ export default function Payouts() {
             <SimOut label="Estimé" value={money(estimated)} color="#00E676" />
             <SimOut label="Date estimée" value={date(new Date(Date.now()+Number(sim.days)*86400000))} color="#B58BFF" />
             <SimOut label="Écart objectif" value={money(gap,{signDisplay:"always"})} color={gap>=0?"#00E676":"#FF5252"} />
+          </div>
           </div>
         </div>
 

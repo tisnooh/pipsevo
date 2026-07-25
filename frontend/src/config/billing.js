@@ -20,6 +20,16 @@ export const PLANS = Object.freeze({
     id: "beta",
     name: "Bêta gratuite",
     price: 0,
+    description: "Pour découvrir PipsEvo et nous aider à fiabiliser l’expérience avant le lancement.",
+    features: [
+      "Journal de trading manuel",
+      "Dashboard et statistiques essentielles",
+      "Score de discipline et check-list",
+      "Suivi manuel des payouts",
+      "Import CSV sécurisé avec retour arrière",
+      "Atlas avec sources · 10 analyses / 24 h",
+      "Accès gratuit sans carte bancaire",
+    ],
   },
   essential: {
     id: "essential",
@@ -64,13 +74,62 @@ export const FEATURES = Object.freeze({
   manualPayouts: { beta: true, essential: true, pro: true },
   screenshots: { beta: true, essential: true, pro: true },
   multipleAccounts: { beta: false, essential: false, pro: true },
-  csvImport: { beta: false, essential: false, pro: true },
-  aiCoach: { beta: false, essential: false, pro: true },
+  csvImport: { beta: true, essential: false, pro: true },
+  aiCoach: { beta: true, essential: false, pro: true },
+  riskAlerts: { beta: true, essential: false, pro: true },
   advancedAnalytics: { beta: false, essential: false, pro: true },
   automaticReports: { beta: false, essential: false, pro: true },
   advancedExports: { beta: false, essential: false, pro: true },
   premiumAutomations: { beta: false, essential: false, pro: true },
 });
+
+export const PRICING_COMPARISON = Object.freeze([
+  {
+    id: "accounts",
+    title: "Comptes et données",
+    rows: [
+      { label: "Comptes prop firm", beta: "Accès de test", essential: "Jusqu’à 2", pro: "Plusieurs" },
+      { label: "Marchés Futures et CFD / Forex", beta: true, essential: true, pro: true },
+      { label: "Saisie manuelle des trades", beta: "Illimitée", essential: "Illimitée", pro: "Illimitée" },
+      { label: "Import CSV avec contrôle des doublons", beta: true, essential: false, pro: true },
+      { label: "Export CSV et archive personnelle", beta: true, essential: true, pro: true },
+    ],
+  },
+  {
+    id: "discipline",
+    title: "Discipline et gestion du risque",
+    rows: [
+      { label: "Règles et check-list personnalisables", beta: true, essential: true, pro: true },
+      { label: "Score de discipline", beta: true, essential: true, pro: true },
+      { label: "Limites, objectifs et drawdown des comptes", beta: true, essential: true, pro: true },
+      { label: "Sessions, setups, émotions et erreurs", beta: true, essential: true, pro: true },
+      { label: "Alertes automatiques de risque", beta: true, essential: false, pro: true },
+    ],
+  },
+  {
+    id: "analytics",
+    title: "Journal et analyses",
+    rows: [
+      { label: "Statistiques essentielles", beta: true, essential: true, pro: true },
+      { label: "Captures d’écran par trade", beta: true, essential: true, pro: true },
+      { label: "Trading DNA", beta: true, essential: true, pro: true },
+      { label: "Comparaison avancée des comptes", beta: false, essential: false, pro: "planned" },
+      { label: "Rapports automatiques", beta: false, essential: false, pro: "planned" },
+      { label: "Exports PDF et rapports avancés", beta: false, essential: false, pro: "planned" },
+    ],
+  },
+  {
+    id: "payouts-ai",
+    title: "Payouts, IA et accompagnement",
+    rows: [
+      { label: "Journal et simulateur de payouts", beta: true, essential: true, pro: true },
+      { label: "Atlas, coach IA comportemental", beta: true, essential: false, pro: true },
+      { label: "Détection des erreurs récurrentes", beta: true, essential: false, pro: true },
+      { label: "Automatisations premium", beta: false, essential: false, pro: "planned" },
+      { label: "Support", beta: "Bêta", essential: "Standard", pro: "Prioritaire" },
+    ],
+  },
+]);
 
 export const formatBillingPrice = (amount) => new Intl.NumberFormat("fr-FR", {
   style: "currency",

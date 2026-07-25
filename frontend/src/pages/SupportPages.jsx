@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Mail, ShieldCheck } from "lucide-react";
+import { Check, Clock3, Mail, Minus, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import PublicHeader from "@/components/PublicHeader";
 import { contact } from "@/lib/api";
 import { toast } from "sonner";
 import { openCookieSettings } from "@/components/CookieConsent";
-import { BILLING_CONFIG, COMMERCIAL_PHASES, PLANS, formatBillingPrice, launchOfferCopy } from "@/config/billing";
+import { BILLING_CONFIG, COMMERCIAL_PHASES, PLANS, PRICING_COMPARISON, formatBillingPrice, launchOfferCopy } from "@/config/billing";
 import { captureCommercialEvent } from "@/lib/commercialAnalytics";
+import { useAuth } from "@/context/AuthContext";
+import { INTEGRATIONS } from "@/config/integrations";
 
 const faqs = [
   ["Comment ajouter mes trades ?", "Depuis le Journal, clique sur Nouveau trade, choisis ton compte puis renseigne le résultat et le contexte du trade."],
@@ -19,11 +21,11 @@ const faqs = [
   ["Puis-je résilier à tout moment ?", "Aucun abonnement payant n'est proposé pendant la bêta. Les modalités de résiliation seront affichées clairement avant toute future souscription."],
 ];
 
-function PublicLayout({ title, subtitle, children }) {
+function PublicLayout({ title, subtitle, children, wide = false }) {
   const longTitle = title.length > 28;
   return <div className="min-h-screen bg-[#050505] text-white">
     <PublicHeader />
-    <main id="main-content" className="mx-auto max-w-5xl px-5 pb-14 pt-14 sm:px-6 md:py-16"><div className="mb-9 text-center sm:mb-10"><h1 className={`${longTitle ? "text-[36px] min-[390px]:text-[40px]" : "text-[40px] min-[390px]:text-[44px]"} mx-auto max-w-4xl break-normal font-bold leading-[1.08] text-gradient sm:text-5xl sm:leading-[1.05]`}>{title}</h1><p className="mx-auto mt-4 max-w-2xl text-[19px] leading-relaxed text-[#AAB0BE] min-[390px]:text-xl md:text-lg md:text-[#9CA3AF]">{subtitle}</p></div>{children}</main>
+    <main id="main-content" className={`${wide ? "max-w-6xl" : "max-w-5xl"} mx-auto px-5 pb-14 pt-14 sm:px-6 md:py-16`}><div className="mb-9 text-center sm:mb-10"><h1 className={`${longTitle ? "text-[36px] min-[390px]:text-[40px]" : "text-[40px] min-[390px]:text-[44px]"} mx-auto max-w-4xl break-normal font-bold leading-[1.08] text-gradient sm:text-5xl sm:leading-[1.05]`}>{title}</h1><p className="mx-auto mt-4 max-w-2xl text-[19px] leading-relaxed text-[#AAB0BE] min-[390px]:text-xl md:text-lg md:text-[#9CA3AF]">{subtitle}</p></div>{children}</main>
     <Footer/>
   </div>;
 }
@@ -38,38 +40,62 @@ export function ContactPage(){
 }
 
 export function PricingPage(){
+  const { user }=useAuth();
   const phase=BILLING_CONFIG.currentPhase;
   const isBeta=phase===COMMERCIAL_PHASES.BETA;
   const isLaunch=phase===COMMERCIAL_PHASES.LAUNCH_OFFER;
   const launch=launchOfferCopy();
   useEffect(()=>captureCommercialEvent("pricing_viewed",{phase}),[phase]);
   const title=isBeta?"La bêta est gratuite":isLaunch?"L’offre de lancement PipsEvo":"Choisis ton plan PipsEvo";
-  const subtitle=isBeta?"Profite gratuitement des fonctionnalités essentielles de PipsEvo pendant la phase bêta.":isLaunch?`${launch.title} ${launch.detail}`:"Deux formules claires, sans engagement et adaptées à ton rythme.";
-  return <PublicLayout title={title} subtitle={subtitle}>
-    {isBeta&&<div className="mx-auto mb-8 max-w-3xl rounded-2xl border border-[#00E676]/20 bg-[#00E676]/[0.05] p-5 text-center"><div className="text-xs font-mono uppercase tracking-[.2em] text-[#00E676]">Bêta gratuite</div><p className="mt-2 text-sm text-[#B5BBC9]">PipsEvo est actuellement disponible gratuitement pendant sa phase bêta. Certaines fonctionnalités avancées et automatiques seront disponibles lors du lancement officiel.</p></div>}
+  const subtitle=isBeta?"Teste les fonctions essentielles de PipsEvo gratuitement, sans carte bancaire.":isLaunch?`${launch.title} ${launch.detail}`:"Deux formules claires, sans engagement et adaptées à ton rythme.";
+  const visiblePlans=isBeta?[PLANS.beta,PLANS.essential,PLANS.pro]:[PLANS.essential,PLANS.pro];
+  return <PublicLayout title={title} subtitle={subtitle} wide>
+    {isBeta&&<div className="mx-auto mb-8 max-w-3xl rounded-2xl border border-[#00E676]/20 bg-[#00E676]/[0.05] p-5 text-center"><div className="text-xs font-mono uppercase tracking-[.2em] text-[#00E676]">Bêta gratuite en cours</div><p className="mt-2 text-sm leading-relaxed text-[#B5BBC9]">Les fonctions indiquées comme « prévues » ne sont pas encore vendues ni présentées comme disponibles. Tu peux utiliser la bêta immédiatement et sans carte bancaire.</p></div>}
     {isLaunch&&<div className="mx-auto mb-8 max-w-3xl rounded-2xl border border-[#7C4DFF]/30 bg-gradient-to-r from-[#7C4DFF]/10 to-[#4F8CFF]/10 p-5 text-center"><div className="text-xs font-mono uppercase tracking-[.2em] text-[#C8AEFF]">Offre réservée aux utilisateurs ayant rejoint la bêta</div><p className="mt-2 text-sm text-white">Sans engagement. Annulation possible à tout moment.</p>{BILLING_CONFIG.launchOfferEndDate&&<p className="mt-2 text-xs text-[#9CA3AF]">Offre valable jusqu’au {new Date(BILLING_CONFIG.launchOfferEndDate).toLocaleDateString("fr-FR")}.</p>}</div>}
-    <div className="mb-5 text-center text-xs font-mono uppercase tracking-[.2em] text-[#7E8798]">{isBeta?"Tarifs prévus après la bêta":"Abonnements mensuels"}</div>
-    <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-2">
-      <Plan plan={PLANS.essential} phase={phase}/><Plan plan={PLANS.pro} phase={phase} recommended/>
+    <div className="mb-5 text-center text-xs font-mono uppercase tracking-[.2em] text-[#7E8798]">{isBeta?"Accès actuel et tarifs mensuels prévus":"Abonnements mensuels"}</div>
+    <div className={`mx-auto grid max-w-6xl gap-5 ${visiblePlans.length===3?"lg:grid-cols-3":"md:grid-cols-2"}`}>
+      {visiblePlans.map(plan=><Plan key={plan.id} plan={plan} phase={phase} recommended={plan.id==="pro"} current={isBeta&&plan.id==="beta"} authenticated={Boolean(user)}/>)}
     </div>
-    <div className="mx-auto mt-7 max-w-3xl rounded-2xl border border-white/[0.07] bg-[#0B0E18] p-5 text-center text-sm text-[#9CA3AF]">{isBeta?"Les utilisateurs bêta recevront une offre spéciale au lancement officiel. Aucune carte bancaire requise.":"Le paiement n’est pas encore activé. Aucun prélèvement ne sera effectué sans ton consentement explicite."}</div>
+    <PricingComparison/>
+    <div className="mx-auto mt-7 max-w-3xl rounded-2xl border border-white/[0.07] bg-[#0B0E18] p-5 text-center text-sm leading-relaxed text-[#9CA3AF]">{isBeta?"Les tarifs Essential et Pro sont indicatifs tant que la facturation n’est pas activée. Toute évolution sera annoncée avant le lancement et aucun prélèvement ne sera effectué sans ton accord.":"Le paiement n’est pas encore activé. Aucun prélèvement ne sera effectué sans ton consentement explicite."}</div>
   </PublicLayout>;
 }
-const Plan=({plan,phase,recommended=false})=>{
-  const unavailable=phase===COMMERCIAL_PHASES.BETA;
+const Plan=({plan,phase,recommended=false,current=false,authenticated=false})=>{
+  const isBetaPlan=plan.id==="beta";
+  const unavailable=phase===COMMERCIAL_PHASES.BETA&&!isBetaPlan;
   const event=plan.id==="pro"?"pro_clicked":"essential_clicked";
   const launchPro=phase===COMMERCIAL_PHASES.LAUNCH_OFFER&&plan.id==="pro";
-  return <article className={`card-elev relative flex h-full flex-col p-6 sm:p-7 ${recommended?"glow-purple border-[#7C4DFF]/45":""}`}>
-    {recommended&&<span className="absolute right-5 top-5 rounded-full border border-[#7C4DFF]/35 bg-[#7C4DFF]/15 px-2.5 py-1 text-[9px] font-semibold tracking-wider text-[#C8AEFF]">RECOMMANDÉ</span>}
+  return <article className={`card-elev relative flex h-full flex-col overflow-hidden p-6 sm:p-7 ${recommended?"glow-purple border-[#7C4DFF]/55":""} ${current?"border-[#00E676]/35 bg-[#00E676]/[0.025]":""}`}>
+    {recommended&&<span className="absolute right-5 top-5 rounded-full border border-[#7C4DFF]/35 bg-[#7C4DFF]/15 px-2.5 py-1 text-[9px] font-semibold tracking-wider text-[#C8AEFF]">LE PLUS COMPLET</span>}
+    {current&&<span className="absolute right-5 top-5 rounded-full border border-[#00E676]/30 bg-[#00E676]/10 px-2.5 py-1 text-[9px] font-semibold tracking-wider text-[#70F5AE]">DISPONIBLE</span>}
     <div className="pr-24 text-[#B58BFF] font-mono uppercase text-xs">{plan.name}</div>
-    <div className="mt-4 flex flex-wrap items-end gap-2"><span className="text-4xl font-bold font-numeric">{launchPro?formatBillingPrice(BILLING_CONFIG.prices.betaLaunch):formatBillingPrice(plan.price)}</span><span className="pb-1 text-sm text-[#9CA3AF]">/mois</span></div>
+    <div className="mt-4 flex flex-wrap items-end gap-2"><span className="text-4xl font-bold font-numeric">{launchPro?formatBillingPrice(BILLING_CONFIG.prices.betaLaunch):formatBillingPrice(plan.price)}</span>{!isBetaPlan&&<span className="pb-1 text-sm text-[#9CA3AF]">/mois</span>}</div>
     {launchPro&&<p className="mt-2 text-xs text-[#C8AEFF]">Premier mois, puis {formatBillingPrice(BILLING_CONFIG.prices.pro)}/mois.</p>}
     <p className="mt-4 min-h-10 text-sm leading-relaxed text-[#9CA3AF]">{plan.description}</p>
     <div className="mt-6 flex-1 space-y-3">{plan.features.map(x=><div key={x} className="flex gap-2 text-sm text-[#D0D4DE]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#00E676]"/>{x}</div>)}</div>
-    <button type="button" disabled onClick={()=>captureCommercialEvent(event,{phase})} title={unavailable?"Disponible après la bêta":"Paiement en cours de préparation"} className={`${recommended?"btn-primary":"btn-ghost"} mt-7 w-full cursor-not-allowed opacity-60`}>{unavailable?"Disponible après la bêta":launchPro?`Profiter de l’offre à ${formatBillingPrice(BILLING_CONFIG.prices.betaLaunch)}`:`Choisir ${plan.id==="pro"?"Pro":"Essential"}`}</button>
-    {!unavailable&&<p className="mt-2 text-center text-[10px] text-[#7E8798]">Paiement bientôt disponible — aucun débit aujourd’hui.</p>}
+    {current?<Link to={authenticated?"/app/dashboard":"/register"} onClick={()=>captureCommercialEvent("beta_cta_clicked",{phase,authenticated})} className="btn-primary mt-7 inline-flex w-full items-center justify-center">{authenticated?"Ouvrir mon espace":"Commencer gratuitement"}</Link>:<button type="button" disabled onClick={()=>captureCommercialEvent(event,{phase})} title={unavailable?"Disponible après la bêta":"Paiement en cours de préparation"} className={`${recommended?"btn-primary":"btn-ghost"} mt-7 w-full cursor-not-allowed opacity-60`}>{unavailable?"Disponible après la bêta":launchPro?`Profiter de l’offre à ${formatBillingPrice(BILLING_CONFIG.prices.betaLaunch)}`:`Choisir ${plan.id==="pro"?"Pro":"Essential"}`}</button>}
+    {!current&&<p className="mt-2 text-center text-[10px] text-[#7E8798]">{unavailable?"Fonctionnalités et paiement encore en préparation.":"Aucun débit aujourd’hui."}</p>}
   </article>;
 };
+
+const ComparisonValue=({value})=>{
+  if(value===true)return <span className="inline-flex items-center gap-1.5 text-[#CFEFDD]"><Check className="h-4 w-4 text-[#00E676]"/>Inclus</span>;
+  if(value==="planned")return <span className="inline-flex items-center gap-1.5 text-[#C8AEFF]"><Clock3 className="h-4 w-4"/>Prévu</span>;
+  if(value===false)return <span className="inline-flex items-center gap-1.5 text-[#6F7787]"><Minus className="h-4 w-4"/>Non inclus</span>;
+  return <span className="text-[#D6D9E2]">{value}</span>;
+};
+
+const PricingComparison=()=> <section aria-labelledby="pricing-comparison-title" className="mt-16 sm:mt-20">
+  <div className="mx-auto mb-7 max-w-3xl text-center"><div className="text-xs font-mono uppercase tracking-[.2em] text-[#B58BFF]">Comparaison transparente</div><h2 id="pricing-comparison-title" className="mt-3 text-2xl font-bold sm:text-3xl">Ce que chaque formule comprend</h2><p className="mt-3 text-sm leading-relaxed text-[#9CA3AF]">« Prévu » signifie que la fonctionnalité fait partie de la feuille de route, mais qu’elle n’est pas encore commercialisée.</p></div>
+  <div className="hidden overflow-hidden rounded-3xl border border-white/[0.08] bg-[#090B13] lg:block">
+    <table className="w-full table-fixed border-collapse text-left text-sm">
+      <caption className="sr-only">Comparaison des formules Bêta, Essential et Pro</caption>
+      <thead className="bg-[#0F1220]"><tr><th scope="col" className="w-[46%] px-6 py-5 text-xs uppercase tracking-[.16em] text-[#8E96A7]">Fonctionnalité</th><th scope="col" className="w-[18%] px-4 py-5 text-[#70F5AE]">Bêta</th><th scope="col" className="w-[18%] px-4 py-5 text-white">Essential</th><th scope="col" className="w-[18%] px-4 py-5 text-[#C8AEFF]">Pro</th></tr></thead>
+      <tbody>{PRICING_COMPARISON.map(section=><React.Fragment key={section.id}><tr><th colSpan={4} scope="colgroup" className="border-y border-white/[0.07] bg-white/[0.025] px-6 py-4 text-xs font-semibold uppercase tracking-[.16em] text-[#B58BFF]">{section.title}</th></tr>{section.rows.map(row=><tr key={row.label} className="border-b border-white/[0.06] last:border-b-0"><th scope="row" className="px-6 py-4 font-medium text-[#E5E7ED]">{row.label}</th><td className="px-4 py-4"><ComparisonValue value={row.beta}/></td><td className="px-4 py-4"><ComparisonValue value={row.essential}/></td><td className="bg-[#7C4DFF]/[0.025] px-4 py-4"><ComparisonValue value={row.pro}/></td></tr>)}</React.Fragment>)}</tbody>
+    </table>
+  </div>
+  <div className="space-y-4 lg:hidden">{PRICING_COMPARISON.map(section=><details key={section.id} className="card-flat group overflow-hidden" open={section.id==="accounts"}><summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-semibold"><span>{section.title}</span><span aria-hidden="true" className="text-xl text-[#B58BFF] transition-transform group-open:rotate-45">+</span></summary><div className="border-t border-white/[0.07] px-4 pb-4">{section.rows.map(row=><div key={row.label} className="border-b border-white/[0.06] py-4 last:border-b-0"><div className="mb-3 text-sm font-medium text-white">{row.label}</div><div className="grid grid-cols-3 gap-2 text-[11px]"><div><div className="mb-1.5 text-[9px] uppercase tracking-wider text-[#70F5AE]">Bêta</div><ComparisonValue value={row.beta}/></div><div><div className="mb-1.5 text-[9px] uppercase tracking-wider text-[#9CA3AF]">Essential</div><ComparisonValue value={row.essential}/></div><div><div className="mb-1.5 text-[9px] uppercase tracking-wider text-[#C8AEFF]">Pro</div><ComparisonValue value={row.pro}/></div></div></div>)}</div></details>)}</div>
+</section>;
 
 const legal = {
   privacy:{title:"Politique de confidentialité",intro:"Comprendre quelles données sont utilisées et garder le contrôle sur tes choix.",sections:[
@@ -102,7 +128,7 @@ const legal = {
 };
 export function LegalPage({type}){const page=legal[type];return <PublicLayout title={page.title} subtitle={page.intro}><div className="card-elev p-6 sm:p-8 max-w-3xl mx-auto"><div className="flex items-center justify-between gap-3 border-b border-white/[0.07] pb-5"><ShieldCheck className="text-[#B58BFF]"/><span className="text-[10px] text-[#6B7280]">Mise à jour : 13 juillet 2026</span></div><div className="mt-6 space-y-7">{page.sections.map(([heading,text])=><section key={heading}><h2 className="font-semibold">{heading}</h2><p className="text-sm text-[#B5BBC9] mt-2 leading-relaxed">{text}</p></section>)}</div>{type==="privacy"&&<button onClick={openCookieSettings} className="btn-ghost mt-8">Gérer mes préférences de cookies</button>}</div></PublicLayout>}
 
-export function PlatformsPage(){const ps=[["Saisie manuelle","Disponible","Ajoute immédiatement tes comptes et trades depuis le journal."],["Import CSV","En préparation","Prévisualisation, validation et détection des doublons avant import."],["MetaTrader 4 / 5","À l’étude","Aucune synchronisation directe n’est encore disponible."],["cTrader","À l’étude","La faisabilité dépendra des accès et autorisations officielles."],["Tradovate / NinjaTrader","À l’étude","Intégrations envisagées pour les traders Futures."]];return <PublicLayout title="Plateformes et imports" subtitle="La saisie manuelle est disponible. Les imports et connexions directes ne le sont pas encore."><div className="grid sm:grid-cols-2 gap-4">{ps.map(([n,s,d])=><div key={n} className="card-elev p-6"><div className="flex justify-between gap-3"><h2 className="font-semibold">{n}</h2><span className="text-[10px] text-[#B58BFF] border border-[#7C4DFF]/30 rounded-full px-2 py-1 whitespace-nowrap">{s}</span></div><p className="text-sm text-[#9CA3AF] mt-3">{d}</p></div>)}</div><div className="mt-6 rounded-2xl border border-[#FFB855]/20 bg-[#FFB855]/5 p-4 text-xs text-[#B5BBC9]">Les noms de plateformes et prop firms indiquent une compatibilité de saisie ou une piste d’intégration. Ils n’impliquent aucun partenariat officiel.</div></PublicLayout>}
+export function PlatformsPage(){const{user}=useAuth();return <PublicLayout title="Plateformes et imports" subtitle="L’import CSV sécurisé est disponible. Les connexions automatiques resteront désactivées tant qu’un accès officiel n’est pas validé."><div className="grid sm:grid-cols-2 gap-4">{INTEGRATIONS.map(item=><div key={item.id} className="card-elev p-6"><div className="flex flex-wrap items-start justify-between gap-3"><h2 className="font-semibold">{item.name}</h2><span className={`rounded-full border px-2 py-1 text-[10px] whitespace-nowrap ${item.status==="available"?"border-[#00E676]/30 bg-[#00E676]/[0.06] text-[#6AFFB1]":"border-[#7C4DFF]/30 text-[#B58BFF]"}`}>{item.statusLabel}</span></div><p className="text-sm text-[#9CA3AF] mt-3">{item.description}</p>{item.id==="csv"&&<Link to={user?"/app/journal":"/register"} className="mt-4 inline-flex text-xs font-semibold text-[#B58BFF] hover:text-white">{user?"Ouvrir l’import dans le Journal →":"Créer un compte pour importer →"}</Link>}</div>)}</div><div className="mt-6 rounded-2xl border border-[#FFB855]/20 bg-[#FFB855]/5 p-4 text-xs text-[#B5BBC9]">Les noms de plateformes et prop firms indiquent une compatibilité de saisie ou une piste d’intégration. Ils n’impliquent aucun partenariat officiel.</div></PublicLayout>}
 
 const posts=[
   {title:"Construire un journal de trading utile",intro:"Un bon journal relie le résultat, le contexte, l'émotion et le respect du plan.",steps:["Note le setup et la raison d'entrée avant d'évaluer le résultat.","Ajoute le risque prévu, le résultat en R et le respect de tes règles.","Relis chaque semaine les erreurs qui se répètent, pas seulement les pertes."]},

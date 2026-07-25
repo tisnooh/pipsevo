@@ -1,4 +1,4 @@
-import { BILLING_CONFIG, FEATURES, PLANS, canUseFeature, effectivePlan, hasPlanAccess } from "./billing";
+import { BILLING_CONFIG, FEATURES, PLANS, PRICING_COMPARISON, canUseFeature, effectivePlan, hasPlanAccess } from "./billing";
 
 describe("configuration commerciale PipsEvo", () => {
   test("centralise les trois prix attendus", () => {
@@ -7,10 +7,11 @@ describe("configuration commerciale PipsEvo", () => {
     expect(PLANS.pro.price).toBe(BILLING_CONFIG.prices.pro);
   });
 
-  test("la bêta ne débloque pas les fonctions premium", () => {
+  test("la bêta débloque les fonctions testées publiquement, sans ouvrir tout le premium", () => {
     expect(effectivePlan({ plan: "pro", subscription_status: "active" })).toBe("beta");
     expect(canUseFeature(null, "manualJournal")).toBe(true);
-    expect(canUseFeature(null, "aiCoach")).toBe(false);
+    expect(canUseFeature(null, "aiCoach")).toBe(true);
+    expect(canUseFeature(null, "csvImport")).toBe(true);
     expect(canUseFeature(null, "automaticReports")).toBe(false);
   });
 
@@ -25,5 +26,27 @@ describe("configuration commerciale PipsEvo", () => {
     Object.values(FEATURES).forEach((access) => {
       expect(access).toEqual(expect.objectContaining({ beta: expect.any(Boolean), essential: expect.any(Boolean), pro: expect.any(Boolean) }));
     });
+  });
+
+  test("la comparaison tarifaire couvre toujours les trois formules", () => {
+    expect(PRICING_COMPARISON.length).toBeGreaterThan(0);
+    PRICING_COMPARISON.forEach((section) => {
+      expect(section.id).toBeTruthy();
+      expect(section.rows.length).toBeGreaterThan(0);
+      section.rows.forEach((row) => {
+        expect(row).toEqual(expect.objectContaining({
+          label: expect.any(String),
+          beta: expect.anything(),
+          essential: expect.anything(),
+          pro: expect.anything(),
+        }));
+      });
+    });
+  });
+
+  test("la bêta possède une présentation exploitable dans les cartes tarifaires", () => {
+    expect(PLANS.beta.price).toBe(0);
+    expect(PLANS.beta.description).toBeTruthy();
+    expect(PLANS.beta.features.length).toBeGreaterThan(0);
   });
 });
