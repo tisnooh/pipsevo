@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { LogoMark, LogoWordmark } from "@/components/Logo";
+import { LogoMark } from "@/components/Logo";
 import { dashboard } from "@/lib/api";
 import { useI18n } from "@/context/I18nContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -88,11 +88,17 @@ export default function AppShell() {
         ${mobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
         data-testid="app-sidebar"
       >
-        <div className="px-5 py-5 flex items-center justify-between gap-2.5 shrink-0">
-          <LogoWordmark to="/app/dashboard" size="md" />
+        <div className="flex h-[60px] shrink-0 items-center justify-between gap-2.5 px-4 md:h-[68px]">
+          <NavLink
+            to="/app/dashboard"
+            aria-label="Retour au tableau de bord"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70"
+          >
+            <LogoMark size="md" className="!h-6 !w-6 md:!h-8 md:!w-8" />
+          </NavLink>
           <button
             onClick={closeMobile}
-            className="md:hidden w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-[#9CA3AF]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#9CA3AF] transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:hidden"
             aria-label="Fermer le menu"
             data-testid="sidebar-close"
           >
@@ -215,11 +221,11 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
     return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close); };
   }, []);
   return (
-    <div className="sticky top-0 z-30 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 px-4 md:px-6 py-3 flex items-center gap-3 w-full min-w-0">
+    <header className="sticky top-0 z-30 flex h-[60px] w-full min-w-0 items-center gap-1.5 border-b border-white/5 bg-[#050505]/80 px-3 py-0 backdrop-blur-xl sm:gap-2 sm:px-4 md:h-[68px] md:gap-3 md:px-5">
       {/* Hamburger — mobile uniquement */}
       <button
         onClick={onMenuClick}
-        className="md:hidden w-9 h-9 shrink-0 rounded-xl hover:bg-white/5 flex items-center justify-center text-[#9CA3AF]"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#9CA3AF] transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:hidden"
         aria-label="Ouvrir le menu"
         data-testid="top-menu-toggle"
       >
@@ -227,12 +233,12 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
       </button>
 
       {/* Sur mobile, le favicon compact reste à côté du menu hamburger. */}
-      <button onClick={()=>onNavigate("/app/dashboard")} aria-label="Retour au tableau de bord" className="md:hidden grid h-9 w-9 shrink-0 place-items-center rounded-xl hover:bg-white/5">
-        <LogoMark size="sm" />
+      <button onClick={()=>onNavigate("/app/dashboard")} aria-label="Retour au tableau de bord" className="grid h-9 w-9 shrink-0 place-items-center rounded-xl transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:hidden">
+        <LogoMark size="sm" className="!h-6 !w-6" />
       </button>
 
       {/* Barre de recherche — desktop uniquement */}
-      <button onClick={onSearch} className="hidden md:block flex-1 min-w-0 max-w-md relative text-left">
+      <button onClick={onSearch} aria-label="Ouvrir la recherche" className="relative hidden min-w-0 max-w-md flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:block">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6B7280]" />
         <input readOnly
           placeholder="Rechercher…"
@@ -247,24 +253,24 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
       {/* Icône recherche seule — mobile */}
       <button
         onClick={onSearch}
-        className="md:hidden w-9 h-9 shrink-0 rounded-xl hover:bg-white/5 flex items-center justify-center text-[#9CA3AF]"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#9CA3AF] transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:hidden"
         aria-label="Rechercher"
         data-testid="top-search-mobile"
       >
         <Search className="w-4 h-4" />
       </button>
 
-      <div className="relative"><button onClick={onNotifications} className="relative w-9 h-9 shrink-0 rounded-xl hover:bg-white/5 flex items-center justify-center" data-testid="top-notifs">
+      <div className="relative"><button onClick={onNotifications} aria-label="Ouvrir les notifications" aria-expanded={notificationsOpen} aria-controls="app-notifications-menu" className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70" data-testid="top-notifs">
         <Bell className="w-4 h-4 text-[#9CA3AF]" />
         {!!notifications.length && <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-[#FF4FD8] rounded-full" />}
-      </button>{notificationsOpen && <div className="absolute right-0 top-11 w-72 card-elev p-4 z-50"><div className="text-sm font-semibold">Notifications</div>{notifications.length?<div className="mt-3 space-y-2">{notifications.map(n=><button key={n.to+n.text} onClick={()=>{onNavigate(n.to);onNotifications()}} className="w-full rounded-xl border border-white/[0.06] p-3 text-left text-xs text-[#B5BBC9] hover:bg-white/[0.04]">{n.text}</button>)}</div>:<div className="text-xs text-[#9CA3AF] mt-3">Tout est à jour. Aucune alerte active.</div>}</div>}</div>
+      </button>{notificationsOpen && <div id="app-notifications-menu" className="fixed left-3 right-3 top-[68px] z-50 w-auto card-elev p-4 md:absolute md:left-auto md:right-0 md:top-11 md:w-72"><div className="text-sm font-semibold">Notifications</div>{notifications.length?<div className="mt-3 space-y-2">{notifications.map(n=><button key={n.to+n.text} onClick={()=>{onNavigate(n.to);onNotifications()}} className="w-full rounded-xl border border-white/[0.06] p-3 text-left text-xs text-[#B5BBC9] hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70">{n.text}</button>)}</div>:<div className="text-xs text-[#9CA3AF] mt-3">Tout est à jour. Aucune alerte active.</div>}</div>}</div>
 
       <div ref={profileRef} className="relative shrink-0">
-      <button onClick={()=>setProfileOpen(v=>!v)} aria-expanded={profileOpen} aria-label="Ouvrir le menu du profil" className="flex items-center gap-2 px-2 py-1.5 rounded-xl border border-white/10 bg-[#0D1020] hover:border-[#7C4DFF]/40 transition">
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] flex items-center justify-center text-xs font-bold shrink-0">
+      <button onClick={()=>setProfileOpen(v=>!v)} aria-expanded={profileOpen} aria-controls="app-profile-menu" aria-label="Ouvrir le menu du profil" className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#0D1020] px-1.5 py-1 transition hover:border-[#7C4DFF]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:gap-2 md:px-2 md:py-1.5">
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] text-[10px] font-bold md:h-7 md:w-7 md:text-xs">
           {(user?.name || user?.email || "U")[0].toUpperCase()}
         </div>
-        <div className="hidden sm:block text-sm font-medium whitespace-nowrap" data-testid="top-username">
+        <div className="hidden max-w-32 truncate whitespace-nowrap text-sm font-medium lg:max-w-48 sm:block" data-testid="top-username">
           {user?.name || user?.email}
         </div>
         <span className="hidden sm:inline text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#7C4DFF]/20 text-[#B58BFF] border border-[#7C4DFF]/30 whitespace-nowrap">
@@ -272,7 +278,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
         </span>
         <span className={`text-[#9CA3AF] text-xs transition-transform ${profileOpen ? "rotate-180" : ""}`}>⌄</span>
       </button>
-      {profileOpen && <div className="absolute right-0 top-12 z-50 w-64 card-elev p-2 shadow-2xl">
+      {profileOpen && <div id="app-profile-menu" className="absolute right-0 top-11 z-50 w-[min(16rem,calc(100vw-1.5rem))] card-elev p-2 shadow-2xl md:top-12">
         <div className="px-3 py-3 border-b border-white/5">
           <div className="text-sm font-semibold truncate">{user?.name || "Utilisateur"}</div>
           <div className="text-xs text-[#9CA3AF] truncate mt-0.5">{user?.email}</div>
@@ -285,7 +291,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
         <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 border-t border-white/5 mt-1 rounded-lg text-sm text-[#FF7A7A] hover:bg-[#FF5252]/10"><LogOut className="w-4 h-4"/>Se déconnecter</button>
       </div>}
       </div>
-    </div>
+    </header>
   );
 }
 

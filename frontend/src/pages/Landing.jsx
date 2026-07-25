@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Play, Check, Shield, BookOpen, Activity, Brain, Banknote, User, Building2, TrendingUp, Trophy, FlaskConical, Target } from "lucide-react";
+import { ArrowRight, Play, Check, Shield, BookOpen, Activity, Brain, Banknote, User, Building2, TrendingUp, Trophy, FlaskConical, Target, Menu, X } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { Candle, DashboardMock } from "@/components/CandleArt";
 import { openCookieSettings } from "@/components/CookieConsent";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { PLANS, formatBillingPrice } from "@/config/billing";
+import { useI18n } from "@/context/I18nContext";
 
 const fade = {
   hidden: { opacity: 0, y: 30 },
@@ -22,9 +23,14 @@ const propFirmLogos = [
 ];
 
 export default function Landing() {
+  const { language } = useI18n();
   const [mx, setMx] = useState(0);
   const [my, setMy] = useState(0);
   const [activeStory, setActiveStory] = useState(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuButtonRef = useRef(null);
+  const mobileMenuPanelRef = useRef(null);
+  const mobileMenuFirstLinkRef = useRef(null);
   const stories = [
     { icon: BookOpen, label: "Journal", eyebrow: "CHAQUE TRADE COMPTE", title: "Arrête de répéter les mêmes erreurs.", text: "Transforme chaque décision en donnée exploitable. Repère les setups qui te paient, les sessions qui te coûtent et les habitudes qui fragilisent ton compte.", bullets: ["Historique structuré par compte", "Tags, notes et émotions", "Résultats comparables dans le temps"], color: "#B58BFF" },
     { icon: Shield, label: "Discipline", eyebrow: "PROTÈGE TON CAPITAL", title: "Une mauvaise journée ne doit plus effacer une bonne semaine.", text: "Suis tes limites, ton drawdown restant et le respect de ton plan avant que la pression ne prenne le contrôle.", bullets: ["Score de discipline", "Suivi des règles prop firm", "Alertes sur les comportements à risque"], color: "#00E676" },
@@ -38,13 +44,49 @@ export default function Landing() {
     return () => window.removeEventListener("mousemove", h);
   }, []);
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const menuButton = mobileMenuButtonRef.current;
+    document.body.style.overflow = "hidden";
+    window.requestAnimationFrame(() => mobileMenuFirstLinkRef.current?.focus());
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = mobileMenuPanelRef.current?.querySelectorAll("a[href], button:not([disabled])");
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      menuButton?.focus();
+    };
+  }, [mobileMenuOpen]);
+
+  const closeMobileMenu = () => setMobileMenuOpen(false);
+
   return (
     <div className="bg-[#050505] text-white overflow-hidden">
       {/* NAV */}
-      <nav className="fixed top-0 left-0 right-0 z-50 px-5 sm:px-6 lg:px-10 py-3.5 sm:py-4 bg-[#050505]/85 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Logo size="lg" />
-          <div className="hidden md:flex items-center gap-9 text-sm text-[#B5BBC9]">
+      <nav className="fixed top-0 left-0 right-0 z-50 px-3 sm:px-5 lg:px-10 py-2 lg:py-4 bg-[#050505]/85 backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-7xl mx-auto flex min-w-0 items-center justify-between gap-1.5 sm:gap-3">
+          <Logo size="lg" className="!h-8 !w-[124px] min-[360px]:!w-[136px] lg:!h-11 lg:!w-[196px]" />
+          <div className="hidden lg:flex items-center gap-9 text-sm text-[#B5BBC9]">
             <a href="#features" className="hover:text-white transition">Fonctionnalités</a>
             <a href="#how" className="hover:text-white transition">Fonctionnement</a>
             <Link to="/pricing" className="hover:text-white transition">Tarifs</Link>
@@ -52,16 +94,45 @@ export default function Landing() {
             <Link to="/faq" className="hover:text-white transition">FAQ</Link>
             <Link to="/contact" className="hover:text-white transition">Contact</Link>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-3">
-            <LanguageSwitcher compact />
-            <Link to="/login" className="text-xs sm:text-sm px-2.5 sm:px-4 py-2 text-[#9CA3AF] hover:text-white" data-testid="nav-login">Connexion</Link>
-            <Link to="/register" className="btn-primary text-xs sm:text-sm px-3.5 sm:px-5" data-testid="nav-register">Accès gratuit</Link>
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 lg:gap-3">
+            <div className="hidden lg:block"><LanguageSwitcher compact /></div>
+            <Link to="/login" className="hidden lg:inline-flex text-sm px-4 py-2 text-[#9CA3AF] hover:text-white" data-testid="nav-login">Connexion</Link>
+            <Link to="/register" className="btn-primary hidden h-11 min-[360px]:inline-flex lg:hidden items-center whitespace-nowrap !rounded-xl !px-3 text-[11px] sm:!px-4 sm:text-xs" data-testid="nav-register-mobile">Accès gratuit</Link>
+            <Link to="/register" className="btn-primary hidden lg:inline-flex text-sm px-5" data-testid="nav-register">Accès gratuit</Link>
+            <button
+              ref={mobileMenuButtonRef}
+              type="button"
+              data-testid="mobile-menu-button"
+              aria-label={mobileMenuOpen ? (language === "fr" ? "Fermer le menu" : "Close menu") : (language === "fr" ? "Ouvrir le menu" : "Open menu")}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="landing-mobile-menu"
+              onClick={() => setMobileMenuOpen((open) => !open)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-white transition hover:border-[#7C4DFF]/50 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 lg:hidden"
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
           </div>
         </div>
       </nav>
 
+      {mobileMenuOpen && <div className="fixed inset-0 top-[61px] z-40 lg:hidden">
+        <button type="button" aria-label={language === "fr" ? "Fermer le menu" : "Close menu"} onClick={closeMobileMenu} className="absolute inset-0 h-full w-full bg-black/75 backdrop-blur-sm" />
+        <div id="landing-mobile-menu" ref={mobileMenuPanelRef} role="dialog" aria-modal="true" aria-label={language === "fr" ? "Navigation mobile" : "Mobile navigation"} className="relative mx-3 mt-3 max-h-[calc(100dvh-85px)] overflow-y-auto rounded-2xl border border-white/10 bg-[#0A0B12]/95 p-3 shadow-2xl sm:mx-5 sm:ml-auto sm:max-w-sm">
+          <nav className="flex flex-col gap-1 text-sm">
+            <Link ref={mobileMenuFirstLinkRef} to="/register" onClick={closeMobileMenu} className="btn-primary mb-2 inline-flex h-12 items-center justify-center whitespace-nowrap !rounded-xl !px-4">Accès gratuit</Link>
+            <a href="#features" onClick={closeMobileMenu} className="rounded-xl px-4 py-3 text-[#D4D7DF] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">Fonctionnalités</a>
+            <a href="#how" onClick={closeMobileMenu} className="rounded-xl px-4 py-3 text-[#D4D7DF] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">Fonctionnement</a>
+            <Link to="/pricing" onClick={closeMobileMenu} className="rounded-xl px-4 py-3 text-[#D4D7DF] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">Tarifs</Link>
+            <Link to="/faq" onClick={closeMobileMenu} className="rounded-xl px-4 py-3 text-[#D4D7DF] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">FAQ</Link>
+            <Link to="/contact" onClick={closeMobileMenu} className="rounded-xl px-4 py-3 text-[#D4D7DF] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">Contact</Link>
+            <Link to="/login" onClick={closeMobileMenu} className="rounded-xl px-4 py-3 text-[#D4D7DF] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">Connexion</Link>
+            <div className="mt-2 flex items-center justify-between border-t border-white/10 px-4 pt-3"><span className="text-xs text-[#8E96A7]">{language === "fr" ? "Langue" : "Language"}</span><LanguageSwitcher /></div>
+          </nav>
+        </div>
+      </div>}
+
       {/* HERO */}
-      <section className="relative pt-28 sm:pt-32 lg:pt-36 pb-16 sm:pb-20 lg:pb-24 px-5 sm:px-6 lg:px-10">
+      <section className="relative px-4 pb-10 pt-[82px] min-[390px]:pt-[86px] sm:px-6 md:pb-20 md:pt-32 lg:px-10 lg:pb-24 lg:pt-36">
         {/* background atmospherics */}
         <div className="absolute inset-0 grid-floor opacity-60 pointer-events-none" />
         <div className="absolute inset-0 pointer-events-none">
@@ -70,26 +141,31 @@ export default function Landing() {
           <div className="absolute top-[40%] right-[30%] w-[400px] h-[400px] rounded-full blur-3xl opacity-15" style={{ background: "radial-gradient(circle, #FF4FD8, transparent 70%)" }} />
         </div>
 
-        <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-12 sm:gap-14 lg:gap-10 items-center relative z-10">
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-7 md:gap-14 lg:gap-10 items-center relative z-10">
           {/* LEFT */}
-          <motion.div initial="hidden" animate="show" variants={fade} className="lg:col-span-5 space-y-6 sm:space-y-7 text-center lg:text-left">
-            <motion.div custom={0} variants={fade} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass text-[10px] sm:text-[11px] font-mono uppercase tracking-widest text-[#B5BBC9]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00E676] pulse-glow shrink-0" /> Bêta publique · Accès gratuit sans carte bancaire
+          <motion.div initial="hidden" animate="show" variants={fade} className="lg:col-span-5 space-y-4 min-[390px]:space-y-5 md:space-y-7 text-center lg:text-left">
+            <motion.div custom={0} variants={fade} data-testid="hero-beta-badge" className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 font-mono text-[8px] uppercase tracking-[.1em] text-[#B5BBC9] glass min-[360px]:gap-2 min-[360px]:px-3 min-[360px]:text-[9px] md:text-[11px] md:tracking-widest">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#00E676] pulse-glow shrink-0" /><span className="md:hidden">Bêta gratuite · Sans carte bancaire</span><span className="hidden md:inline">Bêta publique · Accès gratuit sans carte bancaire</span>
             </motion.div>
-            <motion.h1 custom={1} variants={fade} className="text-4xl sm:text-6xl lg:text-7xl font-bold leading-[1.08] sm:leading-[1.02] tracking-tight">
-              <span className="text-gradient">Protège tes comptes financés.</span><br className="hidden sm:block" />{" "}
-              <span className="text-purple-grad">Transforme tes trades en progrès.</span>
+            <motion.h1 custom={1} variants={fade} data-testid="hero-title" className="mx-auto max-w-[720px] break-normal text-[40px] font-bold leading-[1.04] tracking-[-0.035em] min-[430px]:text-[44px] sm:text-[46px] md:text-6xl md:leading-[1.02] lg:mx-0 lg:text-7xl lg:tracking-tight">
+              <span className="block text-gradient">Protège tes comptes financés.</span>
+              <span className="mt-1 block text-purple-grad md:mt-0">Transforme tes trades en progrès.</span>
             </motion.h1>
-            <motion.p custom={2} variants={fade} className="text-base sm:text-lg text-[#9CA3AF] max-w-md mx-auto lg:mx-0 leading-relaxed">
-              PipsEvo révèle ce qui renforce ta performance, ce qui fragilise ta discipline et ce qui te rapproche réellement d'un payout.
+            <motion.p custom={2} variants={fade} data-testid="hero-copy" className="mx-auto max-w-[390px] text-[15px] leading-relaxed text-[#AAB0BE] md:max-w-md md:text-lg md:text-[#9CA3AF] lg:mx-0">
+              <span className="md:hidden">Analyse tes performances, renforce ta discipline et protège tes comptes financés.</span><span className="hidden md:inline">PipsEvo révèle ce qui renforce ta performance, ce qui fragilise ta discipline et ce qui te rapproche réellement d'un payout.</span>
             </motion.p>
-            <motion.div custom={3} variants={fade} className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
-              <Link to="/register" className="btn-primary inline-flex items-center justify-center gap-2 text-base w-full sm:w-auto" data-testid="hero-cta-start">Commencer gratuitement <ArrowRight className="w-4 h-4"/></Link>
-              <a href="#story" className="btn-ghost inline-flex items-center justify-center gap-2 text-base w-full sm:w-auto" data-testid="hero-cta-demo"><Play className="w-4 h-4 fill-white"/> Découvrir PipsEvo</a>
+            <motion.div custom={3} variants={fade} className="flex flex-col items-center justify-center gap-3 md:flex-row lg:justify-start">
+              <div className="w-full md:w-auto"><Link to="/register" className="btn-primary inline-flex h-[54px] w-full items-center justify-center gap-2 !rounded-[14px] !px-5 text-[15px] md:h-auto md:w-auto md:!px-[26px] md:text-base" data-testid="hero-cta-start">Commencer gratuitement <ArrowRight className="w-4 h-4"/></Link><p className="mt-2 text-center text-[10px] text-[#777F90] md:hidden">Aucune carte bancaire requise pendant la bêta.</p></div>
+              <a href="#story" className="btn-ghost inline-flex h-[54px] w-full items-center justify-center gap-2 !px-5 text-[15px] md:h-auto md:w-auto md:!px-[26px] md:text-base" data-testid="hero-cta-demo"><Play className="w-4 h-4 fill-white"/> Découvrir PipsEvo</a>
             </motion.div>
-            <motion.div custom={4} variants={fade} className="pt-4 sm:pt-6">
-              <div className="text-[11px] font-mono uppercase tracking-widest text-[#6B7280] mb-3">Comptes de prop firms compatibles</div>
-              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-7 gap-y-5 min-h-7">
+            <motion.div custom={4} variants={fade} className="pt-1 md:pt-6">
+              <div className="mb-2 font-mono text-[9px] uppercase tracking-[.16em] text-[#777F90] md:mb-3 md:text-[11px] md:tracking-widest md:text-[#6B7280]">Comptes de prop firms compatibles</div>
+              <div data-testid="mobile-prop-logos" className="mx-auto grid max-w-[360px] grid-cols-2 items-center justify-items-center gap-x-4 gap-y-4 min-[390px]:grid-cols-3 md:hidden">
+                {propFirmLogos.map((firm) => (
+                  <img key={`mobile-${firm.name}`} src={firm.src} alt={firm.alt} loading="lazy" referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.style.display = "none"; }} className="h-[25px] w-auto max-w-[120px] object-contain grayscale brightness-125 opacity-65 transition-opacity duration-200 hover:opacity-100 min-[390px]:h-[27px] min-[390px]:max-w-[112px]" />
+                ))}
+              </div>
+              <div className="hidden flex-wrap items-center justify-center gap-x-7 gap-y-5 min-h-7 md:flex lg:justify-start">
                 {propFirmLogos.map((firm) => (
                   <img
                     key={firm.name}
@@ -98,7 +174,7 @@ export default function Landing() {
                     loading="lazy"
                     referrerPolicy="no-referrer"
                     onError={(e) => { e.currentTarget.style.display = "none"; }}
-                    className="h-[22px] sm:h-6 w-auto max-w-[118px] object-contain grayscale brightness-125 opacity-55 transition-opacity duration-200 hover:opacity-100"
+                    className="h-6 w-auto max-w-[118px] object-contain grayscale brightness-125 opacity-55 transition-opacity duration-200 hover:opacity-100"
                   />
                 ))}
               </div>
@@ -120,7 +196,7 @@ export default function Landing() {
           </motion.div>
 
           {/* Mobile-only: lightweight candle accent instead of the full dashboard mockup */}
-          <div className="lg:hidden flex justify-center gap-4 pt-2">
+          <div className="hidden md:flex lg:hidden justify-center gap-4 pt-2">
             <div className="floaty"><Candle color="purple" height={70} rot={-6} /></div>
             <div className="floaty-slow" style={{ animationDelay: "0.6s" }}><Candle color="green" height={90} rot={5} /></div>
             <div className="floaty" style={{ animationDelay: "1.1s" }}><Candle color="pink" height={60} rot={-3} /></div>
