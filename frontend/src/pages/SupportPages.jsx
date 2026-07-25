@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, Mail, ShieldCheck } from "lucide-react";
-import { Logo, LogoMark } from "@/components/Logo";
-import { useAuth } from "@/context/AuthContext";
+import { Logo } from "@/components/Logo";
+import PublicHeader from "@/components/PublicHeader";
 import { contact } from "@/lib/api";
 import { toast } from "sonner";
 import { openCookieSettings } from "@/components/CookieConsent";
-import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { BILLING_CONFIG, COMMERCIAL_PHASES, PLANS, formatBillingPrice, launchOfferCopy } from "@/config/billing";
 import { captureCommercialEvent } from "@/lib/commercialAnalytics";
 
@@ -20,29 +19,11 @@ const faqs = [
   ["Puis-je résilier à tout moment ?", "Aucun abonnement payant n'est proposé pendant la bêta. Les modalités de résiliation seront affichées clairement avant toute future souscription."],
 ];
 
-function ConnectedPricingHeader({ user }) {
-  return <header className="sticky top-0 z-30 h-[60px] border-b border-white/5 bg-[#050505]/90 backdrop-blur-xl md:h-[68px]">
-    <div className="mx-auto flex h-full max-w-6xl items-center justify-between gap-2 px-3 sm:px-4 md:px-5">
-      <Link to="/app/dashboard" aria-label="Retour au tableau de bord" className="grid h-9 w-9 shrink-0 place-items-center rounded-xl transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70">
-        <LogoMark size="md" className="!h-6 !w-6 md:!h-8 md:!w-8" />
-      </Link>
-      <nav aria-label="Navigation du compte" className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-        <Link to="/app/dashboard" className="hidden rounded-xl px-3 py-2 text-sm text-[#B5BBC9] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 sm:inline-flex">Dashboard</Link>
-        <LanguageSwitcher compact />
-        <Link to="/app/settings" aria-label="Ouvrir les paramètres du profil" className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#0D1020] px-1.5 py-1 transition hover:border-[#7C4DFF]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:gap-2 md:px-2 md:py-1.5">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] text-[10px] font-bold md:h-7 md:w-7 md:text-xs">{(user?.name || user?.email || "U")[0].toUpperCase()}</span>
-          <span className="hidden max-w-36 truncate text-sm font-medium md:block">{user?.name || user?.email}</span>
-        </Link>
-      </nav>
-    </div>
-  </header>;
-}
-
-function PublicLayout({ title, subtitle, children, compactWhenAuthenticated = false }) {
-  const { user } = useAuth();
+function PublicLayout({ title, subtitle, children }) {
+  const longTitle = title.length > 28;
   return <div className="min-h-screen bg-[#050505] text-white">
-    {compactWhenAuthenticated && user ? <ConnectedPricingHeader user={user} /> : <header className="border-b border-white/5 bg-[#050505]/90 backdrop-blur-xl"><div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between"><Logo/><nav className="flex items-center gap-2 sm:gap-4 text-sm text-[#9CA3AF]"><Link to="/pricing" className="hidden sm:inline hover:text-white">Tarifs</Link><Link to="/faq" className="hidden sm:inline hover:text-white">FAQ</Link><Link to="/contact" className="hidden md:inline hover:text-white">Contact</Link><LanguageSwitcher compact/><Link to="/login" className="btn-primary py-2">Connexion</Link></nav></div></header>}
-    <main className="max-w-5xl mx-auto px-5 py-14"><div className="text-center mb-10"><h1 className="text-3xl sm:text-5xl font-bold text-gradient">{title}</h1><p className="text-[#9CA3AF] mt-3 max-w-2xl mx-auto">{subtitle}</p></div>{children}</main>
+    <PublicHeader />
+    <main id="main-content" className="mx-auto max-w-5xl px-5 pb-14 pt-14 sm:px-6 md:py-16"><div className="mb-9 text-center sm:mb-10"><h1 className={`${longTitle ? "text-[36px] min-[390px]:text-[40px]" : "text-[40px] min-[390px]:text-[44px]"} mx-auto max-w-4xl break-normal font-bold leading-[1.08] text-gradient sm:text-5xl sm:leading-[1.05]`}>{title}</h1><p className="mx-auto mt-4 max-w-2xl text-[19px] leading-relaxed text-[#AAB0BE] min-[390px]:text-xl md:text-lg md:text-[#9CA3AF]">{subtitle}</p></div>{children}</main>
     <Footer/>
   </div>;
 }
@@ -64,7 +45,7 @@ export function PricingPage(){
   useEffect(()=>captureCommercialEvent("pricing_viewed",{phase}),[phase]);
   const title=isBeta?"La bêta est gratuite":isLaunch?"L’offre de lancement PipsEvo":"Choisis ton plan PipsEvo";
   const subtitle=isBeta?"Profite gratuitement des fonctionnalités essentielles de PipsEvo pendant la phase bêta.":isLaunch?`${launch.title} ${launch.detail}`:"Deux formules claires, sans engagement et adaptées à ton rythme.";
-  return <PublicLayout title={title} subtitle={subtitle} compactWhenAuthenticated>
+  return <PublicLayout title={title} subtitle={subtitle}>
     {isBeta&&<div className="mx-auto mb-8 max-w-3xl rounded-2xl border border-[#00E676]/20 bg-[#00E676]/[0.05] p-5 text-center"><div className="text-xs font-mono uppercase tracking-[.2em] text-[#00E676]">Bêta gratuite</div><p className="mt-2 text-sm text-[#B5BBC9]">PipsEvo est actuellement disponible gratuitement pendant sa phase bêta. Certaines fonctionnalités avancées et automatiques seront disponibles lors du lancement officiel.</p></div>}
     {isLaunch&&<div className="mx-auto mb-8 max-w-3xl rounded-2xl border border-[#7C4DFF]/30 bg-gradient-to-r from-[#7C4DFF]/10 to-[#4F8CFF]/10 p-5 text-center"><div className="text-xs font-mono uppercase tracking-[.2em] text-[#C8AEFF]">Offre réservée aux utilisateurs ayant rejoint la bêta</div><p className="mt-2 text-sm text-white">Sans engagement. Annulation possible à tout moment.</p>{BILLING_CONFIG.launchOfferEndDate&&<p className="mt-2 text-xs text-[#9CA3AF]">Offre valable jusqu’au {new Date(BILLING_CONFIG.launchOfferEndDate).toLocaleDateString("fr-FR")}.</p>}</div>}
     <div className="mb-5 text-center text-xs font-mono uppercase tracking-[.2em] text-[#7E8798]">{isBeta?"Tarifs prévus après la bêta":"Abonnements mensuels"}</div>
