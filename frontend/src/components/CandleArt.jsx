@@ -8,4 +8,4 @@ export const Candle = ({ color = "purple", height = 80, className = "", rot = 0,
 };
 
 // Compatibilité avec les sections historiques : la source visuelle est désormais unique.
-export const DashboardMock = (props) => <ProductDashboardPreview activeSection="overview" tilted {...props}/>;
+export const DashboardMock = (props) => <ProductDashboardPreview variant="hero" {...props}/>;

@@ -134,7 +134,7 @@ export default function Landing() {
       </div>}
 
       {/* HERO */}
-      <section className="relative px-4 pb-10 pt-[82px] min-[390px]:pt-[86px] sm:px-6 md:pb-20 md:pt-32 lg:px-10 lg:pb-24 lg:pt-36">
+      <section data-testid="landing-hero" className="relative px-4 pb-10 pt-[82px] min-[390px]:pt-[86px] sm:px-6 md:pb-20 md:pt-32 lg:flex lg:min-h-screen lg:items-center lg:px-8 lg:pb-10 lg:pt-[104px] xl:px-10 xl:pb-12 xl:pt-[110px]">
         {/* background atmospherics */}
         <div className="absolute inset-0 grid-floor opacity-60 pointer-events-none" />
         <div className="absolute inset-0 pointer-events-none">
@@ -143,7 +143,7 @@ export default function Landing() {
           <div className="absolute top-[40%] right-[30%] w-[400px] h-[400px] rounded-full blur-3xl opacity-15" style={{ background: "radial-gradient(circle, #FF4FD8, transparent 70%)" }} />
         </div>
 
-        <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-7 md:gap-14 lg:gap-10 items-center relative z-10">
+        <div className="relative z-10 mx-auto grid w-full max-w-[1500px] items-center gap-7 md:gap-14 lg:grid-cols-12 lg:gap-8 xl:gap-12">
           {/* LEFT */}
           <motion.div initial="hidden" animate="show" variants={fade} className="lg:col-span-5 space-y-4 min-[390px]:space-y-5 md:space-y-7 text-center lg:text-left">
             <motion.div custom={0} variants={fade} data-testid="hero-beta-badge" className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 font-mono text-[8px] uppercase tracking-[.1em] text-[#B5BBC9] glass min-[360px]:gap-2 min-[360px]:px-3 min-[360px]:text-[9px] md:text-[11px] md:tracking-widest">
@@ -184,7 +184,7 @@ export default function Landing() {
           </motion.div>
 
           {/* RIGHT — Tilted 3D dashboard mockup with floating candles (desktop/tablet only — too dense to stay legible on phones) */}
-          <motion.div initial={{ opacity: 0, scale: 0.92, y: 40 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 1.2, ease: [0.22,1,0.36,1] }} className="hidden lg:block lg:col-span-7 relative">
+          <motion.div initial={{ opacity: 0, scale: 0.92, y: 40 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 1.2, ease: [0.22,1,0.36,1] }} className="relative hidden lg:col-span-7 lg:block">
             <div style={{ transform: `translate(${-mx * 0.6}px, ${-my * 0.6}px)` }}>
               <DashboardMock />
             </div>
@@ -197,12 +197,8 @@ export default function Landing() {
             <div className="absolute right-[18%] -bottom-2 floaty-slow" style={{ animationDelay: "0.9s" }}><Candle color="green" height={70} rot={4} /></div>
           </motion.div>
 
-          {/* Mobile-only: lightweight candle accent instead of the full dashboard mockup */}
-          <div className="hidden md:flex lg:hidden justify-center gap-4 pt-2">
-            <div className="floaty"><Candle color="purple" height={70} rot={-6} /></div>
-            <div className="floaty-slow" style={{ animationDelay: "0.6s" }}><Candle color="green" height={90} rot={5} /></div>
-            <div className="floaty" style={{ animationDelay: "1.1s" }}><Candle color="pink" height={60} rot={-3} /></div>
-          </div>
+          {/* Même produit sur petits écrans, recadré sur le contenu principal sans sidebar. */}
+          <div className="mx-auto mt-3 w-full max-w-[760px] lg:hidden"><ProductDashboardPreview variant="mobile" /></div>
         </div>
       </section>
 
@@ -308,7 +304,7 @@ export default function Landing() {
           </div>
           {/* Même source produit que le hero, sans recréer une seconde interface. */}
           <div className="hidden lg:block relative">
-            <div style={{ transform: "scale(0.78)", transformOrigin: "top left" }}><ProductDashboardPreview activeSection="overview"/></div>
+            <ProductDashboardPreview variant="compact" />
             <div className="absolute -left-4 top-10 floaty"><Candle color="green" height={90} rot={-4} /></div>
             <div className="absolute right-10 -top-4 floaty-slow"><Candle color="pink" height={110} rot={8} /></div>
             <div className="absolute right-0 bottom-4 floaty"><Candle color="purple" height={70} rot={-6} /></div>

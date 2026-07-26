@@ -1,56 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { dashboard, trades, accounts as accAPI } from "@/lib/api";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
 import { Plus, TrendingUp, Shield, Target, ArrowDownRight, Sparkles, Calendar, BarChart3, RefreshCw } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { useAuth } from "@/context/AuthContext";
 import useAppSettings from "@/hooks/useAppSettings";
 import CommercialBanner from "@/components/CommercialBanner";
+import { DashboardKpiCard } from "@/components/dashboard/DashboardVisuals";
 
 const EMPTY_KPIS = { funded_capital: 0, total_profit: 0, remaining_drawdown: 0, estimated_payout: 0, discipline_score: 0, trader_score: 0, total_payouts: 0, active_accounts: 0, total_trades: 0 };
 const EMPTY_METRICS = { winrate: 0, profit_factor: 0, avg_win: 0, avg_loss: 0, plan_respect_rate: 0 };
-
-const kpiColors = {
-  green: { stroke: "#00E676", id: "g-green" },
-  purple: { stroke: "#B58BFF", id: "g-purple" },
-  blue:   { stroke: "#4F8CFF", id: "g-blue" },
-  red:    { stroke: "#FF5252", id: "g-red" },
-};
-
-const sparkData = (seed, down) => {
-  const out = []; let v = 12;
-  for (let i = 0; i < 24; i++) { v += (Math.sin(seed*1.7 + i*0.7) + 0.55 + (down ? -0.5 : 0.35)) * 1.3; out.push({ x: i, y: Math.max(1, v) }); }
-  return out;
-};
-
-const KPICard = ({ label, value, sub, sparkColor = "green", icon: Icon, testid }) => {
-  const c = kpiColors[sparkColor];
-  return (
-    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -3 }} transition={{ duration: .25 }} className="card-elev p-4 sm:p-5 relative overflow-hidden h-[160px] sm:h-[180px] group hover:border-white/15" data-testid={testid}>
-      <div className="absolute -top-16 -right-16 w-36 h-36 rounded-full blur-3xl opacity-10 group-hover:opacity-20 transition" style={{background:c.stroke}}/>
-      <div className="flex items-center justify-between">
-        <div className="text-xs sm:text-sm text-[#9CA3AF]">{label}</div>
-        {Icon && <Icon className="w-4 h-4 shrink-0" style={{ color: c.stroke }} />}
-      </div>
-      <div className="text-[26px] sm:text-[34px] font-bold font-numeric mt-3 leading-none" style={{ color: sparkColor === "red" ? "#FF5252" : sparkColor === "green" ? "#00E676" : "white" }}>{value}</div>
-      {sub && <div className="text-xs mt-2 flex items-center gap-1" style={{ color: c.stroke }}>◆ <span>{sub}</span></div>}
-      <div className="absolute left-0 right-0 bottom-0 h-[58px] pointer-events-none">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={sparkData(label.length, sparkColor === "red")} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="g-green" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#00E676" stopOpacity="0.55"/><stop offset="100%" stopColor="#00E676" stopOpacity="0"/></linearGradient>
-              <linearGradient id="g-purple" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#B58BFF" stopOpacity="0.55"/><stop offset="100%" stopColor="#B58BFF" stopOpacity="0"/></linearGradient>
-              <linearGradient id="g-blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4F8CFF" stopOpacity="0.55"/><stop offset="100%" stopColor="#4F8CFF" stopOpacity="0"/></linearGradient>
-              <linearGradient id="g-red" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#FF5252" stopOpacity="0.55"/><stop offset="100%" stopColor="#FF5252" stopOpacity="0"/></linearGradient>
-            </defs>
-            <Area type="monotone" dataKey="y" stroke={c.stroke} strokeWidth={2} fill={`url(#${c.id})`} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-    </motion.div>
-  );
-};
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -119,11 +78,11 @@ export default function Dashboard() {
       {loading && <div className="grid grid-cols-2 md:grid-cols-5 gap-3">{Array.from({length:5}).map((_,i)=><div key={i} className="h-40 rounded-2xl bg-white/[0.035] animate-pulse"/>)}</div>}
 
       {!loading && <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        <KPICard label="Profit net" value={money(periodProfit,{signDisplay:"always"})} sub={`Sur les ${period} derniers jours`} sparkColor={periodProfit < 0 ? "red" : "green"} icon={TrendingUp} testid="kpi-profit" />
-        <KPICard label="Score de discipline" value={<><span>{k.discipline_score}</span><span className="text-[#9CA3AF] text-base"> /100</span></>} sub={`${m.plan_respect_rate}% du plan respecté`} sparkColor="purple" icon={BarChart3} testid="kpi-discipline" />
-        <KPICard label="Comptes actifs" value={k.active_accounts} sub={`${k.active_accounts} compte${k.active_accounts>1?"s":""} suivi${k.active_accounts>1?"s":""}`} sparkColor="blue" icon={Shield} testid="kpi-accounts" />
-        <KPICard label="Win Rate" value={`${periodWinrate}%`} sub={`${tradeList.length} trades sur la période`} sparkColor="green" icon={Target} testid="kpi-winrate" />
-        <KPICard label="Drawdown restant" value={money(k.remaining_drawdown)} sub="Marge de risque disponible" sparkColor="red" icon={ArrowDownRight} testid="kpi-dd" />
+        <DashboardKpiCard label="Profit net" value={money(periodProfit,{signDisplay:"always"})} sub={`Sur les ${period} derniers jours`} sparkColor={periodProfit < 0 ? "red" : "green"} icon={TrendingUp} testid="kpi-profit" />
+        <DashboardKpiCard label="Score de discipline" value={<><span>{k.discipline_score}</span><span className="text-[#9CA3AF] text-base"> /100</span></>} sub={`${m.plan_respect_rate}% du plan respecté`} sparkColor="purple" icon={BarChart3} testid="kpi-discipline" />
+        <DashboardKpiCard label="Comptes actifs" value={k.active_accounts} sub={`${k.active_accounts} compte${k.active_accounts>1?"s":""} suivi${k.active_accounts>1?"s":""}`} sparkColor="blue" icon={Shield} testid="kpi-accounts" />
+        <DashboardKpiCard label="Win Rate" value={`${periodWinrate}%`} sub={`${tradeList.length} trades sur la période`} sparkColor="green" icon={Target} testid="kpi-winrate" />
+        <DashboardKpiCard label="Drawdown restant" value={money(k.remaining_drawdown)} sub="Marge de risque disponible" sparkColor="red" icon={ArrowDownRight} testid="kpi-dd" />
       </div>}
 
       <div className="grid lg:grid-cols-3 gap-4">
