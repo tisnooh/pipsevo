@@ -4,6 +4,8 @@ import { motion } from "framer-motion";
 import { ArrowRight, Play, Check, Shield, BookOpen, Activity, Brain, Banknote, User, Building2, TrendingUp, Trophy, FlaskConical, Target, Menu, X } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { Candle, DashboardMock } from "@/components/CandleArt";
+import ProductDashboardPreview from "@/components/ProductDashboardPreview";
+import TradingViewChart from "@/components/TradingViewChart";
 import { openCookieSettings } from "@/components/CookieConsent";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { PLANS, formatBillingPrice } from "@/config/billing";
@@ -32,11 +34,11 @@ export default function Landing() {
   const mobileMenuPanelRef = useRef(null);
   const mobileMenuFirstLinkRef = useRef(null);
   const stories = [
-    { icon: BookOpen, label: "Journal", eyebrow: "CHAQUE TRADE COMPTE", title: "Arrête de répéter les mêmes erreurs.", text: "Transforme chaque décision en donnée exploitable. Repère les setups qui te paient, les sessions qui te coûtent et les habitudes qui fragilisent ton compte.", bullets: ["Historique structuré par compte", "Tags, notes et émotions", "Résultats comparables dans le temps"], color: "#B58BFF" },
-    { icon: Shield, label: "Discipline", eyebrow: "PROTÈGE TON CAPITAL", title: "Une mauvaise journée ne doit plus effacer une bonne semaine.", text: "Suis tes limites, ton drawdown restant et le respect de ton plan avant que la pression ne prenne le contrôle.", bullets: ["Score de discipline", "Suivi des règles prop firm", "Alertes sur les comportements à risque"], color: "#00E676" },
-    { icon: FlaskConical, label: "Backtest", eyebrow: "PROUVE TON EDGE", title: "Teste avant de risquer ton compte financé.", text: "Simule ta stratégie, mesure son espérance et son drawdown, puis décide avec des chiffres plutôt qu'avec une impression.", bullets: ["Capital et risque composés", "Espérance en R", "Drawdown maximal simulé"], color: "#4F8CFF" },
-    { icon: Brain, label: "Coach IA", eyebrow: "COMPRENDS TES PATTERNS", title: "Tes données racontent une histoire. L'IA t'aide à la lire.", text: "Le coach analyse ton processus et transforme tes trades en actions concrètes, sans donner de signaux ni prédire le marché.", bullets: ["Analyse comportementale", "Questions sur tes performances", "Plan d'action personnalisé"], color: "#FF4FD8" },
-    { icon: Banknote, label: "Payouts", eyebrow: "PENSE LONG TERME", title: "Ne cherche plus seulement à gagner. Apprends à durer.", text: "Visualise tes étapes vers le prochain payout tout en conservant un coussin de sécurité adapté aux règles de tes comptes.", bullets: ["Suivi des retraits", "Projection du prochain payout", "Vue consolidée multi-comptes"], color: "#FFB855" },
+    { icon: BookOpen, section: "journal", label: "Journal", eyebrow: "CHAQUE TRADE COMPTE", title: "Arrête de répéter les mêmes erreurs.", text: "Transforme chaque décision en donnée exploitable. Repère les setups qui te paient, les sessions qui te coûtent et les habitudes qui fragilisent ton compte.", bullets: ["Historique structuré par compte", "Tags, notes et émotions", "Résultats comparables dans le temps"], color: "#B58BFF" },
+    { icon: Shield, section: "discipline", label: "Discipline", eyebrow: "PROTÈGE TON CAPITAL", title: "Une mauvaise journée ne doit plus effacer une bonne semaine.", text: "Suis tes limites, ton drawdown restant et le respect de ton plan avant que la pression ne prenne le contrôle.", bullets: ["Score de discipline", "Suivi des règles prop firm", "Alertes sur les comportements à risque"], color: "#00E676" },
+    { icon: FlaskConical, section: "backtest", label: "Backtest", eyebrow: "PROUVE TON EDGE", title: "Teste avant de risquer ton compte financé.", text: "Simule ta stratégie, mesure son espérance et son drawdown, puis décide avec des chiffres plutôt qu'avec une impression.", bullets: ["Capital et risque composés", "Espérance en R", "Drawdown maximal simulé"], color: "#4F8CFF" },
+    { icon: Brain, section: "coach", label: "Coach IA", eyebrow: "COMPRENDS TES PATTERNS", title: "Tes données racontent une histoire. L'IA t'aide à la lire.", text: "Le coach analyse ton processus et transforme tes trades en actions concrètes, sans donner de signaux ni prédire le marché.", bullets: ["Analyse comportementale", "Questions sur tes performances", "Plan d'action personnalisé"], color: "#FF4FD8" },
+    { icon: Banknote, section: "payouts", label: "Payouts", eyebrow: "PENSE LONG TERME", title: "Ne cherche plus seulement à gagner. Apprends à durer.", text: "Visualise tes étapes vers le prochain payout tout en conservant un coussin de sécurité adapté aux règles de tes comptes.", bullets: ["Suivi des retraits", "Projection du prochain payout", "Vue consolidée multi-comptes"], color: "#FFB855" },
   ];
   useEffect(() => {
     const h = (e) => { setMx((e.clientX / window.innerWidth - 0.5) * 18); setMy((e.clientY / window.innerHeight - 0.5) * 18); };
@@ -304,9 +306,9 @@ export default function Landing() {
             </div>
             <Link to="/register" className="btn-ghost inline-flex items-center gap-2 mt-8" data-testid="cta-features">Découvrir les fonctionnalités <ArrowRight className="w-4 h-4"/></Link>
           </div>
-          {/* Dashboard preview — desktop/tablet only, same reasoning as hero */}
+          {/* Même source produit que le hero, sans recréer une seconde interface. */}
           <div className="hidden lg:block relative">
-            <div style={{ transform: "scale(0.78)", transformOrigin: "top left" }}><DashboardMock /></div>
+            <div style={{ transform: "scale(0.78)", transformOrigin: "top left" }}><ProductDashboardPreview activeSection="overview"/></div>
             <div className="absolute -left-4 top-10 floaty"><Candle color="green" height={90} rot={-4} /></div>
             <div className="absolute right-10 -top-4 floaty-slow"><Candle color="pink" height={110} rot={8} /></div>
             <div className="absolute right-0 bottom-4 floaty"><Candle color="purple" height={70} rot={-6} /></div>
@@ -340,14 +342,7 @@ export default function Landing() {
             </div>
             <div className="relative p-6 sm:p-10 flex items-center justify-center overflow-hidden bg-[#080912]">
               <div className="absolute inset-0 opacity-30" style={{background:`radial-gradient(circle at 50% 50%, ${stories[activeStory].color}55, transparent 65%)`}}/>
-              <div className="relative w-full max-w-lg card-flat p-5 sm:p-7 shadow-2xl">
-                <div className="flex items-center justify-between"><div className="text-sm font-semibold">PipsEvo · {stories[activeStory].label}</div><span className="w-2 h-2 rounded-full" style={{background:stories[activeStory].color,boxShadow:`0 0 14px ${stories[activeStory].color}`}}/></div>
-                <div className="grid grid-cols-3 gap-3 mt-6">
-                  {["Discipline","Survie","Payout"].map((x,i)=><div key={x} className="bg-[#0A0C14] border border-white/5 rounded-xl p-3"><div className="text-[9px] text-[#6B7280]">{x}</div><div className="text-lg font-bold font-mono mt-1" style={{color:i===activeStory%3?stories[activeStory].color:"white"}}>{[94,87,62][i]}<span className="text-[9px] text-[#6B7280]">%</span></div></div>)}
-                </div>
-                <div className="mt-4 bg-[#0A0C14] border border-white/5 rounded-xl p-4"><div className="text-[10px] text-[#6B7280]">Progression sur 30 jours</div><svg viewBox="0 0 320 100" className="w-full h-32 mt-2"><path d="M0 86 C35 80 48 62 78 69 S120 46 155 52 S205 28 242 34 S286 13 320 8" fill="none" stroke={stories[activeStory].color} strokeWidth="3"/><path d="M0 86 C35 80 48 62 78 69 S120 46 155 52 S205 28 242 34 S286 13 320 8 L320 100 L0 100Z" fill={`${stories[activeStory].color}18`}/></svg></div>
-                <div className="mt-4 flex items-center gap-3 p-3 rounded-xl border border-white/5 bg-white/[0.02]"><Target className="w-5 h-5" style={{color:stories[activeStory].color}}/><div><div className="text-xs font-semibold">Action recommandée</div><div className="text-[10px] text-[#9CA3AF] mt-1">Respecte ton plan sur les 5 prochains trades.</div></div></div>
-              </div>
+              <ProductDashboardPreview activeSection={stories[activeStory].section} accent={stories[activeStory].color} className="relative w-full max-w-[640px]"/>
             </div>
           </motion.div>
         </div>
@@ -400,9 +395,9 @@ export default function Landing() {
       {/* HISTOIRES PRODUIT ALTERNÉES */}
       <section className="px-5 sm:px-6 lg:px-10 pb-16 sm:pb-24">
         <div className="max-w-7xl mx-auto space-y-20 sm:space-y-28">
-          <StoryChapter side="left" eyebrow="TABLEAU DE BORD" title="Vois le risque avant qu'il ne devienne une violation." text="Tous tes comptes, leur capital, leur drawdown restant et leur progression réunis dans une seule vue. Tu sais où ralentir et où ton processus reste solide." bullets={["Vue consolidée multi-comptes","Santé et survie de chaque compte","Progression vers les objectifs"]} color="#00E676" />
-          <StoryChapter side="right" eyebrow="JOURNAL DE TRADING" title="Le résultat dit combien. Le journal explique pourquoi." text="Un trade gagnant peut être une mauvaise décision. Un trade perdant peut respecter parfaitement ton plan. PipsEvo t'aide à séparer le processus du résultat." bullets={["Notes et contexte par trade","Comparaison par setup et session","Respect du plan mesuré"]} color="#B58BFF" />
-          <StoryChapter side="left" eyebrow="COACH COMPORTEMENTAL" title="Ne demande plus seulement “combien j'ai gagné ?” Demande “qu'est-ce qui se répète ?”" text="Interroge tes propres données pour identifier les écarts les plus coûteux et définir une action concrète pour ta prochaine session." bullets={["Questions basées sur ton historique","Analyse sans signaux de marché","Actions orientées discipline"]} color="#FF4FD8" />
+          <StoryChapter section="overview" side="left" eyebrow="TABLEAU DE BORD" title="Vois le risque avant qu'il ne devienne une violation." text="Tous tes comptes, leur capital, leur drawdown restant et leur progression réunis dans une seule vue. Tu sais où ralentir et où ton processus reste solide." bullets={["Vue consolidée multi-comptes","Santé et survie de chaque compte","Progression vers les objectifs"]} color="#00E676" />
+          <StoryChapter section="journal" side="right" eyebrow="JOURNAL DE TRADING" title="Le résultat dit combien. Le journal explique pourquoi." text="Un trade gagnant peut être une mauvaise décision. Un trade perdant peut respecter parfaitement ton plan. PipsEvo t'aide à séparer le processus du résultat." bullets={["Notes et contexte par trade","Comparaison par setup et session","Respect du plan mesuré"]} color="#B58BFF" />
+          <StoryChapter section="coach" side="left" eyebrow="COACH COMPORTEMENTAL" title="Ne demande plus seulement “combien j'ai gagné ?” Demande “qu'est-ce qui se répète ?”" text="Interroge tes propres données pour identifier les écarts les plus coûteux et définir une action concrète pour ta prochaine session." bullets={["Questions basées sur ton historique","Analyse sans signaux de marché","Actions orientées discipline"]} color="#FF4FD8" />
         </div>
       </section>
 
@@ -547,43 +542,7 @@ const TradingViewSection = () => {
   </section>;
 };
 
-const TradingViewChart = ({ symbol, interval }) => {
-  const container = useRef(null);
-  useEffect(() => {
-    const node = container.current;
-    if (!node) return;
-    node.innerHTML = '<div class="tradingview-widget-container__widget" style="height:calc(100% - 28px);width:100%"></div><div class="tradingview-widget-copyright" style="height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#6B7280"><a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank" style="color:#8B9DC3">Graphique</a>&nbsp;par TradingView</div>';
-    const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
-    script.type = "text/javascript";
-    script.async = true;
-    script.innerHTML = JSON.stringify({
-      autosize: true,
-      symbol,
-      interval,
-      timezone: "Europe/Paris",
-      theme: "dark",
-      style: "1",
-      locale: "fr",
-      backgroundColor: "#131722",
-      gridColor: "rgba(255,255,255,0.04)",
-      allow_symbol_change: true,
-      hide_side_toolbar: false,
-      hide_top_toolbar: false,
-      hide_legend: false,
-      hide_volume: false,
-      save_image: true,
-      calendar: false,
-      withdateranges: true,
-      support_host: "https://www.tradingview.com",
-    });
-    node.appendChild(script);
-    return () => { node.innerHTML = ""; };
-  }, [symbol, interval]);
-  return <div ref={container} className="tradingview-widget-container h-full w-full" />;
-};
-
-const StoryChapter = ({ side, eyebrow, title, text, bullets, color }) => (
+const StoryChapter = ({ section, side, eyebrow, title, text, bullets, color }) => (
   <motion.div initial={{opacity:0,y:35}} whileInView={{opacity:1,y:0}} viewport={{once:true,amount:.2}} transition={{duration:.7}} className="grid lg:grid-cols-2 gap-8 lg:gap-14 items-center">
     <div className={side === "right" ? "lg:order-2" : ""}>
       <div className="text-[11px] font-mono uppercase tracking-[0.25em]" style={{color}}>{eyebrow}</div>
@@ -593,12 +552,7 @@ const StoryChapter = ({ side, eyebrow, title, text, bullets, color }) => (
     </div>
     <div className={`relative ${side === "right" ? "lg:order-1" : ""}`}>
       <div className="absolute -inset-10 blur-3xl opacity-20 rounded-full" style={{background:color}}/>
-      <div className="relative card-elev p-5 sm:p-7">
-        <div className="flex items-center justify-between border-b border-white/5 pb-4"><div className="text-xs font-semibold">{eyebrow}</div><div className="flex gap-1.5"><span className="w-2 h-2 rounded-full bg-[#FF5252]"/><span className="w-2 h-2 rounded-full bg-[#FFB855]"/><span className="w-2 h-2 rounded-full bg-[#00E676]"/></div></div>
-        <div className="grid grid-cols-3 gap-3 mt-5">{[["Capital","$105,420"],["Discipline","94/100"],["Drawdown","$6,240"]].map(([k,v],i)=><div key={k} className="card-flat p-3"><div className="text-[9px] text-[#6B7280]">{k}</div><div className="text-sm sm:text-lg font-bold font-mono mt-1" style={{color:i===1?color:"white"}}>{v}</div></div>)}</div>
-        <div className="mt-4 card-flat p-4"><div className="flex justify-between text-[10px] text-[#6B7280]"><span>Évolution du processus</span><span style={{color}}>+12%</span></div><svg viewBox="0 0 420 130" className="w-full h-40"><path d="M0 110 C38 105 55 84 91 90 S142 63 185 70 S234 45 275 53 S340 25 420 18" fill="none" stroke={color} strokeWidth="3"/><path d="M0 110 C38 105 55 84 91 90 S142 63 185 70 S234 45 275 53 S340 25 420 18 L420 130 L0 130Z" fill={`${color}15`}/></svg></div>
-        <div className="mt-4 space-y-2">{["Plan respecté · London session","Trade documenté · +1.8R","Limite quotidienne préservée"].map((x,i)=><div key={x} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.025] border border-white/5"><span className="text-xs text-[#B5BBC9]">{x}</span><span className="text-[10px]" style={{color:i===1?"#00E676":color}}>{i===1?"GAIN":"VALIDÉ"}</span></div>)}</div>
-      </div>
+      <ProductDashboardPreview activeSection={section} accent={color}/>
     </div>
   </motion.div>
 );
