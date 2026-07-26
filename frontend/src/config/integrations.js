@@ -1,3 +1,5 @@
+import { FEATURE_FLAGS } from "@/config/billing";
+
 export const INTEGRATIONS = Object.freeze([
   {
     id: "manual",
@@ -14,10 +16,10 @@ export const INTEGRATIONS = Object.freeze([
     description: "Prévisualisation, validation, détection des doublons et annulation d’un lot importé.",
   },
   {
-    id: "metatrader",
-    name: "MetaTrader 4 / 5",
-    status: "requires_provider",
-    statusLabel: "API officielle requise",
+    id: "mt5",
+    name: "MetaTrader 5",
+    status: FEATURE_FLAGS.mt5AutoSync ? "available" : "coming_soon",
+    statusLabel: FEATURE_FLAGS.mt5AutoSync ? "Disponible" : "Bientôt disponible",
     description: "Architecture prévue, mais aucune synchronisation n’est annoncée sans accès officiel et tests de fiabilité.",
   },
   {

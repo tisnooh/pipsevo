@@ -15,6 +15,10 @@ export const BILLING_CONFIG = Object.freeze({
   }),
 });
 
+export const FEATURE_FLAGS = Object.freeze({
+  mt5AutoSync: process.env.REACT_APP_MT5_AUTO_SYNC_ENABLED === "true",
+});
+
 export const PLANS = Object.freeze({
   beta: {
     id: "beta",
@@ -81,6 +85,7 @@ export const FEATURES = Object.freeze({
   automaticReports: { beta: false, essential: false, pro: true },
   advancedExports: { beta: false, essential: false, pro: true },
   premiumAutomations: { beta: false, essential: false, pro: true },
+  mt5AutoSync: { beta: true, essential: false, pro: true },
 });
 
 export const PRICING_COMPARISON = Object.freeze([
@@ -93,6 +98,7 @@ export const PRICING_COMPARISON = Object.freeze([
       { label: "Saisie manuelle des trades", beta: "Illimitée", essential: "Illimitée", pro: "Illimitée" },
       { label: "Import CSV avec contrôle des doublons", beta: true, essential: false, pro: true },
       { label: "Export CSV et archive personnelle", beta: true, essential: true, pro: true },
+      { label: "Synchronisation automatique MetaTrader 5", beta: "planned", essential: false, pro: "planned" },
     ],
   },
   {
@@ -144,7 +150,10 @@ export const effectivePlan = (user) => {
 };
 
 export const hasPlanAccess = (plan, feature) => Boolean(FEATURES[feature]?.[plan]);
-export const canUseFeature = (user, feature) => hasPlanAccess(effectivePlan(user), feature);
+export const canUseFeature = (user, feature) => {
+  if (feature === "mt5AutoSync" && !FEATURE_FLAGS.mt5AutoSync) return false;
+  return hasPlanAccess(effectivePlan(user), feature);
+};
 
 export const launchOfferCopy = () => ({
   title: `Passe à PipsEvo Pro pour seulement ${formatBillingPrice(BILLING_CONFIG.prices.betaLaunch)} le premier mois.`,

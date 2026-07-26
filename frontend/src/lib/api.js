@@ -454,6 +454,26 @@ export const coach = {
   },
 };
 export const billing = { checkout: (plan = "pro") => api.post("/billing/checkout", null, { params: { plan } }) };
+
+export const integrationConnections = {
+  capabilities: () => api.get("/integrations/capabilities"),
+  list: () => api.get("/integrations/connections"),
+  testMT5: (credentials) => api.post("/integrations/mt5/test", credentials),
+  connectMT5: (credentials) => api.post("/integrations/mt5/connect", credentials),
+  sync: (connectionId) => api.post(`/integrations/${connectionId}/sync`),
+  reconnect: (connectionId, credentials) => api.post(`/integrations/${connectionId}/reconnect`, credentials),
+  disconnect: (connectionId) => api.delete(`/integrations/${connectionId}`),
+  joinWaitlist: async () => {
+    const user = await currentAuthUser();
+    const { data, error } = await supabase
+      .from("integration_waitlist")
+      .upsert({ user_id: user.id, platform: "mt5" }, { onConflict: "user_id,platform" })
+      .select()
+      .single();
+    check(error, "Impossible de rejoindre la liste d’attente");
+    return response(data);
+  },
+};
 export const contact = async (values) => {
   const { error } = await supabase.from("contact_messages").insert({ ...values, status: "new" });
   check(error, "Impossible d’envoyer le message");

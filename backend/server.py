@@ -18,6 +18,13 @@ import anthropic
 import asyncio
 import requests
 
+from integrations.config import IntegrationConfig
+from integrations.providers import provider_registry
+from integrations.repository import SupabaseIntegrationRepository
+from integrations.routes import build_integration_router
+from integrations.security import CredentialVault
+from integrations.service import IntegrationService
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -34,6 +41,28 @@ SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://zwnrmnoutwhazhgoomoi.supa
 SUPABASE_PUBLISHABLE_KEY = os.environ.get(
     'SUPABASE_PUBLISHABLE_KEY',
     'sb_publishable_HkC7wGQyOhDuUJFINnwE-g_U-Nxwt1a',
+)
+SUPABASE_SECRET_KEY = os.environ.get('SUPABASE_SECRET_KEY') or os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
+
+integration_config = IntegrationConfig.from_env()
+integration_vault = (
+    CredentialVault(
+        integration_config.encryption_keys,
+        integration_config.encryption_key_version,
+    )
+    if integration_config.encryption_keys
+    else None
+)
+integration_repository = SupabaseIntegrationRepository(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY,
+    SUPABASE_SECRET_KEY,
+)
+integration_service = IntegrationService(
+    integration_config,
+    provider_registry,
+    integration_repository,
+    integration_vault,
 )
 
 app = FastAPI(title="PipsEvo API")
@@ -852,6 +881,7 @@ async def health():
     return {"app": "PipsEvo", "api": "ok", "database": "ok"}
 
 
+api.include_router(build_integration_router(get_current_user, integration_service))
 app.include_router(api)
 
 app.add_middleware(
@@ -867,6 +897,10 @@ logging.basicConfig(level=logging.INFO)
 
 @app.on_event("startup")
 async def startup_db():
+    integration_config.validate_for_startup(
+        provider_registry.has(integration_config.provider),
+        bool(SUPABASE_SECRET_KEY),
+    )
     await db.command("ping")
     await ensure_database_indexes()
     logging.info("MongoDB connection and indexes are ready")

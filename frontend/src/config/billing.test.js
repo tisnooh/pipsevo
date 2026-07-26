@@ -13,6 +13,7 @@ describe("configuration commerciale PipsEvo", () => {
     expect(canUseFeature(null, "aiCoach")).toBe(true);
     expect(canUseFeature(null, "csvImport")).toBe(true);
     expect(canUseFeature(null, "automaticReports")).toBe(false);
+    expect(canUseFeature(null, "mt5AutoSync")).toBe(false);
   });
 
   test("Essential et Pro possèdent des droits distincts", () => {
