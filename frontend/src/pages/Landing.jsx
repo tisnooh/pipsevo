@@ -1,20 +1,19 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import gsap from "gsap";
 import { ArrowRight, Play, Check, Shield, BookOpen, Activity, Brain, Banknote, User, Building2, TrendingUp, Trophy, FlaskConical, Target, Menu, X } from "lucide-react";
 import { Logo } from "@/components/Logo";
-import { Candle, DashboardMock } from "@/components/CandleArt";
+import { Candle } from "@/components/CandleArt";
 import ProductDashboardPreview from "@/components/ProductDashboardPreview";
+import ProductDashboardMockup3D from "@/components/ProductDashboardMockup3D";
 import TradingViewChart from "@/components/TradingViewChart";
 import { openCookieSettings } from "@/components/CookieConsent";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { PLANS, formatBillingPrice } from "@/config/billing";
 import { useI18n } from "@/context/I18nContext";
 
-const fade = {
-  hidden: { opacity: 0, y: 30 },
-  show: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.7, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] } }),
-};
+const PipsEvoAtmosphere = lazy(() => import("@/components/PipsEvoAtmosphere"));
 
 const propFirmLogos = [
   { name: "Topstep", src: "https://cdn.prod.website-files.com/69e902b0a74d3d99a517f56d/6a299fdfbdc3a918fdf4b3ff_topstep_logo-white.webp", alt: "Topstep" },
@@ -26,13 +25,12 @@ const propFirmLogos = [
 
 export default function Landing() {
   const { language } = useI18n();
-  const [mx, setMx] = useState(0);
-  const [my, setMy] = useState(0);
   const [activeStory, setActiveStory] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuButtonRef = useRef(null);
   const mobileMenuPanelRef = useRef(null);
   const mobileMenuFirstLinkRef = useRef(null);
+  const heroRef = useRef(null);
   const stories = [
     { icon: BookOpen, section: "journal", label: "Journal", eyebrow: "CHAQUE TRADE COMPTE", title: "Arrête de répéter les mêmes erreurs.", text: "Transforme chaque décision en donnée exploitable. Repère les setups qui te paient, les sessions qui te coûtent et les habitudes qui fragilisent ton compte.", bullets: ["Historique structuré par compte", "Tags, notes et émotions", "Résultats comparables dans le temps"], color: "#B58BFF" },
     { icon: Shield, section: "discipline", label: "Discipline", eyebrow: "PROTÈGE TON CAPITAL", title: "Une mauvaise journée ne doit plus effacer une bonne semaine.", text: "Suis tes limites, ton drawdown restant et le respect de ton plan avant que la pression ne prenne le contrôle.", bullets: ["Score de discipline", "Suivi des règles prop firm", "Alertes sur les comportements à risque"], color: "#00E676" },
@@ -41,9 +39,12 @@ export default function Landing() {
     { icon: Banknote, section: "payouts", label: "Payouts", eyebrow: "PENSE LONG TERME", title: "Ne cherche plus seulement à gagner. Apprends à durer.", text: "Visualise tes étapes vers le prochain payout tout en conservant un coussin de sécurité adapté aux règles de tes comptes.", bullets: ["Suivi des retraits", "Projection du prochain payout", "Vue consolidée multi-comptes"], color: "#FFB855" },
   ];
   useEffect(() => {
-    const h = (e) => { setMx((e.clientX / window.innerWidth - 0.5) * 18); setMy((e.clientY / window.innerHeight - 0.5) * 18); };
-    window.addEventListener("mousemove", h);
-    return () => window.removeEventListener("mousemove", h);
+    const hero = heroRef.current;
+    if (!hero || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
+    const context = gsap.context(() => {
+      gsap.fromTo("[data-hero-reveal]", { autoAlpha: 0, y: 22 }, { autoAlpha: 1, y: 0, duration: 0.78, stagger: 0.09, ease: "power3.out", delay: 0.12 });
+    }, hero);
+    return () => context.revert();
   }, []);
 
   useEffect(() => {
@@ -85,10 +86,10 @@ export default function Landing() {
   return (
     <div className="bg-[#050505] text-white overflow-hidden">
       {/* NAV */}
-      <nav className="fixed top-0 left-0 right-0 z-50 px-3 sm:px-5 lg:px-10 py-2 lg:py-4 bg-[#050505]/85 backdrop-blur-xl border-b border-white/5">
+      <nav className="fixed top-0 left-0 right-0 z-50 px-3 sm:px-5 lg:px-4 xl:px-10 py-2 lg:py-4 bg-[#050505]/85 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto flex min-w-0 items-center justify-between gap-1.5 sm:gap-3">
-          <Logo size="lg" className="!h-8 !w-[124px] min-[360px]:!w-[136px] lg:!h-11 lg:!w-[196px]" />
-          <div className="hidden lg:flex items-center gap-9 text-sm text-[#B5BBC9]">
+          <Logo size="lg" className="!h-8 !w-[124px] min-[360px]:!w-[136px] lg:!h-9 lg:!w-[160px] xl:!h-11 xl:!w-[196px]" />
+          <div className="hidden lg:flex items-center gap-4 text-xs text-[#B5BBC9] xl:gap-9 xl:text-sm">
             <a href="#features" className="hover:text-white transition">Fonctionnalités</a>
             <a href="#how" className="hover:text-white transition">Fonctionnement</a>
             <Link to="/pricing" className="hover:text-white transition">Tarifs</Link>
@@ -96,11 +97,11 @@ export default function Landing() {
             <Link to="/faq" className="hover:text-white transition">FAQ</Link>
             <Link to="/contact" className="hover:text-white transition">Contact</Link>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 lg:gap-3">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 xl:gap-3">
             <div className="hidden lg:block"><LanguageSwitcher compact /></div>
-            <Link to="/login" className="hidden lg:inline-flex text-sm px-4 py-2 text-[#9CA3AF] hover:text-white" data-testid="nav-login">Connexion</Link>
+            <Link to="/login" className="hidden lg:inline-flex px-2 py-2 text-xs text-[#9CA3AF] hover:text-white xl:px-4 xl:text-sm" data-testid="nav-login">Connexion</Link>
             <Link to="/register" className="btn-primary hidden h-11 min-[360px]:inline-flex lg:hidden items-center whitespace-nowrap !rounded-xl !px-3 text-[11px] sm:!px-4 sm:text-xs" data-testid="nav-register-mobile">Accès gratuit</Link>
-            <Link to="/register" className="btn-primary hidden lg:inline-flex text-sm px-5" data-testid="nav-register">Accès gratuit</Link>
+            <Link to="/register" className="btn-primary hidden lg:inline-flex whitespace-nowrap px-4 text-xs xl:px-5 xl:text-sm" data-testid="nav-register">Accès gratuit</Link>
             <button
               ref={mobileMenuButtonRef}
               type="button"
@@ -134,33 +135,29 @@ export default function Landing() {
       </div>}
 
       {/* HERO */}
-      <section data-testid="landing-hero" className="relative px-4 pb-10 pt-[82px] min-[390px]:pt-[86px] sm:px-6 md:pb-20 md:pt-32 lg:flex lg:min-h-screen lg:items-center lg:px-8 lg:pb-10 lg:pt-[104px] xl:px-10 xl:pb-12 xl:pt-[110px]">
-        {/* background atmospherics */}
-        <div className="absolute inset-0 grid-floor opacity-60 pointer-events-none" />
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-[20%] left-[20%] w-[700px] h-[700px] rounded-full blur-3xl opacity-25" style={{ background: "radial-gradient(circle, #7C4DFF, transparent 70%)", transform: `translate(${mx}px, ${my}px)` }} />
-          <div className="absolute bottom-[10%] right-[10%] w-[600px] h-[600px] rounded-full blur-3xl opacity-20" style={{ background: "radial-gradient(circle, #4F8CFF, transparent 70%)", transform: `translate(${-mx}px, ${-my}px)` }} />
-          <div className="absolute top-[40%] right-[30%] w-[400px] h-[400px] rounded-full blur-3xl opacity-15" style={{ background: "radial-gradient(circle, #FF4FD8, transparent 70%)" }} />
-        </div>
+      <section ref={heroRef} data-testid="landing-hero" className="relative px-4 pb-10 pt-[82px] min-[390px]:pt-[86px] sm:px-6 md:pb-20 md:pt-32 lg:flex lg:min-h-[100svh] lg:items-center lg:px-8 lg:pb-10 lg:pt-[104px] xl:px-10 xl:pb-12 xl:pt-[110px]">
+        <Suspense fallback={<div className="pipsevo-atmosphere"><div className="pipsevo-atmosphere__fallback" /></div>}>
+          <PipsEvoAtmosphere />
+        </Suspense>
 
         <div className="relative z-10 mx-auto grid w-full max-w-[1500px] items-center gap-7 md:gap-14 lg:grid-cols-12 lg:gap-8 xl:gap-12">
           {/* LEFT */}
-          <motion.div initial="hidden" animate="show" variants={fade} className="lg:col-span-5 space-y-4 min-[390px]:space-y-5 md:space-y-7 text-center lg:text-left">
-            <motion.div custom={0} variants={fade} data-testid="hero-beta-badge" className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 font-mono text-[8px] uppercase tracking-[.1em] text-[#B5BBC9] glass min-[360px]:gap-2 min-[360px]:px-3 min-[360px]:text-[9px] md:text-[11px] md:tracking-widest">
+          <div className="hero-copy-stack lg:col-span-5 space-y-4 min-[390px]:space-y-5 md:space-y-7 text-center lg:text-left">
+            <div data-hero-reveal data-testid="hero-beta-badge" className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 font-mono text-[8px] uppercase tracking-[.1em] text-[#B5BBC9] glass min-[360px]:gap-2 min-[360px]:px-3 min-[360px]:text-[9px] md:text-[11px] md:tracking-widest">
               <span className="w-1.5 h-1.5 rounded-full bg-[#00E676] pulse-glow shrink-0" /><span className="md:hidden">Bêta gratuite · Sans carte bancaire</span><span className="hidden md:inline">Bêta publique · Accès gratuit sans carte bancaire</span>
-            </motion.div>
-            <motion.h1 custom={1} variants={fade} data-testid="hero-title" className="mx-auto max-w-[720px] break-normal text-[40px] font-bold leading-[1.04] tracking-[-0.035em] min-[430px]:text-[44px] sm:text-[46px] md:text-6xl md:leading-[1.02] lg:mx-0 lg:text-7xl lg:tracking-tight">
+            </div>
+            <h1 data-hero-reveal data-testid="hero-title" className="mx-auto max-w-[720px] break-normal text-[40px] font-bold leading-[1.04] tracking-[-0.035em] min-[430px]:text-[44px] sm:text-[46px] md:text-6xl md:leading-[1.02] lg:mx-0 lg:text-7xl lg:tracking-tight">
               <span className="block text-gradient">Protège tes comptes financés.</span>
               <span className="mt-1 block text-purple-grad md:mt-0">Transforme tes trades en progrès.</span>
-            </motion.h1>
-            <motion.p custom={2} variants={fade} data-testid="hero-copy" className="mx-auto max-w-[390px] text-[15px] leading-relaxed text-[#AAB0BE] md:max-w-md md:text-lg md:text-[#9CA3AF] lg:mx-0">
+            </h1>
+            <p data-hero-reveal data-testid="hero-copy" className="mx-auto max-w-[390px] text-[15px] leading-relaxed text-[#AAB0BE] md:max-w-md md:text-lg md:text-[#9CA3AF] lg:mx-0">
               <span className="md:hidden">Analyse tes performances, renforce ta discipline et protège tes comptes financés.</span><span className="hidden md:inline">PipsEvo révèle ce qui renforce ta performance, ce qui fragilise ta discipline et ce qui te rapproche réellement d'un payout.</span>
-            </motion.p>
-            <motion.div custom={3} variants={fade} className="flex flex-col items-center justify-center gap-3 md:flex-row lg:justify-start">
+            </p>
+            <div data-hero-reveal className="flex flex-col items-center justify-center gap-3 md:flex-row lg:justify-start">
               <div className="w-full md:w-auto"><Link to="/register" className="btn-primary inline-flex h-[54px] w-full items-center justify-center gap-2 !rounded-[14px] !px-5 text-[15px] md:h-auto md:w-auto md:!px-[26px] md:text-base" data-testid="hero-cta-start">Commencer gratuitement <ArrowRight className="w-4 h-4"/></Link><p className="mt-2 text-center text-[10px] text-[#777F90] md:hidden">Aucune carte bancaire requise pendant la bêta.</p></div>
               <a href="#story" className="btn-ghost inline-flex h-[54px] w-full items-center justify-center gap-2 !px-5 text-[15px] md:h-auto md:w-auto md:!px-[26px] md:text-base" data-testid="hero-cta-demo"><Play className="w-4 h-4 fill-white"/> Découvrir PipsEvo</a>
-            </motion.div>
-            <motion.div custom={4} variants={fade} className="pt-1 md:pt-6">
+            </div>
+            <div data-hero-reveal className="pt-1 md:pt-6">
               <div className="mb-2 font-mono text-[9px] uppercase tracking-[.16em] text-[#777F90] md:mb-3 md:text-[11px] md:tracking-widest md:text-[#6B7280]">Comptes de prop firms compatibles</div>
               <div data-testid="mobile-prop-logos" className="mx-auto grid max-w-[360px] grid-cols-2 items-center justify-items-center gap-x-4 gap-y-4 min-[390px]:grid-cols-3 md:hidden">
                 {propFirmLogos.map((firm) => (
@@ -180,25 +177,13 @@ export default function Landing() {
                   />
                 ))}
               </div>
-            </motion.div>
-          </motion.div>
-
-          {/* RIGHT — Tilted 3D dashboard mockup with floating candles (desktop/tablet only — too dense to stay legible on phones) */}
-          <motion.div initial={{ opacity: 0, scale: 0.92, y: 40 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 1.2, ease: [0.22,1,0.36,1] }} className="relative hidden lg:col-span-7 lg:block">
-            <div style={{ transform: `translate(${-mx * 0.6}px, ${-my * 0.6}px)` }}>
-              <DashboardMock />
             </div>
+          </div>
 
-            {/* Floating 3D candles */}
-            <div className="absolute -left-2 top-[15%] floaty" style={{ animationDelay: "0s" }}><Candle color="purple" height={110} rot={-8} /></div>
-            <div className="absolute left-[10%] bottom-[10%] floaty" style={{ animationDelay: "1.2s" }}><Candle color="purple" height={80} rot={6} /></div>
-            <div className="absolute -right-4 top-[8%] floaty-slow" style={{ animationDelay: "0.5s" }}><Candle color="green" height={130} rot={10} /></div>
-            <div className="absolute -right-2 bottom-[18%] floaty" style={{ animationDelay: "1.6s" }}><Candle color="pink" height={120} rot={-6} /></div>
-            <div className="absolute right-[18%] -bottom-2 floaty-slow" style={{ animationDelay: "0.9s" }}><Candle color="green" height={70} rot={4} /></div>
-          </motion.div>
+          <div className="hero-product-scene relative hidden lg:col-span-7 lg:block"><ProductDashboardMockup3D variant="hero" /></div>
 
           {/* Même produit sur petits écrans, recadré sur le contenu principal sans sidebar. */}
-          <div className="mx-auto mt-3 w-full max-w-[760px] lg:hidden"><ProductDashboardPreview variant="mobile" /></div>
+          <div className="mx-auto mt-3 w-full max-w-[760px] lg:hidden"><ProductDashboardMockup3D variant="mobile" /></div>
         </div>
       </section>
 
@@ -304,7 +289,7 @@ export default function Landing() {
           </div>
           {/* Même source produit que le hero, sans recréer une seconde interface. */}
           <div className="hidden lg:block relative">
-            <ProductDashboardPreview variant="compact" />
+            <ProductDashboardMockup3D variant="compact" />
             <div className="absolute -left-4 top-10 floaty"><Candle color="green" height={90} rot={-4} /></div>
             <div className="absolute right-10 -top-4 floaty-slow"><Candle color="pink" height={110} rot={8} /></div>
             <div className="absolute right-0 bottom-4 floaty"><Candle color="purple" height={70} rot={-6} /></div>
