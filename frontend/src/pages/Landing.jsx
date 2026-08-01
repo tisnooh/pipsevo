@@ -2,16 +2,15 @@ import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import gsap from "gsap";
-import { ArrowRight, Play, Check, Shield, BookOpen, Activity, Brain, Banknote, User, Building2, TrendingUp, Trophy, FlaskConical, Target, Menu, X } from "lucide-react";
+import { ArrowRight, Play, Check, Shield, BookOpen, Activity, Brain, Banknote, User, Building2, TrendingUp, Trophy, FlaskConical, Target } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import PublicHeader from "@/components/PublicHeader";
 import { Candle } from "@/components/CandleArt";
 import ProductDashboardPreview from "@/components/ProductDashboardPreview";
 import ProductDashboardMockup3D from "@/components/ProductDashboardMockup3D";
 import TradingViewChart from "@/components/TradingViewChart";
 import { openCookieSettings } from "@/components/CookieConsent";
-import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { PLANS, formatBillingPrice } from "@/config/billing";
-import { useI18n } from "@/context/I18nContext";
 
 const PipsEvoAtmosphere = lazy(() => import("@/components/PipsEvoAtmosphere"));
 
@@ -24,12 +23,7 @@ const propFirmLogos = [
 ];
 
 export default function Landing() {
-  const { language } = useI18n();
   const [activeStory, setActiveStory] = useState(0);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const mobileMenuButtonRef = useRef(null);
-  const mobileMenuPanelRef = useRef(null);
-  const mobileMenuFirstLinkRef = useRef(null);
   const heroRef = useRef(null);
   const stories = [
     { icon: BookOpen, section: "journal", label: "Journal", eyebrow: "CHAQUE TRADE COMPTE", title: "Arrête de répéter les mêmes erreurs.", text: "Transforme chaque décision en donnée exploitable. Repère les setups qui te paient, les sessions qui te coûtent et les habitudes qui fragilisent ton compte.", bullets: ["Historique structuré par compte", "Tags, notes et émotions", "Résultats comparables dans le temps"], color: "#B58BFF" },
@@ -47,92 +41,10 @@ export default function Landing() {
     return () => context.revert();
   }, []);
 
-  useEffect(() => {
-    if (!mobileMenuOpen) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    const menuButton = mobileMenuButtonRef.current;
-    document.body.style.overflow = "hidden";
-    window.requestAnimationFrame(() => mobileMenuFirstLinkRef.current?.focus());
-
-    const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
-        setMobileMenuOpen(false);
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = mobileMenuPanelRef.current?.querySelectorAll("a[href], button:not([disabled])");
-      if (!focusable?.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      menuButton?.focus();
-    };
-  }, [mobileMenuOpen]);
-
-  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
     <div className="bg-[#050505] text-white overflow-hidden">
-      {/* NAV */}
-      <nav className="fixed top-0 left-0 right-0 z-50 px-3 sm:px-5 lg:px-4 xl:px-10 py-2 lg:py-4 bg-[#050505]/85 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-7xl mx-auto flex min-w-0 items-center justify-between gap-1.5 sm:gap-3">
-          <Logo size="lg" className="!h-8 !w-[124px] min-[360px]:!w-[136px] lg:!h-9 lg:!w-[160px] xl:!h-11 xl:!w-[196px]" />
-          <div className="hidden lg:flex items-center gap-4 text-xs text-[#B5BBC9] xl:gap-9 xl:text-sm">
-            <a href="#features" className="hover:text-white transition">Fonctionnalités</a>
-            <a href="#how" className="hover:text-white transition">Fonctionnement</a>
-            <Link to="/pricing" className="hover:text-white transition">Tarifs</Link>
-            <a href="#reviews" className="hover:text-white transition">Bêta</a>
-            <Link to="/faq" className="hover:text-white transition">FAQ</Link>
-            <Link to="/contact" className="hover:text-white transition">Contact</Link>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 xl:gap-3">
-            <div className="hidden lg:block"><LanguageSwitcher compact /></div>
-            <Link to="/login" className="hidden lg:inline-flex px-2 py-2 text-xs text-[#9CA3AF] hover:text-white xl:px-4 xl:text-sm" data-testid="nav-login">Connexion</Link>
-            <Link to="/register" className="btn-primary hidden h-11 min-[360px]:inline-flex lg:hidden items-center whitespace-nowrap !rounded-xl !px-3 text-[11px] sm:!px-4 sm:text-xs" data-testid="nav-register-mobile">Accès gratuit</Link>
-            <Link to="/register" className="btn-primary hidden lg:inline-flex whitespace-nowrap px-4 text-xs xl:px-5 xl:text-sm" data-testid="nav-register">Accès gratuit</Link>
-            <button
-              ref={mobileMenuButtonRef}
-              type="button"
-              data-testid="mobile-menu-button"
-              aria-label={mobileMenuOpen ? (language === "fr" ? "Fermer le menu" : "Close menu") : (language === "fr" ? "Ouvrir le menu" : "Open menu")}
-              aria-expanded={mobileMenuOpen}
-              aria-controls="landing-mobile-menu"
-              onClick={() => setMobileMenuOpen((open) => !open)}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-white transition hover:border-[#7C4DFF]/50 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 lg:hidden"
-            >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
-          </div>
-        </div>
-      </nav>
-
-      {mobileMenuOpen && <div className="fixed inset-0 top-[61px] z-40 lg:hidden">
-        <button type="button" aria-label={language === "fr" ? "Fermer le menu" : "Close menu"} onClick={closeMobileMenu} className="absolute inset-0 h-full w-full bg-black/75 backdrop-blur-sm" />
-        <div id="landing-mobile-menu" ref={mobileMenuPanelRef} role="dialog" aria-modal="true" aria-label={language === "fr" ? "Navigation mobile" : "Mobile navigation"} className="relative mx-3 mt-3 max-h-[calc(100dvh-85px)] overflow-y-auto rounded-2xl border border-white/10 bg-[#0A0B12]/95 p-3 shadow-2xl sm:mx-5 sm:ml-auto sm:max-w-sm">
-          <nav className="flex flex-col gap-1 text-sm">
-            <Link ref={mobileMenuFirstLinkRef} to="/register" onClick={closeMobileMenu} className="btn-primary mb-2 inline-flex h-12 items-center justify-center whitespace-nowrap !rounded-xl !px-4">Accès gratuit</Link>
-            <a href="#features" onClick={closeMobileMenu} className="rounded-xl px-4 py-3 text-[#D4D7DF] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">Fonctionnalités</a>
-            <a href="#how" onClick={closeMobileMenu} className="rounded-xl px-4 py-3 text-[#D4D7DF] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">Fonctionnement</a>
-            <Link to="/pricing" onClick={closeMobileMenu} className="rounded-xl px-4 py-3 text-[#D4D7DF] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">Tarifs</Link>
-            <Link to="/faq" onClick={closeMobileMenu} className="rounded-xl px-4 py-3 text-[#D4D7DF] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">FAQ</Link>
-            <Link to="/contact" onClick={closeMobileMenu} className="rounded-xl px-4 py-3 text-[#D4D7DF] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">Contact</Link>
-            <Link to="/login" onClick={closeMobileMenu} className="rounded-xl px-4 py-3 text-[#D4D7DF] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">Connexion</Link>
-            <div className="mt-2 flex items-center justify-between border-t border-white/10 px-4 pt-3"><span className="text-xs text-[#8E96A7]">{language === "fr" ? "Langue" : "Language"}</span><LanguageSwitcher /></div>
-          </nav>
-        </div>
-      </div>}
+      <PublicHeader variant="landing" />
 
       {/* HERO */}
       <section ref={heroRef} data-testid="landing-hero" className="relative px-4 pb-10 pt-[82px] min-[390px]:pt-[86px] sm:px-6 md:pb-20 md:pt-32 lg:flex lg:min-h-[100svh] lg:items-center lg:px-8 lg:pb-10 lg:pt-[104px] xl:px-10 xl:pb-12 xl:pt-[110px]">
