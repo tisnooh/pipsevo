@@ -4,10 +4,14 @@ import ProductDashboardPreview from "@/components/ProductDashboardPreview";
 import { Candle } from "@/components/CandleArt";
 
 const CANDLES = [
-  { color: "purple", height: 96, className: "product-mockup-candle candle-a", delay: 0 },
-  { color: "green", height: 122, className: "product-mockup-candle candle-b", delay: 0.35 },
-  { color: "pink", height: 105, className: "product-mockup-candle candle-c", delay: 0.8 },
-  { color: "blue", height: 72, className: "product-mockup-candle candle-d", delay: 1.1 },
+  { color: "purple", height: 96, className: "product-mockup-candle candle-a" },
+  { color: "green", height: 122, className: "product-mockup-candle candle-b" },
+  { color: "pink", height: 105, className: "product-mockup-candle candle-c" },
+  { color: "blue", height: 72, className: "product-mockup-candle candle-d" },
+  { color: "green", height: 62, className: "product-mockup-candle candle-e" },
+  { color: "purple", height: 54, className: "product-mockup-candle candle-f" },
+  { color: "pink", height: 66, className: "product-mockup-candle candle-g" },
+  { color: "blue", height: 48, className: "product-mockup-candle candle-h" },
 ];
 
 export default function ProductDashboardMockup3D({ variant = "hero", activeSection = "overview", className = "" }) {
@@ -27,9 +31,17 @@ export default function ProductDashboardMockup3D({ variant = "hero", activeSecti
     const context = gsap.context(() => {
       if (!reducedMotion) {
         gsap.fromTo(frame, { autoAlpha: 0, x: 44, y: 24, scale: 0.965 }, { autoAlpha: 1, x: 0, y: 0, scale: 1, duration: 1.15, ease: "power3.out" });
-        gsap.fromTo(root.querySelectorAll(".product-mockup-candle"), { autoAlpha: 0, scale: 0.8 }, { autoAlpha: 1, scale: 1, stagger: 0.12, delay: 0.5, duration: 0.8, ease: "power2.out" });
         root.querySelectorAll(".product-mockup-candle").forEach((candle, index) => {
-          ambientTweens.push(gsap.to(candle, { y: index % 2 ? 14 : -16, rotation: index % 2 ? 1.5 : -1.2, duration: 4.8 + index * 0.7, delay: CANDLES[index]?.delay || 0, repeat: -1, yoyo: true, ease: "sine.inOut" }));
+          const direction = index % 2 === 0 ? -1 : 1;
+          ambientTweens.push(gsap.to(candle, {
+            y: direction * (9 + (index % 3) * 3),
+            rotation: direction * (0.7 + (index % 4) * 0.25),
+            duration: 3.8 + index * 0.38,
+            delay: index * 0.16,
+            repeat: -1,
+            yoyo: true,
+            ease: "sine.inOut",
+          }));
         });
         ambientTweens.push(gsap.to(root.querySelector(".product-mockup-floor-glow"), { opacity: 0.82, scaleX: 1.06, duration: 4.5, repeat: -1, yoyo: true, ease: "sine.inOut" }));
       }
