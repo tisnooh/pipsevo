@@ -32,8 +32,9 @@ export default function AICoach() {
     if (!hasCoachAccess) { setInitialLoading(false); return; }
     Promise.all([coach.history(),dashboard()]).then(([h,d])=>{setHistory(h.data);setSummary(d.data)}).catch(()=>toast.error("Impossible de charger l’analyse")).finally(()=>setInitialLoading(false));
   }, [hasCoachAccess]);
+  const planRate = summary?.metrics?.plan_respect_rate;
   const insights = summary?.kpis?.total_trades ? [
-    { I: AlertTriangle, t: "Respect du plan", d: `${summary.metrics.plan_respect_rate}% des trades respectent le plan`, c: summary.metrics.plan_respect_rate>=80?"#00E676":"#FFB855" },
+    { I: AlertTriangle, t: "Respect du plan", d: planRate === null || planRate === undefined ? "Pas encore mesuré" : `${planRate}% des trades renseignés respectent le plan`, c: planRate === null || planRate === undefined ? "#7E8798" : planRate>=80?"#00E676":"#FFB855" },
     { I: Trophy, t: "Meilleur setup", d: summary.best_setup || "Pas encore déterminé", c: "#00E676" },
     { I: Clock, t: "Setup à surveiller", d: summary.worst_setup || "Pas encore déterminé", c: "#FF5252" },
     { I: Shield, t: "Score discipline", d: `${summary.kpis.discipline_score}/100`, c: "#FFB855" },

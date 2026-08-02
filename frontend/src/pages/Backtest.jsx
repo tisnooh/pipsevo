@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { FlaskConical, Play, RotateCcw } from "lucide-react";
+import { BarChart3, FlaskConical, Play, RotateCcw, ShieldCheck, Target } from "lucide-react";
 import { useAppSettings } from "@/hooks/useAppSettings";
 
 export default function Backtest() {
@@ -19,6 +19,11 @@ export default function Backtest() {
     return { final: equity, profit: equity-(+form.capital), maxDd, expectancy: (+form.winrate/100)*+form.gain-(1-(+form.winrate/100))*+form.loss, curve };
   }, [form]);
   const valid = +form.capital > 0 && +form.trades >= 1 && +form.trades <= 5000 && +form.winrate >= 0 && +form.winrate <= 100 && +form.gain > 0 && +form.loss > 0 && +form.risk > 0 && +form.risk <= 10;
+  const preview = {
+    expectancy: (+form.winrate/100)*+form.gain-(1-(+form.winrate/100))*+form.loss,
+    riskAmount: +form.capital*(+form.risk/100),
+    requiredWinrate: (+form.loss/(+form.gain + +form.loss))*100,
+  };
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   return <div className="p-4 sm:p-7 space-y-5">
     <div><h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2"><FlaskConical className="text-[#B58BFF]"/>Simulateur de stratégie</h1><p className="text-sm text-[#9CA3AF] mt-1">Teste des hypothèses avec un risque composé. Ce module n’utilise pas encore de données de marché historiques.</p></div>
@@ -29,7 +34,15 @@ export default function Backtest() {
         <div className="flex gap-2"><button disabled={!valid} className="btn-primary flex-1 inline-flex justify-center items-center gap-2 disabled:opacity-40"><Play className="w-4 h-4"/>Simuler</button><button type="button" title="Réinitialiser" onClick={()=>{setForm(initial);setRan(false)}} className="btn-ghost px-3"><RotateCcw className="w-4 h-4"/></button></div>
       </form>
       <div className="lg:col-span-2 space-y-4">
-        {!ran ? <div className="card-elev p-12 text-center text-[#9CA3AF]"><div className="font-semibold text-white">Simulation statistique, pas Trade Replay</div><p className="mx-auto mt-2 max-w-xl text-sm">Renseigne tes hypothèses puis lance la simulation. Un vrai replay nécessitera une source officielle de bougies et ne sera activé qu’après connexion d’un fournisseur de données.</p></div> : <>
+        {!ran ? <div className="card-elev overflow-hidden">
+          <div className="border-b border-white/[0.07] p-6 sm:p-8"><div className="font-semibold text-white">Aperçu de ton hypothèse</div><p className="mt-2 max-w-2xl text-sm text-[#9CA3AF]">Vérifie rapidement la cohérence de tes paramètres avant de lancer la projection statistique.</p></div>
+          <div className="grid sm:grid-cols-3 gap-3 p-5 sm:p-6">
+            <PreviewStat icon={BarChart3} label="Espérance théorique" value={`${preview.expectancy.toFixed(2)}R`} positive={preview.expectancy>=0}/>
+            <PreviewStat icon={ShieldCheck} label="Risque au départ" value={money(preview.riskAmount)} positive/>
+            <PreviewStat icon={Target} label="Win rate d’équilibre" value={`${preview.requiredWinrate.toFixed(1)}%`} positive/>
+          </div>
+          <div className="mx-5 mb-5 sm:mx-6 sm:mb-6 rounded-xl border border-[#B58BFF]/15 bg-[#B58BFF]/[0.05] p-4 text-xs leading-relaxed text-[#A5ADBA]">Il s’agit d’une simulation mathématique déterministe, pas d’un Trade Replay ni d’une prévision de performance. Lance-la pour visualiser le capital projeté et le drawdown du scénario.</div>
+        </div> : <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Stat l="Capital final" v={money(result.final)} c="#B58BFF"/><Stat l="Profit net" v={money(result.profit,{signDisplay:"always"})} c={result.profit>=0?'#00E676':'#FF5252'}/><Stat l="Drawdown max" v={`${result.maxDd.toFixed(1)}%`} c="#FFB855"/><Stat l="Espérance" v={`${result.expectancy.toFixed(2)}R`} c={result.expectancy>=0?'#00E676':'#FF5252'}/>
           </div>
@@ -40,3 +53,4 @@ export default function Backtest() {
   </div>;
 }
 const Stat=({l,v,c})=><div className="card-elev p-4"><div className="text-xs text-[#9CA3AF]">{l}</div><div className="text-xl font-bold font-mono mt-2" style={{color:c}}>{v}</div></div>;
+const PreviewStat=({icon:Icon,label,value,positive})=><div className="card-flat p-4"><div className="flex items-center gap-2 text-xs text-[#9CA3AF]"><Icon className="h-4 w-4 text-[#B58BFF]"/>{label}</div><div className={`mt-3 text-xl font-bold font-numeric ${positive?"text-white":"text-[#FF7272]"}`}>{value}</div></div>;

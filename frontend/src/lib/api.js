@@ -392,14 +392,29 @@ const buildDashboard = (accountRows, tradeRows, payoutRows) => {
   const balance = accountRows.reduce((sum, item) => sum + Number(item.balance || 0), 0);
   const totalProfit = balance - initial;
   const remainingDrawdown = accountRows.reduce((sum, item) => sum + Math.max(0, Number(item.max_drawdown || 0) - Math.max(0, Number(item.initial_balance || 0) - Number(item.balance || 0))), 0);
-  const wins = tradeRows.filter((item) => Number(item.pnl || 0) > 0);
-  const losses = tradeRows.filter((item) => Number(item.pnl || 0) < 0);
-  const winrate = tradeRows.length ? wins.length / tradeRows.length * 100 : 0;
-  const planRate = tradeRows.length ? tradeRows.filter((item) => item.plan_respected).length / tradeRows.length * 100 : 100;
-  const discipline = Math.max(0, Math.min(100, Math.trunc(planRate * 0.6 + winrate * 0.2 + 20)));
+  const completedTrades = tradeRows.filter((item) =>
+    item.pnl !== null && item.pnl !== undefined && !["open", "cancelled", "canceled"].includes(item.result_status)
+  );
+  const wins = completedTrades.filter((item) => Number(item.pnl) > 0);
+  const losses = completedTrades.filter((item) => Number(item.pnl) < 0);
+  const winrate = completedTrades.length ? wins.length / completedTrades.length * 100 : 0;
+  const measuredPlanTrades = tradeRows.filter((item) => item.plan_respected === true || item.plan_respected === false);
+  const planRate = measuredPlanTrades.length
+    ? measuredPlanTrades.filter((item) => item.plan_respected === true).length / measuredPlanTrades.length * 100
+    : null;
+  const discipline = measuredPlanTrades.length
+    ? Math.max(0, Math.min(100, Math.trunc(planRate * 0.7 + 30)))
+    : 0;
   const survival = accountRows.length ? Math.trunc(accountRows.reduce((sum, item) => sum + enrichAccount(item).survival_score, 0) / accountRows.length) : 100;
   let running = 0;
-  const equity = [...tradeRows].sort((a, b) => String(a.date).localeCompare(String(b.date))).map((item) => ({ date: item.date, equity: Math.round((running += Number(item.pnl || 0)) * 100) / 100 }));
+  const pnlByDate = completedTrades.reduce((result, item) => {
+    const date = item.date || "Date inconnue";
+    result[date] = (result[date] || 0) + Number(item.pnl);
+    return result;
+  }, {});
+  const equity = Object.entries(pnlByDate)
+    .sort(([dateA], [dateB]) => String(dateA).localeCompare(String(dateB)))
+    .map(([date, pnl]) => ({ date, equity: Math.round((running += pnl) * 100) / 100 }));
   const setups = groupTrades(tradeRows, "setup");
   const sessions = groupTrades(tradeRows, "session");
   const setupNames = Object.keys(setups);
@@ -410,7 +425,7 @@ const buildDashboard = (accountRows, tradeRows, payoutRows) => {
       estimated_payout: Math.max(0, totalProfit * 0.8), discipline_score: discipline,
       trader_score: Math.trunc((discipline + survival + Math.max(0, Math.min(100, winrate))) / 3),
       survival_score: survival, total_payouts: payoutRows.reduce((total, item) => total + Number(item.amount || 0), 0),
-      active_accounts: accountRows.filter((item) => item.status === "active").length, total_trades: tradeRows.length,
+      active_accounts: accountRows.filter((item) => item.status === "active").length, total_trades: completedTrades.length,
     },
     equity_curve: equity.slice(-180),
     metrics: {
@@ -418,7 +433,7 @@ const buildDashboard = (accountRows, tradeRows, payoutRows) => {
       profit_factor: losses.length ? Math.round((sum(wins) / Math.abs(sum(losses))) * 100) / 100 : 0,
       avg_win: wins.length ? Math.round(sum(wins) / wins.length * 100) / 100 : 0,
       avg_loss: losses.length ? Math.round(sum(losses) / losses.length * 100) / 100 : 0,
-      plan_respect_rate: Math.round(planRate * 10) / 10,
+      plan_respect_rate: planRate === null ? null : Math.round(planRate * 10) / 10,
     },
     setups, sessions,
     best_setup: setupNames.length ? setupNames.reduce((best, name) => setups[name].pnl > setups[best].pnl ? name : best) : null,

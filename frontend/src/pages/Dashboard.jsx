@@ -53,7 +53,16 @@ export default function Dashboard() {
   const periodProfit = tradeList.reduce((sum,t)=>sum+Number(t.pnl||0),0);
   const periodWins = tradeList.filter(t=>Number(t.pnl)>0).length;
   const periodWinrate = tradeList.length ? Math.round(periodWins/tradeList.length*100) : 0;
-  const insight = !k.total_trades ? "Ajoute tes premiers trades pour obtenir un insight personnalisé." : m.plan_respect_rate < 80 ? `Ton plan est respecté sur ${m.plan_respect_rate}% des trades. Priorité : réduire les prises hors plan.` : `Ton plan est respecté sur ${m.plan_respect_rate}% des trades. Continue à documenter chaque décision.`;
+  const planRateLabel = m.plan_respect_rate === null || m.plan_respect_rate === undefined ? "Non mesuré" : `${m.plan_respect_rate}%`;
+  const insight = !k.total_trades
+    ? "Ajoute tes premiers trades pour obtenir un insight personnalisé."
+    : m.plan_respect_rate === null || m.plan_respect_rate === undefined
+      ? "Renseigne le respect du plan sur tes prochains trades pour activer l’analyse de discipline."
+      : m.plan_respect_rate < 80
+        ? `Ton plan est respecté sur ${m.plan_respect_rate}% des trades renseignés. Priorité : réduire les prises hors plan.`
+        : `Ton plan est respecté sur ${m.plan_respect_rate}% des trades renseignés. Continue à documenter chaque décision.`;
+  const capitalLabel = Number(k.funded_capital) > 0 ? money(k.funded_capital) : "À configurer";
+  const traderScoreLabel = k.total_trades ? `${k.trader_score || k.discipline_score}/100` : "En attente";
 
   return (
     <div className="p-4 sm:p-7 space-y-5 max-w-[1800px] mx-auto">
@@ -62,7 +71,7 @@ export default function Dashboard() {
         <div className="absolute -top-32 right-[8%] w-80 h-80 rounded-full bg-[#7C4DFF] blur-3xl opacity-15"/><div className="absolute -bottom-36 left-[25%] w-72 h-72 rounded-full bg-[#4F8CFF] blur-3xl opacity-10"/>
         <div className="relative flex flex-col xl:flex-row xl:items-center justify-between gap-5">
           <div><div className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[.2em] font-mono text-[#B58BFF]"><span className="w-1.5 h-1.5 rounded-full bg-[#00E676] shadow-[0_0_10px_#00E676]"/>Centre de pilotage</div><h1 className="text-2xl sm:text-4xl font-bold mt-3">Bonjour {user?.name?.split(" ")[0] || "Trader"}<span className="text-[#B58BFF]">.</span></h1><p className="text-sm text-[#9CA3AF] mt-2">Garde le contrôle de ton risque, de ta discipline et de tes prochains objectifs.</p></div>
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-0 xl:min-w-[420px]">{[["Capital suivi",money(k.funded_capital),"#4F8CFF"],["Score trader",`${k.trader_score || k.discipline_score}/100`,"#B58BFF"],["Payouts",money(k.total_payouts),"#00E676"]].map(([l,v,c])=><div key={l} className="rounded-2xl border border-white/[0.07] bg-black/20 p-3 sm:p-4 backdrop-blur"><div className="text-[9px] text-[#6B7280] uppercase tracking-wider">{l}</div><div className="text-sm sm:text-xl font-bold font-numeric mt-2 truncate" style={{color:c}}>{v}</div></div>)}</div>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-0 xl:min-w-[420px]">{[["Capital suivi",capitalLabel,"#4F8CFF"],["Score trader",traderScoreLabel,"#B58BFF"],["Payouts",money(k.total_payouts),"#00E676"]].map(([l,v,c])=><div key={l} className="rounded-2xl border border-white/[0.07] bg-black/20 p-3 sm:p-4 backdrop-blur"><div className="text-[9px] text-[#6B7280] uppercase tracking-wider">{l}</div><div className="text-sm sm:text-xl font-bold font-numeric mt-2 truncate" style={{color:c}}>{v}</div></div>)}</div>
         </div>
         <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 pt-5 border-t border-white/[0.06]">
           {isEmptyAccount ? <div className="text-[11px] text-[#B58BFF] inline-flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[#B58BFF]"/>Ton espace est prêt : ajoute un compte puis journalise ton premier trade.</div> : <div className="text-[11px] text-[#00E676] inline-flex items-center gap-2"><Shield className="w-3.5 h-3.5"/>Données réelles synchronisées avec ton journal.</div>}
@@ -79,7 +88,7 @@ export default function Dashboard() {
 
       {!loading && <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <DashboardKpiCard label="Profit net" value={money(periodProfit,{signDisplay:"always"})} sub={`Sur les ${period} derniers jours`} sparkColor={periodProfit < 0 ? "red" : "green"} icon={TrendingUp} testid="kpi-profit" />
-        <DashboardKpiCard label="Score de discipline" value={<><span>{k.discipline_score}</span><span className="text-[#9CA3AF] text-base"> /100</span></>} sub={`${m.plan_respect_rate}% du plan respecté`} sparkColor="purple" icon={BarChart3} testid="kpi-discipline" />
+        <DashboardKpiCard label="Score de discipline" value={<><span>{k.discipline_score}</span><span className="text-[#9CA3AF] text-base"> /100</span></>} sub={`${planRateLabel} · plan respecté`} sparkColor="purple" icon={BarChart3} testid="kpi-discipline" />
         <DashboardKpiCard label="Comptes actifs" value={k.active_accounts} sub={`${k.active_accounts} compte${k.active_accounts>1?"s":""} suivi${k.active_accounts>1?"s":""}`} sparkColor="blue" icon={Shield} testid="kpi-accounts" />
         <DashboardKpiCard label="Win Rate" value={`${periodWinrate}%`} sub={`${tradeList.length} trades sur la période`} sparkColor="green" icon={Target} testid="kpi-winrate" />
         <DashboardKpiCard label="Drawdown restant" value={money(k.remaining_drawdown)} sub="Marge de risque disponible" sparkColor="red" icon={ArrowDownRight} testid="kpi-dd" />
