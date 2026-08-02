@@ -541,6 +541,22 @@ html, body, #root {
 .pipsevo-atmosphere__noise { position: absolute; inset: 0; opacity: .035; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.75'/%3E%3C/svg%3E"); mix-blend-mode: soft-light; }
 .pipsevo-atmosphere__vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at 65% 52%, transparent 18%, rgba(0,0,0,.18) 54%, rgba(0,0,0,.78) 100%), linear-gradient(90deg, rgba(0,0,0,.72), transparent 46%); }
 
+/* Prolonge visuellement l'atmosphère du hero au lieu de la couper net avant le parcours. */
+[data-testid="landing-hero"]::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: clamp(150px, 20vh, 260px);
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 68% 18%, rgba(68, 72, 218, .14), transparent 55%),
+    radial-gradient(ellipse at 42% 34%, rgba(115, 50, 205, .12), transparent 58%),
+    linear-gradient(180deg, rgba(5, 5, 9, 0) 0%, rgba(5, 5, 9, .46) 42%, #050505 100%);
+}
+
 @media (max-width: 1023px) {
   .product-dashboard-mockup--hero { padding: 3% 0 7%; }
   .product-mockup-frame { transform: rotateX(.4deg) rotateY(-.7deg); border-radius: 18px; }
@@ -577,6 +593,12 @@ html, body, #root {
   .product-mockup-candle.candle-b { right: 2%; top: 10%; transform: scale(.45); opacity: .75; }
   .product-mockup-candle.candle-c, .product-mockup-candle.candle-e, .product-mockup-candle.candle-g { display: none; }
   .pipsevo-atmosphere__canvas { opacity: .55; }
+  [data-testid="landing-hero"]::after {
+    height: 130px;
+    background:
+      radial-gradient(ellipse at 65% 20%, rgba(86, 60, 210, .1), transparent 58%),
+      linear-gradient(180deg, rgba(5, 5, 9, 0) 0%, #050505 100%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
