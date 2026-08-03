@@ -18,6 +18,7 @@ export default function ProductDashboardMockup3D({ variant = "hero", activeSecti
   const rootRef = useRef(null);
   const stageRef = useRef(null);
   const frameRef = useRef(null);
+  const isPrimaryHeroMockup = variant === "hero" || variant === "mobile";
 
   useEffect(() => {
     const root = rootRef.current;
@@ -30,7 +31,11 @@ export default function ProductDashboardMockup3D({ variant = "hero", activeSecti
     const ambientTweens = [];
     const context = gsap.context(() => {
       if (!reducedMotion) {
-        gsap.fromTo(frame, { autoAlpha: 0, x: 44, y: 24, scale: 0.965 }, { autoAlpha: 1, x: 0, y: 0, scale: 1, duration: 1.15, ease: "power3.out" });
+        gsap.fromTo(
+          frame,
+          { autoAlpha: 0, x: isPrimaryHeroMockup ? 30 : 44, y: isPrimaryHeroMockup ? 16 : 24, scale: isPrimaryHeroMockup ? 1 : 0.965 },
+          { autoAlpha: 1, x: 0, y: 0, scale: 1, duration: 1.15, ease: "power3.out" },
+        );
       }
 
       // Les chandeliers restent animes meme si le systeme reduit les animations.
@@ -52,8 +57,8 @@ export default function ProductDashboardMockup3D({ variant = "hero", activeSecti
         }));
       });
       ambientTweens.push(gsap.to(root.querySelector(".product-mockup-floor-glow"), {
-        opacity: 0.86,
-        scaleX: 1.08,
+        opacity: isPrimaryHeroMockup ? 0.34 : 0.86,
+        scaleX: isPrimaryHeroMockup ? 1.04 : 1.08,
         duration: reducedMotion ? 5.5 : 3.8,
         repeat: -1,
         yoyo: true,
@@ -75,19 +80,19 @@ export default function ProductDashboardMockup3D({ variant = "hero", activeSecti
 
     if (!desktopPointer || reducedMotion || variant !== "hero") return cleanupMotion;
 
-    const rotateX = gsap.quickTo(stage, "rotationX", { duration: 0.9, ease: "power3.out" });
-    const rotateY = gsap.quickTo(stage, "rotationY", { duration: 0.9, ease: "power3.out" });
-    const moveX = gsap.quickTo(stage, "x", { duration: 0.9, ease: "power3.out" });
-    const moveY = gsap.quickTo(stage, "y", { duration: 0.9, ease: "power3.out" });
+    const rotateX = gsap.quickTo(stage, "rotationX", { duration: 0.85, ease: "power3.out" });
+    const rotateY = gsap.quickTo(stage, "rotationY", { duration: 0.85, ease: "power3.out" });
+    const moveX = gsap.quickTo(stage, "x", { duration: 0.85, ease: "power3.out" });
+    const moveY = gsap.quickTo(stage, "y", { duration: 0.85, ease: "power3.out" });
 
     const handlePointerMove = (event) => {
       const bounds = root.getBoundingClientRect();
       const x = (event.clientX - bounds.left) / bounds.width - 0.5;
       const y = (event.clientY - bounds.top) / bounds.height - 0.5;
-      rotateX(-y * 3);
-      rotateY(x * 5);
-      moveX(x * 7);
-      moveY(y * 6);
+      rotateX(-y * 1.2);
+      rotateY(x * 1.6);
+      moveX(x * 10);
+      moveY(y * 8);
     };
     const reset = () => { rotateX(0); rotateY(0); moveX(0); moveY(0); };
     root.addEventListener("pointermove", handlePointerMove, { passive: true });
@@ -97,13 +102,13 @@ export default function ProductDashboardMockup3D({ variant = "hero", activeSecti
       root.removeEventListener("pointerleave", reset);
       cleanupMotion();
     };
-  }, [variant]);
+  }, [isPrimaryHeroMockup, variant]);
 
   return (
     <div ref={rootRef} className={`product-dashboard-mockup product-dashboard-mockup--${variant} ${className}`}>
       <div className="product-mockup-floor-glow" aria-hidden="true" />
       <div ref={stageRef} className="product-mockup-stage">
-        <div className="product-mockup-depth product-mockup-depth--far" aria-hidden="true" />
+        {!isPrimaryHeroMockup && <div className="product-mockup-depth product-mockup-depth--far" aria-hidden="true" />}
         <div className="product-mockup-depth product-mockup-depth--near" aria-hidden="true" />
         <div ref={frameRef} className="product-mockup-frame">
           <div className="product-mockup-edge" aria-hidden="true" />
