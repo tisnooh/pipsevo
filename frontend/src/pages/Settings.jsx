@@ -144,7 +144,7 @@ export default function Settings() {
     <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
       <aside className="pe-card h-fit p-2 lg:sticky lg:top-24">
         <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-1">
-          {sections.map(({id,label,subtitle,icon:Icon})=><button key={id} onClick={()=>setActive(id)} className={`flex items-center gap-3 rounded-xl p-3 text-left transition ${active===id ? "bg-[#7C4DFF]/15 text-white shadow-[inset_0_0_0_1px_rgba(124,77,255,.28)]" : "text-[#8B93A3] hover:bg-white/[0.035] hover:text-white"}`}><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${active===id ? "bg-[#7C4DFF] text-white" : "bg-white/[0.04]"}`}><Icon className="h-4 w-4"/></span><span className="min-w-0"><span className="block truncate text-xs font-medium sm:text-sm">{label}</span><span className="mt-0.5 hidden text-pe-micro text-[#6B7280] lg:block">{subtitle}</span></span><ChevronRight className="ml-auto hidden h-3.5 w-3.5 lg:block"/></button>)}
+          {sections.map(({id,label,subtitle,icon:Icon})=><button key={id} onClick={()=>setActive(id)} className={`flex items-center gap-3 rounded-xl p-3 text-left transition ${active===id ? "bg-[#7C4DFF]/15 text-white shadow-[inset_0_0_0_1px_rgba(124,77,255,.28)]" : "text-[#8B93A3] hover:bg-white/[0.035] hover:text-white"}`}><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${active===id ? "bg-[#7C4DFF] text-white" : "bg-white/[0.04]"}`}><Icon className="h-4 w-4"/></span><span className="min-w-0"><span className="block truncate text-xs font-medium sm:text-sm">{label}</span><span className="mt-0.5 hidden text-[10px] leading-[1.3] text-[#626A79] lg:block">{subtitle}</span></span><ChevronRight className="ml-auto hidden h-3.5 w-3.5 lg:block"/></button>)}
         </div>
       </aside>
 
@@ -155,7 +155,13 @@ export default function Settings() {
             <div className="flex items-center gap-4 rounded-2xl border border-white/[0.07] bg-[#0B0E18] p-4"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-[#4F8CFF] to-[#7C4DFF] text-lg font-bold">{initials}</span><div><div className="text-sm font-medium">Photo de profil</div><div className="mt-1 text-xs text-[#7E8798]">L’avatar utilise actuellement tes initiales.</div></div></div>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-xs text-[#9CA3AF]">Nom complet<input value={name} onChange={e=>setName(e.target.value)} required maxLength={80} className="pe-control mt-2 w-full"/></label>
-              <label className="block text-xs text-[#9CA3AF]">Adresse email<div className="relative"><Mail className="absolute left-4 top-5 h-4 w-4 text-[#596172]"/><input value={user?.email || ""} disabled className="pe-control mt-2 w-full pl-11 disabled:opacity-60"/></div></label>
+              <label className="block text-xs text-[#9CA3AF]">
+                <span className="block">Adresse email</span>
+                <div className="relative mt-2">
+                  <Mail aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-[#596172]"/>
+                  <input value={user?.email || ""} disabled className="pe-control w-full !pl-11 disabled:opacity-60"/>
+                </div>
+              </label>
             </div>
             <SettingsSelect item={{label:"Marchés tradés",icon:Globe2,options:[["futures","Futures"],["cfd","CFD / Forex"],["both","Futures et CFD / Forex"]]}} value={traderType} onChange={setTraderType}/>
           </div>
@@ -317,7 +323,7 @@ function SettingsSelect({ item, value, onChange }) {
   return <div className="text-xs text-[#9CA3AF]">
     <div>{item.label}</div>
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="mt-2 h-12 rounded-xl border-white/10 bg-[#0D1020] px-4 text-white shadow-none focus:ring-[#7C4DFF]/50">
+      <SelectTrigger className="mt-2 h-12 rounded-xl border-white/10 bg-[#0D1020] px-4 text-white shadow-none focus:ring-[#7C4DFF]/50 [&>span]:!flex [&>span]:min-w-0 [&>span]:items-center [&>span]:gap-3">
         <span className="flex min-w-0 items-center gap-3"><Icon className="h-4 w-4 shrink-0 text-[#596172]"/><SelectValue/></span>
       </SelectTrigger>
       <SelectContent className="z-[90] border-white/10 bg-[#0D1020] p-1 text-white shadow-2xl">

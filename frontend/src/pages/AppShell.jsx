@@ -134,11 +134,11 @@ export default function AppShell() {
         </nav>
 
         {/* Discipline du jour */}
-        <div className="px-3 mt-3 shrink-0">
-          <div className="card-flat p-4 text-center">
-            <div className="text-pe-micro font-mono uppercase tracking-widest text-[#9CA3AF]">Discipline du jour</div>
-            <div className="relative mt-2 mb-1">
-              <svg viewBox="0 0 80 50" className="w-full h-12 mx-auto">
+        <div className="px-3 mt-2 shrink-0">
+          <div className="card-flat px-3 py-2.5 text-center">
+            <div className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.18em] text-[#9CA3AF]">Discipline du jour</div>
+            <div className="relative mt-1">
+              <svg viewBox="0 0 80 50" className="mx-auto h-9 w-24 max-w-full">
                 <defs>
                   <linearGradient id="gauge-a" x1="0" y1="0" x2="1" y2="0">
                     <stop offset="0%" stopColor="#7C4DFF" />
@@ -157,27 +157,27 @@ export default function AppShell() {
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center pt-1">
-                <div className="text-xl font-bold font-mono">
+                <div className="font-mono text-base font-bold leading-none">
                   {discipline}
-                  <span className="text-xs text-[#9CA3AF]">/100</span>
+                  <span className="ml-0.5 text-[8px] text-[#9CA3AF]">/100</span>
                 </div>
               </div>
             </div>
-            <div className={`text-pe-micro ${discipline>=80?"text-[#00E676]":discipline>=60?"text-[#FFB855]":"text-[#FF7272]"}`}>{discipline>=80?"Excellent":discipline>=60?"À consolider":discipline?"À améliorer":"En attente"}</div>
-            <svg viewBox="0 0 80 18" className="w-full h-4 mt-2">
+            <div className={`text-[9px] leading-tight ${discipline>=80?"text-[#00E676]":discipline>=60?"text-[#FFB855]":"text-[#FF7272]"}`}>{discipline>=80?"Excellent":discipline>=60?"À consolider":discipline?"À améliorer":"En attente"}</div>
+            <svg viewBox="0 0 80 18" className="mx-auto mt-1 h-3 w-24 max-w-full">
               <path d="M0,15 L10,12 L20,13 L30,9 L40,10 L50,6 L60,7 L70,3 L80,4" stroke="#7C4DFF" strokeWidth="1.5" fill="none" />
             </svg>
           </div>
         </div>
 
         {/* Upgrade card */}
-        <div className="px-3 mt-3 mb-2 shrink-0">
-          <div className="card-flat p-4">
-            <div className="text-sm font-semibold">{BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Bêta gratuite":"Découvre les offres"}</div>
-            <div className="mt-1 text-pe-micro text-[#9CA3AF]">{BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Les fonctions essentielles sont gratuites. Les outils avancés arrivent au lancement.":"Compare Essential et Pro sans engagement."}</div>
+        <div className="px-3 mt-2 mb-2 shrink-0">
+          <div className="card-flat p-3">
+            <div className="text-xs font-semibold leading-tight">{BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Bêta gratuite":"Découvre les offres"}</div>
+            <div className="mt-1 text-[9px] leading-[1.45] text-[#9CA3AF]">{BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Les fonctions essentielles sont gratuites. Les outils avancés arrivent au lancement.":"Compare Essential et Pro sans engagement."}</div>
             <button
               onClick={() => { closeMobile(); nav("/pricing"); }}
-              className="mt-3 w-full text-xs py-2 rounded-lg bg-gradient-to-r from-[#7C4DFF] to-[#5A2DFF] hover:opacity-90 transition font-semibold"
+              className="mt-2 w-full rounded-lg bg-gradient-to-r from-[#7C4DFF] to-[#5A2DFF] py-1.5 text-[10px] font-semibold transition hover:opacity-90"
               data-testid="sidebar-upgrade"
             >
               {BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Voir la roadmap →":"Voir les tarifs →"}
@@ -251,7 +251,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
           data-testid="top-search"
           className="w-full bg-[#0D1020] border border-white/5 rounded-xl pl-10 pr-12 py-2 text-sm placeholder:text-[#6B7280] focus:border-[#7C4DFF]/40"
         />
-        <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-white/10 px-1.5 py-0.5 font-mono text-pe-micro text-[#6B7280]">⌘K</kbd>
+        <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/10 bg-black/10 px-1.5 py-0.5 font-mono text-[9px] leading-none text-[#6B7280]">⌘K</kbd>
       </button>
 
       <div className="flex-1 min-w-0" />
@@ -279,7 +279,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
         <div className="hidden max-w-32 truncate whitespace-nowrap text-sm font-medium lg:max-w-48 sm:block" data-testid="top-username">
           {user?.name || user?.email}
         </div>
-        <span className="hidden whitespace-nowrap rounded border border-[#7C4DFF]/30 bg-[#7C4DFF]/20 px-1.5 py-0.5 text-pe-micro font-bold tracking-wider text-[#B58BFF] sm:inline">
+        <span className="hidden whitespace-nowrap rounded-md border border-[#7C4DFF]/30 bg-[#7C4DFF]/15 px-1 py-0.5 text-[9px] font-semibold leading-none tracking-[0.08em] text-[#B58BFF] sm:inline">
           PRO
         </span>
         <span className={`text-[#9CA3AF] text-xs transition-transform ${profileOpen ? "rotate-180" : ""}`}>⌄</span>

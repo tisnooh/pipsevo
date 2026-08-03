@@ -209,7 +209,7 @@ export default function PublicHeader({ variant = "default" }) {
         <Link to="/" aria-label={t("PipsEvo — accueil", "PipsEvo — home")} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 min-[360px]:hidden">
           <LogoMark size="sm" className="!h-[26px] !w-[26px]" />
         </Link>
-        <Logo size="lg" className={`hidden !h-8 min-[360px]:inline-flex md:!h-9 ${landing ? "!w-[124px] min-[360px]:!w-[136px] lg:!w-[160px] xl:!h-11 xl:!w-[196px]" : "!w-[142px] md:!w-[160px] lg:!h-10 lg:!w-[178px]"}`} />
+        <Logo size="lg" className={`hidden !h-8 min-[360px]:inline-flex md:!h-[34px] ${landing ? "!w-[124px] min-[360px]:!w-[136px] md:!w-[151px] xl:!h-[38px] xl:!w-[168px]" : "!w-[142px] md:!w-[151px] lg:!h-[35px] lg:!w-[155px]"}`} />
 
         <nav aria-label={t("Navigation principale", "Primary navigation")} className={`hidden items-center text-sm text-[#B5BBC9] ${landing ? "gap-4 text-xs lg:flex lg:gap-6 xl:gap-8 xl:text-sm" : "gap-5 md:flex lg:gap-7"}`}>
           {landing && <>
