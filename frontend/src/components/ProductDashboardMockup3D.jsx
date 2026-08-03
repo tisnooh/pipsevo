@@ -31,20 +31,34 @@ export default function ProductDashboardMockup3D({ variant = "hero", activeSecti
     const context = gsap.context(() => {
       if (!reducedMotion) {
         gsap.fromTo(frame, { autoAlpha: 0, x: 44, y: 24, scale: 0.965 }, { autoAlpha: 1, x: 0, y: 0, scale: 1, duration: 1.15, ease: "power3.out" });
-        root.querySelectorAll(".product-mockup-candle").forEach((candle, index) => {
-          const direction = index % 2 === 0 ? -1 : 1;
-          ambientTweens.push(gsap.to(candle, {
-            y: direction * (9 + (index % 3) * 3),
-            rotation: direction * (0.7 + (index % 4) * 0.25),
-            duration: 3.8 + index * 0.38,
-            delay: index * 0.16,
-            repeat: -1,
-            yoyo: true,
-            ease: "sine.inOut",
-          }));
-        });
-        ambientTweens.push(gsap.to(root.querySelector(".product-mockup-floor-glow"), { opacity: 0.82, scaleX: 1.06, duration: 4.5, repeat: -1, yoyo: true, ease: "sine.inOut" }));
       }
+
+      // Les chandeliers restent animes meme si le systeme reduit les animations.
+      // L'amplitude reste assez visible pour que le mouvement ne ressemble jamais
+      // a une image statique, tout en restant plus doux dans ce mode.
+      const motionScale = reducedMotion ? 0.78 : 1;
+      root.querySelectorAll(".product-mockup-candle").forEach((candle, index) => {
+        const verticalDirection = index % 2 === 0 ? -1 : 1;
+        const horizontalDirection = index % 3 === 0 ? 1 : -1;
+        ambientTweens.push(gsap.to(candle, {
+          x: horizontalDirection * (12 + (index % 3) * 6) * motionScale,
+          y: verticalDirection * (34 + (index % 4) * 8) * motionScale,
+          rotation: verticalDirection * (1.8 + (index % 4) * 0.55) * motionScale,
+          duration: 2.05 + index * 0.18,
+          delay: index * 0.11,
+          repeat: -1,
+          yoyo: true,
+          ease: "sine.inOut",
+        }));
+      });
+      ambientTweens.push(gsap.to(root.querySelector(".product-mockup-floor-glow"), {
+        opacity: 0.86,
+        scaleX: 1.08,
+        duration: reducedMotion ? 5.5 : 3.8,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut",
+      }));
     }, root);
 
     const syncAmbientMotion = (isVisible) => ambientTweens.forEach((tween) => tween.paused(!isVisible || document.hidden));
