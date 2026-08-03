@@ -65,13 +65,13 @@ export default function Dashboard() {
   const traderScoreLabel = k.total_trades ? `${k.trader_score || k.discipline_score}/100` : "En attente";
 
   return (
-    <div className="p-4 sm:p-7 space-y-5 max-w-[1800px] mx-auto">
+    <div className="pe-page pe-page-stack max-w-[1800px] mx-auto">
       <CommercialBanner placement="dashboard" />
       <div className="relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-gradient-to-br from-[#111426] via-[#0B0E1A] to-[#090B13] p-5 sm:p-7 shadow-[0_20px_70px_rgba(0,0,0,.32)]">
         <div className="absolute -top-32 right-[8%] w-80 h-80 rounded-full bg-[#7C4DFF] blur-3xl opacity-15"/><div className="absolute -bottom-36 left-[25%] w-72 h-72 rounded-full bg-[#4F8CFF] blur-3xl opacity-10"/>
         <div className="relative flex flex-col xl:flex-row xl:items-center justify-between gap-5">
-          <div><div className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[.2em] font-mono text-[#B58BFF]"><span className="w-1.5 h-1.5 rounded-full bg-[#00E676] shadow-[0_0_10px_#00E676]"/>Centre de pilotage</div><h1 className="text-2xl sm:text-4xl font-bold mt-3">Bonjour {user?.name?.split(" ")[0] || "Trader"}<span className="text-[#B58BFF]">.</span></h1><p className="text-sm text-[#9CA3AF] mt-2">Garde le contrôle de ton risque, de ta discipline et de tes prochains objectifs.</p></div>
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-0 xl:min-w-[420px]">{[["Capital suivi",capitalLabel,"#4F8CFF"],["Score trader",traderScoreLabel,"#B58BFF"],["Payouts",money(k.total_payouts),"#00E676"]].map(([l,v,c])=><div key={l} className="rounded-2xl border border-white/[0.07] bg-black/20 p-3 sm:p-4 backdrop-blur"><div className="text-[9px] text-[#6B7280] uppercase tracking-wider">{l}</div><div className="text-sm sm:text-xl font-bold font-numeric mt-2 truncate" style={{color:c}}>{v}</div></div>)}</div>
+          <div><div className="pe-eyebrow"><span className="w-1.5 h-1.5 rounded-full bg-[#00E676] shadow-[0_0_10px_#00E676]"/>Centre de pilotage</div><h1 className="pe-page-title mt-3 sm:!text-4xl">Bonjour {user?.name?.split(" ")[0] || "Trader"}<span className="text-[#B58BFF]">.</span></h1><p className="pe-page-copy mt-2">Garde le contrôle de ton risque, de ta discipline et de tes prochains objectifs.</p></div>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-0 xl:min-w-[420px]">{[["Capital suivi",capitalLabel,"#4F8CFF"],["Score trader",traderScoreLabel,"#B58BFF"],["Payouts",money(k.total_payouts),"#00E676"]].map(([l,v,c])=><div key={l} className="rounded-pe-lg border border-white/[0.07] bg-black/20 p-3 sm:p-4 backdrop-blur"><div className="text-pe-caption text-[#7E8798] uppercase tracking-wider">{l}</div><div className="text-sm sm:text-xl font-bold font-numeric mt-2 truncate" style={{color:c}}>{v}</div></div>)}</div>
         </div>
         <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 pt-5 border-t border-white/[0.06]">
           {isEmptyAccount ? <div className="text-[11px] text-[#B58BFF] inline-flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[#B58BFF]"/>Ton espace est prêt : ajoute un compte puis journalise ton premier trade.</div> : <div className="text-[11px] text-[#00E676] inline-flex items-center gap-2"><Shield className="w-3.5 h-3.5"/>Données réelles synchronisées avec ton journal.</div>}
@@ -163,8 +163,8 @@ export default function Dashboard() {
           </div>
 
           <div className="hidden md:block m-5 mt-4 overflow-x-auto rounded-2xl border border-white/[0.07] bg-[#090B13]">
-            <table className="w-full text-sm min-w-[820px]">
-              <thead className="bg-white/[0.025] text-[#71798A] text-[10px] uppercase tracking-[.12em] font-mono"><tr><th className="text-left px-4 py-3 font-normal">Date</th><th className="text-left px-3 font-normal">Actif</th><th className="text-left px-3 font-normal">Direction</th><th className="text-right px-3 font-normal">Résultat</th><th className="text-right px-3 font-normal">R Multiple</th><th className="text-left px-3 font-normal">Durée</th><th className="text-left px-3 font-normal">Compte</th><th className="text-left px-4 font-normal">Tags</th></tr></thead>
+            <table className="pe-table min-w-[820px]">
+              <thead><tr><th className="text-left">Date</th><th className="text-left">Actif</th><th className="text-left">Direction</th><th className="text-right">Résultat</th><th className="text-right">R Multiple</th><th className="text-left">Durée</th><th className="text-left">Compte</th><th className="text-left">Tags</th></tr></thead>
               <tbody>
                 {filtered.map(t => {
                   const hasPnl = typeof t.pnl === "number"; const positive = hasPnl && t.pnl >= 0;

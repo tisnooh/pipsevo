@@ -25,16 +25,16 @@ export default function Backtest() {
     requiredWinrate: (+form.loss/(+form.gain + +form.loss))*100,
   };
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
-  return <div className="p-4 sm:p-7 space-y-5">
-    <div><h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2"><FlaskConical className="text-[#B58BFF]"/>Simulateur de stratégie</h1><p className="text-sm text-[#9CA3AF] mt-1">Teste des hypothèses avec un risque composé. Ce module n’utilise pas encore de données de marché historiques.</p></div>
+  return <div className="pe-page pe-page-stack mx-auto max-w-[1800px]">
+    <div className="pe-page-header"><div><div className="pe-eyebrow">Projection statistique</div><h1 className="pe-page-title flex items-center gap-2"><FlaskConical className="h-6 w-6 text-[#B58BFF]"/>Simulateur de stratégie</h1><p className="pe-page-copy">Teste des hypothèses avec un risque composé. Ce module n’utilise pas encore de données de marché historiques.</p></div></div>
     <div className="grid lg:grid-cols-3 gap-4">
-      <form onSubmit={e=>{e.preventDefault();setRan(true)}} className="card-elev p-6 space-y-4">
-        {[["capital",`Capital initial (${settings.currency})`,100],['trades','Nombre de trades',1],['winrate','Win rate (%)',1],['gain','Gain moyen (R)',0.1],['loss','Perte moyenne (R)',0.1],['risk','Risque par trade (%)',0.1]].map(([k,l,s])=><label key={k} className="block text-xs text-[#9CA3AF]">{l}<input type="number" min={k==='winrate'?0:0.01} max={k==='winrate'?100:k==='risk'?10:k==='trades'?5000:undefined} step={s} value={form[k]} onChange={e=>set(k,e.target.value)} className="mt-1 w-full bg-[#0D1020] border border-white/10 rounded-xl px-3 py-2.5 text-white"/></label>)}
+      <form onSubmit={e=>{e.preventDefault();setRan(true)}} className="pe-card pe-card-pad space-y-4">
+        {[["capital",`Capital initial (${settings.currency})`,100],['trades','Nombre de trades',1],['winrate','Win rate (%)',1],['gain','Gain moyen (R)',0.1],['loss','Perte moyenne (R)',0.1],['risk','Risque par trade (%)',0.1]].map(([k,l,s])=><label key={k} className="block text-xs font-medium text-[#9CA3AF]">{l}<input type="number" min={k==='winrate'?0:0.01} max={k==='winrate'?100:k==='risk'?10:k==='trades'?5000:undefined} step={s} value={form[k]} onChange={e=>set(k,e.target.value)} className="pe-control mt-2 w-full"/></label>)}
         {!valid&&<p className="text-xs text-[#FF7272]">Vérifie les valeurs : risque entre 0 et 10%, win rate entre 0 et 100%, maximum 5 000 trades.</p>}
-        <div className="flex gap-2"><button disabled={!valid} className="btn-primary flex-1 inline-flex justify-center items-center gap-2 disabled:opacity-40"><Play className="w-4 h-4"/>Simuler</button><button type="button" title="Réinitialiser" onClick={()=>{setForm(initial);setRan(false)}} className="btn-ghost px-3"><RotateCcw className="w-4 h-4"/></button></div>
+        <div className="flex gap-2"><button disabled={!valid} className="btn-primary flex-1 inline-flex justify-center items-center gap-2 disabled:opacity-40"><Play className="w-4 h-4"/>Simuler</button><button type="button" title="Réinitialiser" aria-label="Réinitialiser la simulation" onClick={()=>{setForm(initial);setRan(false)}} className="pe-icon-button"><RotateCcw className="w-4 h-4"/></button></div>
       </form>
       <div className="lg:col-span-2 space-y-4">
-        {!ran ? <div className="card-elev overflow-hidden">
+        {!ran ? <div className="pe-card overflow-hidden">
           <div className="border-b border-white/[0.07] p-6 sm:p-8"><div className="font-semibold text-white">Aperçu de ton hypothèse</div><p className="mt-2 max-w-2xl text-sm text-[#9CA3AF]">Vérifie rapidement la cohérence de tes paramètres avant de lancer la projection statistique.</p></div>
           <div className="grid sm:grid-cols-3 gap-3 p-5 sm:p-6">
             <PreviewStat icon={BarChart3} label="Espérance théorique" value={`${preview.expectancy.toFixed(2)}R`} positive={preview.expectancy>=0}/>
@@ -46,11 +46,11 @@ export default function Backtest() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Stat l="Capital final" v={money(result.final)} c="#B58BFF"/><Stat l="Profit net" v={money(result.profit,{signDisplay:"always"})} c={result.profit>=0?'#00E676':'#FF5252'}/><Stat l="Drawdown max" v={`${result.maxDd.toFixed(1)}%`} c="#FFB855"/><Stat l="Espérance" v={`${result.expectancy.toFixed(2)}R`} c={result.expectancy>=0?'#00E676':'#FF5252'}/>
           </div>
-          <div className="card-elev p-6"><div className="text-sm font-semibold mb-4">Courbe simulée</div><svg viewBox="0 0 600 180" className="w-full h-64"><polyline points={result.curve.map((v,i)=>`${i/(Math.max(result.curve.length-1,1))*600},${170-(v-Math.min(...result.curve))/(Math.max(...result.curve)-Math.min(...result.curve)||1)*155}`).join(' ')} fill="none" stroke="#B58BFF" strokeWidth="3"/></svg></div>
+          <div className="pe-card pe-card-pad"><div className="pe-section-title mb-4">Courbe simulée</div><svg viewBox="0 0 600 180" className="h-64 w-full"><polyline points={result.curve.map((v,i)=>`${i/(Math.max(result.curve.length-1,1))*600},${170-(v-Math.min(...result.curve))/(Math.max(...result.curve)-Math.min(...result.curve)||1)*155}`).join(' ')} fill="none" stroke="#B58BFF" strokeWidth="3"/></svg></div>
         </>}
       </div>
     </div>
   </div>;
 }
-const Stat=({l,v,c})=><div className="card-elev p-4"><div className="text-xs text-[#9CA3AF]">{l}</div><div className="text-xl font-bold font-mono mt-2" style={{color:c}}>{v}</div></div>;
-const PreviewStat=({icon:Icon,label,value,positive})=><div className="card-flat p-4"><div className="flex items-center gap-2 text-xs text-[#9CA3AF]"><Icon className="h-4 w-4 text-[#B58BFF]"/>{label}</div><div className={`mt-3 text-xl font-bold font-numeric ${positive?"text-white":"text-[#FF7272]"}`}>{value}</div></div>;
+const Stat=({l,v,c})=><div className="pe-card p-4"><div className="text-pe-caption text-[#9CA3AF]">{l}</div><div className="font-numeric mt-2 text-2xl font-bold" style={{color:c}}>{v}</div></div>;
+const PreviewStat=({icon:Icon,label,value,positive})=><div className="card-flat p-4"><div className="flex items-center gap-2 text-xs font-medium text-[#9CA3AF]"><Icon className="h-4 w-4 text-[#B58BFF]"/>{label}</div><div className={`font-numeric mt-3 text-2xl font-bold ${positive?"text-white":"text-[#FF7272]"}`}>{value}</div></div>;

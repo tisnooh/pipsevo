@@ -61,14 +61,14 @@ export default function Onboarding() {
       <div className="absolute -top-36 right-[5%] w-[600px] h-[600px] rounded-full blur-3xl opacity-20 bg-[#7C4DFF]" />
       <div className="absolute -bottom-40 left-[10%] w-[500px] h-[500px] rounded-full blur-3xl opacity-10 bg-[#4F8CFF]" />
       <div className="max-w-5xl mx-auto relative z-10">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-7"><Logo /><div className="flex items-center justify-between gap-3 sm:justify-end"><LanguageSwitcher compact/><div className="text-right"><div className="text-xs text-[#9CA3AF]">Bienvenue, <span className="text-white font-medium">{user?.name || "Trader"}</span></div><div className="text-[10px] text-[#6B7280] mt-1">Personnalisons ton espace.</div></div></div></div>
+        <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><Logo /><div className="flex items-center justify-between gap-3 sm:justify-end"><LanguageSwitcher compact/><div className="text-right"><div className="text-xs text-[#9CA3AF]">Bienvenue, <span className="font-medium text-white">{user?.name || "Trader"}</span></div><div className="mt-1 text-pe-micro text-[#6B7280]">Personnalisons ton espace.</div></div></div></div>
         <div className="rounded-[26px] border border-white/[0.09] bg-gradient-to-br from-[#111426]/95 via-[#0B0E1A]/95 to-[#090B13]/95 p-5 sm:p-8 lg:p-10 shadow-[0_25px_90px_rgba(0,0,0,.5)] relative overflow-hidden">
           <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-[#7C4DFF] blur-3xl opacity-10"/>
           <div className="relative grid grid-cols-6 gap-2 mb-7">
-            {["Profil","Actifs","Journal","Firms","Comptes","Règles"].map((label,i) => <div key={label}><div className={`h-1.5 rounded-full transition-all duration-500 ${step>=i+1?"bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF] shadow-[0_0_12px_rgba(124,77,255,.35)]":"bg-white/10"}`} /><div className={`hidden sm:block text-[9px] mt-2 ${step===i+1?"text-[#B58BFF]":"text-[#4B5563]"}`}>{label}</div></div>)}
+            {["Profil","Actifs","Journal","Firms","Comptes","Règles"].map((label,i) => <div key={label}><div className={`h-1.5 rounded-full transition-all duration-500 ${step>=i+1?"bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF] shadow-[0_0_12px_rgba(124,77,255,.35)]":"bg-white/10"}`} /><div className={`mt-2 hidden text-pe-micro sm:block ${step===i+1?"text-[#B58BFF]":"text-[#4B5563]"}`}>{label}</div></div>)}
           </div>
           <div className="relative">
-          <div className="text-[10px] font-mono uppercase tracking-widest text-[#B58BFF]">Étape {step} / 6</div>
+          <div className="font-mono text-pe-micro uppercase tracking-widest text-[#B58BFF]">Étape {step} / 6</div>
 
           {step === 1 && (
             <div className="mt-3">
@@ -150,7 +150,7 @@ const SectionTitle = ({ market }) => (
   </div>
 );
 
-const PreferenceFavorites = ({ title, options, selected, onToggle }) => <section className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">{title}</h3><span className="text-[10px] text-[#6B7280]">{selected.length} favorite{selected.length>1?"s":""}</span></div><div className="mt-3 flex max-h-44 flex-wrap gap-2 overflow-y-auto pr-1 scrollbar-thin">{options.filter(item=>!item.hidden).map(item=><button type="button" key={item.id} aria-pressed={selected.includes(item.id)} onClick={()=>onToggle(item.id)} className={`rounded-full border px-3 py-1.5 text-[11px] transition ${selected.includes(item.id)?"border-[#7C4DFF] bg-[#7C4DFF]/15 text-white":"border-white/10 text-[#8B93A3] hover:border-white/20"}`}>{item.label}</button>)}</div></section>;
+const PreferenceFavorites = ({ title, options, selected, onToggle }) => <section className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">{title}</h3><span className="text-pe-micro text-[#6B7280]">{selected.length} favorite{selected.length>1?"s":""}</span></div><div className="mt-3 flex max-h-44 flex-wrap gap-2 overflow-y-auto pr-1 scrollbar-thin">{options.filter(item=>!item.hidden).map(item=><button type="button" key={item.id} aria-pressed={selected.includes(item.id)} onClick={()=>onToggle(item.id)} className={`rounded-full border px-3 py-1.5 text-xs transition ${selected.includes(item.id)?"border-[#7C4DFF] bg-[#7C4DFF]/15 text-white":"border-white/10 text-[#8B93A3] hover:border-white/20"}`}>{item.label}</button>)}</div></section>;
 
 const AssetSection = ({ market, assets, onToggle, showTitle }) => (
   <section>
@@ -159,7 +159,7 @@ const AssetSection = ({ market, assets, onToggle, showTitle }) => (
       {ASSET_GROUPS[market].map(asset => {
         const selected = assets.includes(asset.id); const Icon = ASSET_ICONS[asset.id] || BarChart3;
         return <button key={asset.id} onClick={()=>onToggle(asset.id)} data-testid={`onb-asset-${asset.id}`} className={`relative text-left rounded-2xl border p-4 transition-all ${selected ? "border-[#7C4DFF]/70 bg-[#7C4DFF]/10 shadow-[0_10px_35px_rgba(124,77,255,.12)]" : "border-white/[0.07] bg-white/[0.025] hover:border-white/20"}`}>
-          <div className="flex items-center gap-3"><span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{background:`${asset.color}18`}}><Icon className="w-5 h-5" style={{color:asset.color}}/></span><div className="min-w-0"><div className="font-semibold text-sm">{asset.name}</div><div className="text-[10px] text-[#6B7280] mt-1">{asset.description}</div></div></div>
+          <div className="flex items-center gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{background:`${asset.color}18`}}><Icon className="h-5 w-5" style={{color:asset.color}}/></span><div className="min-w-0"><div className="text-sm font-semibold">{asset.name}</div><div className="mt-1 text-pe-micro text-[#6B7280]">{asset.description}</div></div></div>
           {selected && <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#7C4DFF] flex items-center justify-center"><Check className="w-3 h-3"/></span>}
         </button>;
       })}
@@ -174,7 +174,7 @@ const FirmSection = ({ market, selected, onToggle, showTitle }) => {
     <div className="grid sm:grid-cols-2 gap-3">{firms.map(firm => {
       const active = selected.includes(firm.name);
       return <button key={`${market}-${firm.id}`} onClick={()=>onToggle(firm.name)} data-testid={`onb-firm-${firm.id}-${market}`} className={`relative text-left rounded-2xl border p-4 transition-all ${active ? "border-[#7C4DFF]/70 bg-[#7C4DFF]/10" : "border-white/[0.07] bg-white/[0.025] hover:border-white/20"}`}>
-        <div className="font-semibold text-sm pr-8">{firm.name}</div><div className="flex gap-1.5 mt-2">{firm.markets.map(m=><span key={m} className={`text-[9px] px-2 py-0.5 rounded-full border ${m === "futures" ? "text-[#8FB4FF] border-[#4F8CFF]/30 bg-[#4F8CFF]/10" : "text-[#B58BFF] border-[#7C4DFF]/30 bg-[#7C4DFF]/10"}`}>{m === "futures" ? "Futures" : "CFD / Forex"}</span>)}</div>
+        <div className="pr-8 text-sm font-semibold">{firm.name}</div><div className="mt-2 flex gap-1.5">{firm.markets.map(m=><span key={m} className={`rounded-full border px-2 py-0.5 text-pe-micro ${m === "futures" ? "text-[#8FB4FF] border-[#4F8CFF]/30 bg-[#4F8CFF]/10" : "text-[#B58BFF] border-[#7C4DFF]/30 bg-[#7C4DFF]/10"}`}>{m === "futures" ? "Futures" : "CFD / Forex"}</span>)}</div>
         {active && <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#7C4DFF] flex items-center justify-center"><Check className="w-3 h-3"/></span>}
       </button>;
     })}</div>

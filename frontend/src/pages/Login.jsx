@@ -46,7 +46,7 @@ export default function Login() {
             <input type="email" required value={email} onChange={(e)=>setEmail(e.target.value)} data-testid="login-email" className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 focus:border-[#7C4DFF] outline-none" />
           </div>
           <div>
-            <div className="flex items-center justify-between gap-3"><label className="text-xs font-mono uppercase text-[#9CA3AF]">Mot de passe</label><Link to="/forgot-password" data-testid="forgot-password-link" className="text-[11px] text-[#B58BFF] hover:text-white">Mot de passe oublié ?</Link></div>
+            <div className="flex items-center justify-between gap-3"><label className="text-xs font-mono uppercase text-[#9CA3AF]">Mot de passe</label><Link to="/forgot-password" data-testid="forgot-password-link" className="text-xs text-[#B58BFF] hover:text-white">Mot de passe oublié ?</Link></div>
             <input type="password" required value={password} onChange={(e)=>setPassword(e.target.value)} data-testid="login-password" className="w-full mt-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 focus:border-[#7C4DFF] outline-none" />
           </div>
           <button type="submit" disabled={loading} className="btn-primary w-full inline-flex items-center justify-center gap-2" data-testid="login-submit">{loading ? "Connexion…" : (<>Se connecter <ArrowRight className="w-4 h-4"/></>)}</button>

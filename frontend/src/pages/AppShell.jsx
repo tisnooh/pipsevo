@@ -136,7 +136,7 @@ export default function AppShell() {
         {/* Discipline du jour */}
         <div className="px-3 mt-3 shrink-0">
           <div className="card-flat p-4 text-center">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-[#9CA3AF]">Discipline du jour</div>
+            <div className="text-pe-micro font-mono uppercase tracking-widest text-[#9CA3AF]">Discipline du jour</div>
             <div className="relative mt-2 mb-1">
               <svg viewBox="0 0 80 50" className="w-full h-12 mx-auto">
                 <defs>
@@ -163,7 +163,7 @@ export default function AppShell() {
                 </div>
               </div>
             </div>
-            <div className={`text-[10px] ${discipline>=80?"text-[#00E676]":discipline>=60?"text-[#FFB855]":"text-[#FF7272]"}`}>{discipline>=80?"Excellent":discipline>=60?"À consolider":discipline?"À améliorer":"En attente"}</div>
+            <div className={`text-pe-micro ${discipline>=80?"text-[#00E676]":discipline>=60?"text-[#FFB855]":"text-[#FF7272]"}`}>{discipline>=80?"Excellent":discipline>=60?"À consolider":discipline?"À améliorer":"En attente"}</div>
             <svg viewBox="0 0 80 18" className="w-full h-4 mt-2">
               <path d="M0,15 L10,12 L20,13 L30,9 L40,10 L50,6 L60,7 L70,3 L80,4" stroke="#7C4DFF" strokeWidth="1.5" fill="none" />
             </svg>
@@ -174,7 +174,7 @@ export default function AppShell() {
         <div className="px-3 mt-3 mb-2 shrink-0">
           <div className="card-flat p-4">
             <div className="text-sm font-semibold">{BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Bêta gratuite":"Découvre les offres"}</div>
-            <div className="text-[10px] text-[#9CA3AF] mt-1">{BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Les fonctions essentielles sont gratuites. Les outils avancés arrivent au lancement.":"Compare Essential et Pro sans engagement."}</div>
+            <div className="mt-1 text-pe-micro text-[#9CA3AF]">{BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Les fonctions essentielles sont gratuites. Les outils avancés arrivent au lancement.":"Compare Essential et Pro sans engagement."}</div>
             <button
               onClick={() => { closeMobile(); nav("/pricing"); }}
               className="mt-3 w-full text-xs py-2 rounded-lg bg-gradient-to-r from-[#7C4DFF] to-[#5A2DFF] hover:opacity-90 transition font-semibold"
@@ -251,7 +251,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
           data-testid="top-search"
           className="w-full bg-[#0D1020] border border-white/5 rounded-xl pl-10 pr-12 py-2 text-sm placeholder:text-[#6B7280] focus:border-[#7C4DFF]/40"
         />
-        <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[#6B7280] border border-white/10 rounded px-1.5 py-0.5">⌘K</kbd>
+        <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-white/10 px-1.5 py-0.5 font-mono text-pe-micro text-[#6B7280]">⌘K</kbd>
       </button>
 
       <div className="flex-1 min-w-0" />
@@ -279,7 +279,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
         <div className="hidden max-w-32 truncate whitespace-nowrap text-sm font-medium lg:max-w-48 sm:block" data-testid="top-username">
           {user?.name || user?.email}
         </div>
-        <span className="hidden sm:inline text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#7C4DFF]/20 text-[#B58BFF] border border-[#7C4DFF]/30 whitespace-nowrap">
+        <span className="hidden whitespace-nowrap rounded border border-[#7C4DFF]/30 bg-[#7C4DFF]/20 px-1.5 py-0.5 text-pe-micro font-bold tracking-wider text-[#B58BFF] sm:inline">
           PRO
         </span>
         <span className={`text-[#9CA3AF] text-xs transition-transform ${profileOpen ? "rotate-180" : ""}`}>⌄</span>

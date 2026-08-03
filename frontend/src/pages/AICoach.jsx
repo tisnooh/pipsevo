@@ -54,45 +54,46 @@ export default function AICoach() {
   };
 
   return (
-    <div className="p-7 space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] flex items-center justify-center glow-purple"><Brain className="w-5 h-5"/></div>
+    <div className="pe-page pe-page-stack mx-auto max-w-[1800px]">
+      <div className="pe-page-header justify-start">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-pe-md bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] glow-purple"><Brain className="w-5 h-5"/></div>
         <div>
-          <h1 className="text-3xl font-bold">Analyse IA</h1>
-          <p className="text-sm text-[#9CA3AF] mt-0.5">Discute avec Atlas, ton coach d’analyse comportementale. Aucun signal de trading.</p>
+          <div className="pe-eyebrow">Coach comportemental</div>
+          <h1 className="pe-page-title">Analyse IA</h1>
+          <p className="pe-page-copy">Discute avec Atlas, ton coach d’analyse comportementale. Aucun signal de trading.</p>
         </div>
       </div>
 
-      {!hasCoachAccess ? <FeatureGate feature="aiCoach" label="le coach IA complet" className="block w-full"><div className="card-elev p-6 glow-purple"><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-[#B58BFF]"/><div><div className="font-semibold">Atlas est en préparation</div><p className="mt-1 text-xs text-[#9CA3AF]">Aperçu de la future analyse comportementale, sans signal de trading.</p></div></div></div></FeatureGate> : <div className="card-elev p-6 glow-purple">
-        <div className="flex gap-2">
-          <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Pose ta question à Atlas…" data-testid="coach-input" className="flex-1 bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#7C4DFF]" onKeyDown={(e)=>e.key==="Enter"&&ask()} />
+      {!hasCoachAccess ? <FeatureGate feature="aiCoach" label="le coach IA complet" className="block w-full"><div className="pe-card pe-card-pad glow-purple"><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-[#B58BFF]"/><div><div className="font-semibold">Atlas est en préparation</div><p className="mt-1 text-xs text-[#9CA3AF]">Aperçu de la future analyse comportementale, sans signal de trading.</p></div></div></div></FeatureGate> : <div className="pe-card pe-card-pad glow-purple">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Pose ta question à Atlas…" data-testid="coach-input" className="pe-control min-w-0 flex-1" onKeyDown={(e)=>e.key==="Enter"&&ask()} />
           <button onClick={()=>ask()} disabled={loading} className="btn-primary inline-flex items-center gap-2 text-sm" data-testid="coach-ask"><Send className="w-4 h-4"/>{loading?"…":"Envoyer"}</button>
         </div>
         <div className="flex flex-wrap gap-2 mt-4">
-          {PRESETS.map(p => { const label=p[language] || p.fr; return <button key={p.fr} onClick={()=>ask(label)} disabled={loading} data-testid={`coach-preset-${p.fr.slice(0,8)}`} className="text-xs px-3 py-1.5 rounded-full border border-white/10 hover:border-[#7C4DFF]/40 text-[#B5BBC9] hover:text-white transition">{label}</button> })}
+          {PRESETS.map(p => { const label=p[language] || p.fr; return <button key={p.fr} onClick={()=>ask(label)} disabled={loading} data-testid={`coach-preset-${p.fr.slice(0,8)}`} className="pe-badge min-h-8 hover:border-[#7C4DFF]/40 hover:text-white">{label}</button> })}
         </div>
       </div>}
 
       {hasCoachAccess && (initialLoading ? <div className="grid md:grid-cols-5 gap-3">{Array.from({length:5}).map((_,i)=><div key={i} className="h-28 card-flat animate-pulse"/>)}</div> : insights.length ? <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-3">
         {insights.map(i => (
-          <div key={i.t} className="card-flat p-4">
+          <div key={i.t} className="pe-card p-4">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: `${i.c}22` }}><i.I className="w-4 h-4" style={{ color: i.c }}/></div>
-            <div className="text-xs font-semibold">{i.t}</div>
-            <div className="text-xs text-[#9CA3AF] mt-1">{i.d}</div>
+            <div className="text-sm font-semibold">{i.t}</div>
+            <div className="mt-1 text-xs leading-relaxed text-[#9CA3AF]">{i.d}</div>
           </div>
         ))}
       </div> : <div className="rounded-2xl border border-dashed border-white/10 p-5 text-center text-xs text-[#7E8798]">Les cartes d’insight apparaîtront après l’ajout de tes premiers trades.</div>)}
 
       {hasCoachAccess && <div className="space-y-3">
         {history.length === 0 && !loading && (
-          <div className="card-elev p-12 text-center">
+          <div className="pe-empty-state">
             <Sparkles className="w-8 h-8 mx-auto text-[#B58BFF] mb-3"/>
             <div className="text-sm text-[#9CA3AF]">Pose une question pour démarrer ton analyse comportementale.</div>
           </div>
         )}
         {history.map(r => (
-          <div key={r.id} className="card-elev p-6" data-testid={`coach-report-${r.id}`}>
-            <div className="text-[10px] font-mono uppercase text-[#B58BFF] mb-2">{r.tag} · {date(r.created_at,{withTime:true})}</div>
+          <div key={r.id} className="pe-card pe-card-pad" data-testid={`coach-report-${r.id}`}>
+            <div className="pe-eyebrow mb-2">{r.tag} · {date(r.created_at,{withTime:true})}</div>
             <div className="font-semibold mb-3">{r.question}</div>
             <div className="text-sm text-[#B5BBC9] whitespace-pre-wrap leading-relaxed">{r.answer}</div>
             {r.evidence?.length>0&&<details className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"><summary className="cursor-pointer text-xs font-semibold text-[#B58BFF]">Sources utilisées · {r.evidence.length} trade{r.evidence.length>1?"s":""}</summary><div className="mt-3 grid gap-2 sm:grid-cols-2">{r.evidence.map(source=><div key={`${source.alias}-${source.trade_id}`} className="rounded-lg border border-white/[0.06] bg-[#0A0D17] p-3 text-xs"><div className="flex items-center justify-between gap-3"><span className="font-mono font-bold text-[#B58BFF]">[{source.alias}]</span><span className={Number(source.pnl)>=0?"text-[#00E676]":"text-[#FF6B76]"}>{source.pnl===null||source.pnl===undefined?"P&L non renseigné":`${Number(source.pnl)>=0?"+":""}${Number(source.pnl).toFixed(2)}`}</span></div><div className="mt-1 font-semibold">{source.instrument||"Instrument non renseigné"} · {source.direction||"—"}</div><div className="mt-1 text-[#7E8798]">{source.date||"Date inconnue"}{source.setup?` · ${source.setup}`:""}{source.session?` · ${source.session}`:""}</div></div>)}</div></details>}

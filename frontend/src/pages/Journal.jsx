@@ -156,23 +156,22 @@ export function JournalPage() {
   )
 
   return (
-    <div className="flex flex-col lg:flex-row h-full lg:overflow-hidden">
+    <div className="flex h-full flex-col lg:flex-row lg:overflow-hidden">
       {/* Left: trades list */}
-      <div className="flex-1 p-4 sm:p-6 overflow-y-auto scrollbar-thin">
+      <div className="pe-page flex-1 overflow-y-auto scrollbar-thin">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-          <h1 className="text-2xl font-bold text-white">Journal</h1>
-          <div className="flex items-center gap-2 flex-wrap">
-            <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF]"><option value="">Tous les comptes</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
-            <select value={days} onChange={e=>setDays(e.target.value)} className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#9CA3AF]"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option><option value="3650">Toute la période</option></select>
-            <CsvExportButton rows={filtered} type="trades" filename="pipsevo-trades-filtres" className="px-3 py-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] text-xs text-[#B5BBC9] hover:border-[#7C4DFF]/50 hover:text-white"/>
-            <button type="button" onClick={()=>setImportOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#1E2430] bg-[#0F1117] px-3 py-1.5 text-xs text-[#B5BBC9] hover:border-[#7C4DFF]/50 hover:text-white"><Upload className="h-3.5 w-3.5"/>Importer</button>
+        <div className="pe-page-header mb-6">
+          <div><div className="pe-eyebrow">Historique de trading</div><h1 className="pe-page-title mt-2">Journal</h1><p className="pe-page-copy mt-1">Analyse tes décisions, ton contexte et la qualité de ton exécution.</p></div>
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+            <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className="pe-control min-w-[150px] flex-1 sm:flex-none"><option value="">Tous les comptes</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
+            <select value={days} onChange={e=>setDays(e.target.value)} className="pe-control min-w-[150px] flex-1 sm:flex-none"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option><option value="3650">Toute la période</option></select>
+            <CsvExportButton rows={filtered} type="trades" filename="pipsevo-trades-filtres" className="btn-ghost inline-flex h-11 items-center justify-center px-4"/>
+            <button type="button" onClick={()=>setImportOpen(true)} className="btn-ghost inline-flex h-11 items-center justify-center gap-2 px-4"><Upload className="h-4 w-4"/>Importer</button>
             <button
               onClick={openNewTrade}
-              className="px-4 py-1.5 rounded-lg text-xs font-medium text-white flex items-center gap-1.5"
-              style={{ background: "linear-gradient(135deg, #7C4DFF, #4F8CFF)" }}
+              className="btn-primary inline-flex h-11 items-center justify-center gap-2 px-4"
             >
-              <Plus className="w-3 h-3" /> Nouveau trade
+              <Plus className="h-4 w-4" /> Nouveau trade
             </button>
           </div>
         </div>
@@ -195,36 +194,35 @@ export function JournalPage() {
         </div>
 
         {/* KPI row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 mb-5">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {kpis.map((kpi) => (
-            <div key={kpi.label} className="p-3 rounded-xl border border-[#1E2430] bg-[#0F1117]">
+            <div key={kpi.label} className="pe-card min-h-[104px] p-4">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] text-[#9CA3AF]">{kpi.label}</span>
+                <span className="text-pe-caption text-[#9CA3AF]">{kpi.label}</span>
                 <span className="text-xs">{kpi.icon}</span>
               </div>
-              <div className="text-base font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
-              {kpi.sub && <p className="text-[9px] text-[#9CA3AF] mt-0.5">{kpi.sub}</p>}
+              <div className="font-numeric text-xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
+              {kpi.sub && <p className="mt-1 text-pe-caption text-[#9CA3AF]">{kpi.sub}</p>}
             </div>
           ))}
         </div>
 
         {/* Table */}
         {normalized.length === 0 ? (
-          <div className="rounded-xl border border-[#1E2430] bg-[#0F1117] p-8 sm:p-16 text-center">
+          <div className="pe-empty-state">
             <div className="text-[#9CA3AF] text-sm mb-4">Pas encore de trades — ajoute ton premier trade !</div>
             <button
               onClick={openNewTrade}
-              className="px-6 py-2.5 rounded-xl text-sm font-medium text-white"
-              style={{ background: "linear-gradient(135deg, #7C4DFF, #4F8CFF)" }}
+              className="btn-primary inline-flex items-center justify-center px-6"
             >
               <Plus className="w-4 h-4 inline mr-2" />Ajouter un trade
             </button>
           </div>
         ) : (
-          <div className="rounded-xl border border-[#1E2430] bg-[#0F1117] overflow-x-auto">
+          <div className="pe-table-shell">
             {/* Header */}
             <div
-              className="grid text-[11px] text-[#9CA3AF] px-4 py-3 border-b border-[#1E2430] bg-[#0A0C14] min-w-[780px]"
+              className="grid min-w-[780px] border-b border-[#1E2430] bg-[#0A0C14] px-4 py-3.5 text-pe-label uppercase tracking-[0.08em] text-[#9CA3AF]"
               style={{ gridTemplateColumns: "2rem 2fr 1fr 1.5fr 1fr 0.8fr 1fr 1.5fr 1fr 2rem" }}
             >
               <span></span>
@@ -246,22 +244,22 @@ export function JournalPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.04 }}
                 onClick={() => setSelectedTrade(tradeList.find(t => t.id === trade.id))}
-                className={`grid items-center px-4 py-3 border-b border-[#1E2430]/50 last:border-0 cursor-pointer transition-all text-xs min-w-[780px] ${
+                className={`grid min-w-[780px] cursor-pointer items-center border-b border-[#1E2430]/50 px-4 py-3.5 text-[13px] transition-all last:border-0 ${
                   selectedTrade?.id === trade.id ? "bg-[#111322]" : "hover:bg-[#111322]/50"
                 }`}
                 style={{ gridTemplateColumns: "2rem 2fr 1fr 1.5fr 1fr 0.8fr 1fr 1.5fr 1fr 2rem" }}
               >
                 <button aria-label={trade.starred?"Retirer des favoris":"Ajouter aux favoris"} onClick={(e)=>toggleFavorite(trade,e)}><Star className={`w-3.5 h-3.5 transition-colors ${trade.starred ? "text-yellow-400 fill-yellow-400" : "text-[#374151] hover:text-yellow-400"}`}/></button>
-                <span className="text-[#9CA3AF] text-[10px]">{trade.dateLabel}</span>
+                <span className="text-xs text-[#9CA3AF]">{trade.dateLabel}</span>
                 <span className="text-white font-medium">{trade.asset}</span>
                 <span className={trade.toneClass}>{trade.direction}</span>
                 <span className={`font-medium ${trade.toneClass}`}>{trade.result}</span>
                 <span className={trade.toneClass}>{trade.rLabel}</span>
                 <span className="text-[#9CA3AF]">{trade.duration || "—"}</span>
-                <span className="text-[#9CA3AF] text-[10px] truncate">{trade.account}</span>
+                <span className="truncate text-xs text-[#9CA3AF]">{trade.account}</span>
                 <div className="flex gap-1 flex-wrap">
                   {trade.tags.map((tag) => (
-                    <span key={tag} className="px-1.5 py-0.5 bg-[#111322] border border-[#1E2430] text-[#9CA3AF] rounded text-[8px] font-medium">{tag}</span>
+                    <span key={tag} className="pe-badge bg-[#111322] text-[#9CA3AF]">{tag}</span>
                   ))}
                 </div>
                 <button
@@ -273,7 +271,7 @@ export function JournalPage() {
               </motion.div>
             ))}
 
-            <button onClick={()=>{setActiveFilter("Tous les trades");setAccountFilter("");setDays("3650")}} className="w-full mt-3 py-2 text-[11px] text-[#7C4DFF] font-medium hover:bg-[rgba(124,77,255,0.06)] rounded-lg transition-all flex items-center justify-center gap-1">
+            <button onClick={()=>{setActiveFilter("Tous les trades");setAccountFilter("");setDays("3650")}} className="flex min-h-11 w-full items-center justify-center gap-1 text-xs font-medium text-[#B58BFF] transition-all hover:bg-[rgba(124,77,255,0.06)]">
               Voir tous les trades →
             </button>
           </div>
