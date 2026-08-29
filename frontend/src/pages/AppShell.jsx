@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X } from "lucide-react";
+import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { LogoMark } from "@/components/Logo";
 import { dashboard, accounts as accountsAPI, trades as tradesAPI } from "@/lib/api";
@@ -24,15 +24,31 @@ const NAV_LINKS = [
   { to: "/app/settings", fr: "Paramètres", en: "Settings", icon: Cog, testid: "nav-settings" },
 ];
 
+const MOBILE_NAV_ROUTES = new Set([
+  "/app/dashboard",
+  "/app/accounts",
+  "/app/journal",
+  "/app/analytics",
+  "/app/settings",
+]);
+
 export default function AppShell() {
   const { user, logout } = useAuth();
   const { t } = useI18n();
   const nav = useNavigate();
   const links = useMemo(() => NAV_LINKS.map(link => ({ ...link, label: t(link.fr, link.en) })), [t]);
+  const mobileLinks = useMemo(() => links.filter(link => MOBILE_NAV_ROUTES.has(link.to)), [links]);
   const [discipline, setDiscipline] = useState(0);
   const [summary, setSummary] = useState(null);
   const [riskAlerts, setRiskAlerts] = useState([]);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem("pipsevo.sidebar.collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -60,6 +76,14 @@ export default function AppShell() {
     document.body.style.overflow = mobileOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [mobileOpen]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("pipsevo.sidebar.collapsed", String(sidebarCollapsed));
+    } catch {
+      // Le stockage local peut être indisponible en navigation privée stricte.
+    }
+  }, [sidebarCollapsed]);
 
   // Ferme le menu mobile avec la touche Escape
   useEffect(() => {
@@ -89,19 +113,28 @@ export default function AppShell() {
 
       {/* SIDEBAR — fixed sur mobile ET desktop, largeur/translation gérées par breakpoint */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-[100dvh] w-[min(280px,85vw)] md:w-64 border-r border-white/5 bg-[#050505] flex flex-col
-        transition-transform duration-300 ease-out
+        className={`fixed top-0 left-0 z-50 h-[100dvh] w-[min(280px,85vw)] border-r border-white/5 bg-[#050505] flex flex-col
+        transition-[width,transform] duration-300 ease-out
+        ${sidebarCollapsed ? "md:w-[72px]" : "md:w-[232px]"}
         ${mobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
         data-testid="app-sidebar"
       >
-        <div className="flex h-[60px] shrink-0 items-center justify-between gap-2.5 px-4 md:h-[68px]">
+        <div className={`flex h-[60px] shrink-0 items-center justify-between gap-2.5 px-4 md:h-[68px] ${sidebarCollapsed ? "md:justify-center md:px-2" : ""}`}>
           <NavLink
             to="/app/dashboard"
             aria-label="Retour au tableau de bord"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70"
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 ${sidebarCollapsed ? "md:hidden" : ""}`}
           >
             <LogoMark size="md" className="!h-6 !w-6 md:!h-8 md:!w-8" />
           </NavLink>
+          <button
+            onClick={() => setSidebarCollapsed(value => !value)}
+            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#9CA3AF] transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:flex"
+            aria-label={sidebarCollapsed ? "Déployer la navigation" : "Réduire la navigation"}
+            title={sidebarCollapsed ? "Déployer la navigation" : "Réduire la navigation"}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </button>
           <button
             onClick={closeMobile}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-[#9CA3AF] transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:hidden"
@@ -120,21 +153,23 @@ export default function AppShell() {
               end
               onClick={closeMobile}
               data-testid={testid}
+              title={sidebarCollapsed ? label : undefined}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition whitespace-nowrap ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition whitespace-nowrap ${sidebarCollapsed ? "md:justify-center md:px-2" : ""} ${
                   isActive
                     ? "bg-[#7C4DFF]/20 text-white border border-[#7C4DFF]/30 shadow-[0_0_20px_-6px_rgba(124,77,255,0.5)]"
                     : "text-[#9CA3AF] hover:text-white hover:bg-white/[0.04]"
                 }`
               }
             >
-              <Icon className="w-[18px] h-[18px] shrink-0" /> {label}
+              <Icon className="w-[18px] h-[18px] shrink-0" />
+              <span className={sidebarCollapsed ? "md:hidden" : ""}>{label}</span>
             </NavLink>
           ))}
         </nav>
 
         {/* Discipline du jour */}
-        <div className="px-3 mt-2 shrink-0">
+        <div className={`px-3 mt-2 shrink-0 ${sidebarCollapsed ? "md:hidden" : ""}`}>
           <div className="card-flat px-3 py-2.5 text-center">
             <div className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.18em] text-[#9CA3AF]">Discipline du jour</div>
             <div className="relative mt-1">
@@ -171,7 +206,7 @@ export default function AppShell() {
         </div>
 
         {/* Upgrade card */}
-        <div className="px-3 mt-2 mb-2 shrink-0">
+        <div className={`px-3 mt-2 mb-2 shrink-0 ${sidebarCollapsed ? "md:hidden" : ""}`}>
           <div className="card-flat p-3">
             <div className="text-xs font-semibold leading-tight">{BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Bêta gratuite":"Découvre les offres"}</div>
             <div className="mt-1 text-[9px] leading-[1.45] text-[#9CA3AF]">{BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Les fonctions essentielles sont gratuites. Les outils avancés arrivent au lancement.":"Compare Essential et Pro sans engagement."}</div>
@@ -188,16 +223,22 @@ export default function AppShell() {
         <div className="border-t border-white/5 px-3 py-3 text-xs text-[#9CA3AF] shrink-0">
           <button
             onClick={async () => { await logout(); window.location.href = "/"; }}
-            className="flex items-center gap-2 hover:text-[#FF5252]"
+            className={`flex items-center gap-2 hover:text-[#FF5252] ${sidebarCollapsed ? "md:w-full md:justify-center md:gap-0" : ""}`}
+            title={sidebarCollapsed ? "Déconnexion" : undefined}
             data-testid="sidebar-logout"
           >
-            <LogOut className="w-3.5 h-3.5" /> Déconnexion
+            <LogOut className="w-3.5 h-3.5" />
+            <span className={sidebarCollapsed ? "md:hidden" : ""}>Déconnexion</span>
           </button>
         </div>
       </aside>
 
-      {/* MAIN — décalé de 256px uniquement à partir de md (768px), pleine largeur sinon */}
-      <div className="w-full min-w-0 overflow-x-hidden md:ml-64 md:w-[calc(100%-16rem)]">
+      {/* MAIN — suit la largeur de la navigation sur desktop, pleine largeur sur mobile */}
+      <div className={`w-full min-w-0 overflow-x-hidden transition-[margin,width] duration-300 ${
+        sidebarCollapsed
+          ? "md:ml-[72px] md:w-[calc(100%-72px)]"
+          : "md:ml-[232px] md:w-[calc(100%-232px)]"
+      }`}>
         <TopBar
           user={user}
           onMenuClick={() => setMobileOpen(true)}
@@ -208,8 +249,42 @@ export default function AppShell() {
           onNavigate={(to)=>nav(to)}
           onLogout={async()=>{ await logout(); window.location.href = "/"; }}
         />
-        <Outlet />
+        <main className="pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
+          <Outlet />
+        </main>
       </div>
+
+      <nav
+        aria-label="Navigation principale mobile"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-[#07080C]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+      >
+        <div className="grid h-16 grid-cols-5">
+          {mobileLinks.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end
+              onClick={closeMobile}
+              className={({ isActive }) =>
+                `flex min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] transition ${
+                  isActive ? "text-white" : "text-[#7E8798]"
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <span className={`grid h-8 w-10 place-items-center rounded-xl transition ${
+                    isActive ? "bg-[#7C4DFF]/20 text-[#A885FF]" : ""
+                  }`}>
+                    <Icon className="h-[18px] w-[18px]" />
+                  </span>
+                  <span className="max-w-full truncate">{label}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 }
