@@ -17,12 +17,14 @@ import {
   Gauge,
   Layers3,
   LockKeyhole,
+  Minus,
   Shield,
   ShieldCheck,
   Sparkles,
   Target,
   Upload,
   WalletCards,
+  X,
 } from "lucide-react";
 import { Logo, LogoMark } from "@/components/Logo";
 import PublicHeader from "@/components/PublicHeader";
@@ -129,6 +131,16 @@ function SectionTitle({ eyebrow, title, copy, center = false }) {
 
 function CheckLine({ children }) {
   return <div className="flex items-start gap-3 text-sm leading-6 text-[#BEC3CD]"><span className="mt-1 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#7C4DFF]/15 text-[#A991FF]"><Check className="h-3 w-3" /></span><span>{children}</span></div>;
+}
+
+function ComparisonCell({ state = "text", children, featured = false }) {
+  const Icon = state === "yes" ? Check : state === "no" ? X : state === "partial" ? Minus : null;
+  const tone = state === "yes" ? (featured ? "text-[#C7B8FF]" : "text-[#9CA4B2]") : state === "no" ? "text-[#555D6B]" : state === "partial" ? "text-[#8992A2]" : "text-[#969EAC]";
+
+  return <div className={`flex items-center justify-center gap-2 text-center text-xs leading-5 sm:text-[13px] ${tone}`}>
+    {Icon && <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${state === "yes" && featured ? "bg-[#7657FF]/20 text-[#B8A5FF]" : state === "yes" ? "bg-white/[0.045] text-[#8C95A5]" : "bg-white/[0.025] text-[#555D6B]"}`}><Icon className="h-3 w-3" /></span>}
+    {children && <span>{children}</span>}
+  </div>;
 }
 
 function SystemNode({ icon: Icon, label, copy, index }) {
@@ -384,6 +396,63 @@ export default function LandingV2() {
     { icon: Upload, label: t("Import & export", "Import & export"), copy: t("Données portables et contrôlées", "Portable, controlled data") },
   ];
 
+  const comparisonRows = [
+    {
+      label: t("Suivi de plusieurs comptes financés", "Track multiple funded accounts"),
+      manual: { state: "partial", text: t("Onglets à maintenir", "Tabs to maintain") },
+      generic: { state: "partial", text: t("Vue souvent séparée", "Often separate views") },
+      pipsevo: { state: "yes", text: t("Vue consolidée", "Consolidated view") },
+    },
+    {
+      label: t("Journal avec contexte, notes et tags", "Journal with context, notes, and tags"),
+      manual: { state: "partial", text: t("Structure manuelle", "Manual structure") },
+      generic: { state: "yes", text: t("Selon l’outil", "Depends on the tool") },
+      pipsevo: { state: "yes", text: t("Journal structuré", "Structured journal") },
+    },
+    {
+      label: t("Score de discipline", "Discipline score"),
+      manual: { state: "no", text: t("À calculer", "Must be calculated") },
+      generic: { state: "partial", text: t("Variable", "Varies") },
+      pipsevo: { state: "yes", text: t("Calculé depuis tes règles", "Calculated from your rules") },
+    },
+    {
+      label: t("Suivi du drawdown et des limites", "Drawdown and limit tracking"),
+      manual: { state: "partial", text: t("Formules manuelles", "Manual formulas") },
+      generic: { state: "partial", text: t("Partiel", "Partial") },
+      pipsevo: { state: "yes", text: t("Marge de risque visible", "Visible risk margin") },
+    },
+    {
+      label: t("Statistiques de performance", "Performance statistics"),
+      manual: { state: "partial", text: t("Tableaux à construire", "Tables to build") },
+      generic: { state: "yes", text: t("Statistiques standard", "Standard statistics") },
+      pipsevo: { state: "yes", text: t("Analyse multi-angles", "Multi-angle analysis") },
+    },
+    {
+      label: t("Suivi des objectifs et payouts", "Goal and payout tracking"),
+      manual: { state: "partial", text: t("Saisie séparée", "Separate entry") },
+      generic: { state: "partial", text: t("Rarement centralisé", "Rarely centralized") },
+      pipsevo: { state: "yes", text: t("Progression intégrée", "Built-in progress") },
+    },
+    {
+      label: t("Import CSV avec contrôle des doublons", "CSV import with duplicate checks"),
+      manual: { state: "no", text: t("Copier-coller", "Copy and paste") },
+      generic: { state: "partial", text: t("Selon l’outil", "Depends on the tool") },
+      pipsevo: { state: "yes", text: t("Disponible en bêta", "Available in beta") },
+    },
+    {
+      label: t("Analyse comportementale", "Behavioral analysis"),
+      manual: { state: "no", text: t("Lecture personnelle", "Personal review") },
+      generic: { state: "partial", text: t("Insights limités", "Limited insights") },
+      pipsevo: { state: "yes", text: t("Atlas IA sourcé", "Sourced Atlas AI") },
+    },
+    {
+      label: t("Export et portabilité des données", "Data export and portability"),
+      manual: { state: "yes", text: t("Fichiers locaux", "Local files") },
+      generic: { state: "partial", text: t("Formats variables", "Varying formats") },
+      pipsevo: { state: "yes", text: t("Export contrôlé", "Controlled export") },
+    },
+  ];
+
   return <div data-i18n-managed className="min-h-screen overflow-hidden bg-[#050505] text-white selection:bg-[#7657FF]/40">
     <PublicHeader variant="landing" />
     <main id="main-content">
@@ -528,6 +597,74 @@ export default function LandingV2() {
             <SystemNode {...systemTools[6]} index={6} />
             <SystemNode {...systemTools[7]} index={7} />
           </div>
+        </div>
+      </section>
+
+      <section id="comparison" className="scroll-mt-28 px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-32">
+        <div className="mx-auto max-w-[1180px]">
+          <Reveal>
+            <SectionTitle
+              center
+              eyebrow={t("Compare avant de choisir", "Compare before choosing")}
+              title={t("Plus qu’un journal. Un système pensé pour les comptes financés.", "More than a journal. A system built for funded accounts.")}
+              copy={t("Compare PipsEvo aux méthodes manuelles et aux journaux de trading généralistes, fonctionnalité par fonctionnalité.", "Compare PipsEvo with manual methods and generic trading journals, feature by feature.")}
+            />
+          </Reveal>
+
+          <Reveal delay={0.08} className="mt-12 sm:mt-14">
+            <div className="mb-3 flex items-center justify-end gap-2 text-[10px] uppercase tracking-[.14em] text-[#626B79] lg:hidden">
+              {t("Fais glisser pour comparer", "Swipe to compare")}<ArrowRight className="h-3.5 w-3.5" />
+            </div>
+            <div className="overflow-x-auto rounded-[24px] border border-white/[0.08] bg-[#080A10] shadow-[0_26px_80px_rgba(0,0,0,.34)] [scrollbar-color:#403267_transparent]">
+              <table className="w-full min-w-[880px] table-fixed border-separate border-spacing-0 text-left">
+                <caption className="sr-only">{t("Comparaison entre les méthodes manuelles, les journaux génériques et PipsEvo", "Comparison between manual methods, generic journals, and PipsEvo")}</caption>
+                <colgroup><col className="w-[34%]" /><col className="w-[22%]" /><col className="w-[22%]" /><col className="w-[22%]" /></colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col" className="sticky left-0 z-20 border-b border-white/[0.08] bg-[#080A10] px-6 py-7 sm:px-8">
+                      <div className="text-[10px] font-semibold uppercase tracking-[.18em] text-[#697282]">{t("Fonctionnalités", "Features")}</div>
+                      <div className="mt-2 text-sm font-semibold text-[#DDE0E6]">{t("Ce qui compte vraiment", "What really matters")}</div>
+                    </th>
+                    <th scope="col" className="border-b border-white/[0.08] px-5 py-7 text-center">
+                      <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.025] text-[#737C8B]"><FileText className="h-[18px] w-[18px]" /></div>
+                      <div className="mt-3 text-sm font-semibold text-[#B6BBC5]">Excel / Notion</div>
+                      <div className="mt-1 text-[10px] font-normal text-[#5F6877]">{t("Méthode manuelle", "Manual method")}</div>
+                    </th>
+                    <th scope="col" className="border-b border-white/[0.08] px-5 py-7 text-center">
+                      <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.025] text-[#737C8B]"><BookOpen className="h-[18px] w-[18px]" /></div>
+                      <div className="mt-3 text-sm font-semibold text-[#B6BBC5]">{t("Journal générique", "Generic journal")}</div>
+                      <div className="mt-1 text-[10px] font-normal text-[#5F6877]">{t("Suivi du trading", "Trading tracking")}</div>
+                    </th>
+                    <th scope="col" className="relative border-x border-b border-[#7657FF]/35 bg-[#7657FF]/[0.085] px-5 py-7 text-center">
+                      <span className="absolute right-3 top-3 rounded-full border border-[#7657FF]/35 bg-[#7657FF]/15 px-2 py-1 text-[8px] font-semibold uppercase tracking-[.12em] text-[#B9A7FF]">{t("Recommandé", "Recommended")}</span>
+                      <div className="mx-auto grid h-11 w-11 place-items-center rounded-2xl border border-[#7657FF]/35 bg-[#0A0B13] shadow-[0_0_28px_rgba(118,87,255,.22)]"><LogoMark size="md" /></div>
+                      <div className="mt-3 text-sm font-semibold text-white">PipsEvo</div>
+                      <div className="mt-1 text-[10px] font-normal text-[#9D8BE8]">{t("Pilotage financé", "Funded-account control")}</div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparisonRows.map((row, index) => (
+                    <tr key={row.label} className="group">
+                      <th scope="row" className={`sticky left-0 z-10 bg-[#080A10] px-6 py-5 text-[13px] font-medium leading-5 text-[#D8DBE2] sm:px-8 sm:text-sm ${index < comparisonRows.length - 1 ? "border-b border-white/[0.065]" : ""}`}>{row.label}</th>
+                      <td className={`px-5 py-5 ${index < comparisonRows.length - 1 ? "border-b border-white/[0.065]" : ""}`}><ComparisonCell state={row.manual.state}>{row.manual.text}</ComparisonCell></td>
+                      <td className={`px-5 py-5 ${index < comparisonRows.length - 1 ? "border-b border-white/[0.065]" : ""}`}><ComparisonCell state={row.generic.state}>{row.generic.text}</ComparisonCell></td>
+                      <td className={`border-x border-[#7657FF]/30 bg-[#7657FF]/[0.055] px-5 py-5 transition-colors group-hover:bg-[#7657FF]/[0.085] ${index < comparisonRows.length - 1 ? "border-b border-b-[#7657FF]/20" : ""}`}><ComparisonCell state={row.pipsevo.state} featured>{row.pipsevo.text}</ComparisonCell></td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan="3" className="border-t border-white/[0.08] px-6 py-6 text-xs leading-5 text-[#697282] sm:px-8">{t("PipsEvo ne remplace pas ta stratégie : il rend ton processus mesurable, lisible et améliorable.", "PipsEvo does not replace your strategy: it makes your process measurable, readable, and improvable.")}</td>
+                    <td className="border-x border-b border-t border-[#7657FF]/35 bg-[#7657FF]/[0.10] px-5 py-5 text-center">
+                      <Link to="/register" className="inline-flex items-center gap-2 text-xs font-semibold text-[#C4B6FF] transition hover:text-white">{t("Commencer gratuitement", "Start for free")}<ArrowRight className="h-3.5 w-3.5" /></Link>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p className="mt-4 text-center text-[10px] leading-5 text-[#555E6C]">{t("Comparaison indicative basée sur les usages courants des feuilles de calcul et des journaux généralistes. Les fonctions PipsEvo indiquées sont disponibles dans la bêta actuelle.", "Indicative comparison based on common spreadsheet and generic journal workflows. Listed PipsEvo features are available in the current beta.")}</p>
+          </Reveal>
         </div>
       </section>
 
