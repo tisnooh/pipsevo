@@ -202,6 +202,7 @@ function translateText(value) {
 }
 
 function translateNode(node, language) {
+  if (node.parentElement?.closest?.("[data-i18n-managed]")) return;
   if (node.nodeType === Node.TEXT_NODE) {
     const current = node.nodeValue || "";
     if (!current.trim()) return;
@@ -218,6 +219,7 @@ function translateNode(node, language) {
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return;
   if (["SCRIPT", "STYLE", "NOSCRIPT"].includes(node.tagName)) return;
+  if (node.hasAttribute("data-i18n-managed")) return;
   let attrs = originalAttributes.get(node);
   if (!attrs) { attrs = {}; originalAttributes.set(node, attrs); }
   for (const attr of ATTRIBUTES) {

@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef } from "react";
+import React, { useId, useLayoutEffect, useRef } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -84,10 +84,11 @@ function PreviewTopbar() {
 }
 
 function Sparkline({ color }) {
+  const gradientId = `spark-${useId().replace(/:/g, "")}`;
   return (
     <svg className="product-preview-spark" viewBox="0 0 210 44" preserveAspectRatio="none" aria-hidden="true">
-      <defs><linearGradient id={`spark-${color.replace("#", "")}`} x1="0" x2="0" y1="0" y2="1"><stop stopColor={color} stopOpacity=".26"/><stop offset="1" stopColor={color} stopOpacity="0"/></linearGradient></defs>
-      <path d="M0 31 C25 32 33 18 62 22 C92 27 101 13 128 17 C154 21 174 6 210 13 L210 44 L0 44 Z" fill={`url(#spark-${color.replace("#", "")})`} />
+      <defs><linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1"><stop stopColor={color} stopOpacity=".26"/><stop offset="1" stopColor={color} stopOpacity="0"/></linearGradient></defs>
+      <path d="M0 31 C25 32 33 18 62 22 C92 27 101 13 128 17 C154 21 174 6 210 13 L210 44 L0 44 Z" fill={`url(#${gradientId})`} />
       <path d="M0 31 C25 32 33 18 62 22 C92 27 101 13 128 17 C154 21 174 6 210 13" fill="none" stroke={color} strokeWidth="2" />
     </svg>
   );
@@ -105,15 +106,16 @@ function KpiCard({ item }) {
 }
 
 function EquityChart() {
+  const gradientId = `equity-${useId().replace(/:/g, "")}`;
   return (
     <section className="product-preview-card product-preview-equity">
       <div className="product-preview-card-head"><strong>Courbe d’équité</strong><span>30 jours <ChevronDown aria-hidden="true" /></span></div>
       <div className="product-preview-chart">
         <div className="product-preview-chart-labels"><span>30K $US</span><span>20K $US</span><span>10K $US</span><span>0 $US</span><span>-10K $US</span></div>
         <svg viewBox="0 0 760 270" preserveAspectRatio="none" aria-hidden="true">
-          <defs><linearGradient id="equity-fill" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#8B4DFF" stopOpacity=".38"/><stop offset="1" stopColor="#8B4DFF" stopOpacity="0"/></linearGradient></defs>
+          <defs><linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1"><stop stopColor="#8B4DFF" stopOpacity=".38"/><stop offset="1" stopColor="#8B4DFF" stopOpacity="0"/></linearGradient></defs>
           <g stroke="rgba(255,255,255,.055)" strokeWidth="1"><path d="M0 35H760"/><path d="M0 95H760"/><path d="M0 155H760"/><path d="M0 215H760"/></g>
-          <path d="M0 235 L22 217 L44 190 L66 204 L88 196 L110 165 L132 150 L154 122 L176 130 L198 141 L220 151 L242 136 L264 118 L286 102 L308 82 L330 74 L352 83 L374 94 L396 79 L418 58 L440 50 L462 45 L484 52 L506 39 L528 44 L550 30 L572 35 L594 22 L616 31 L638 17 L660 24 L682 11 L704 20 L726 8 L760 2 L760 270 L0 270 Z" fill="url(#equity-fill)"/>
+          <path d="M0 235 L22 217 L44 190 L66 204 L88 196 L110 165 L132 150 L154 122 L176 130 L198 141 L220 151 L242 136 L264 118 L286 102 L308 82 L330 74 L352 83 L374 94 L396 79 L418 58 L440 50 L462 45 L484 52 L506 39 L528 44 L550 30 L572 35 L594 22 L616 31 L638 17 L660 24 L682 11 L704 20 L726 8 L760 2 L760 270 L0 270 Z" fill={`url(#${gradientId})`}/>
           <path d="M0 235 L22 217 L44 190 L66 204 L88 196 L110 165 L132 150 L154 122 L176 130 L198 141 L220 151 L242 136 L264 118 L286 102 L308 82 L330 74 L352 83 L374 94 L396 79 L418 58 L440 50 L462 45 L484 52 L506 39 L528 44 L550 30 L572 35 L594 22 L616 31 L638 17 L660 24 L682 11 L704 20 L726 8 L760 2" fill="none" stroke="#A45CFF" strokeWidth="3"/>
         </svg>
         <span className="product-preview-chart-total">+21 850 $US</span>
@@ -236,6 +238,7 @@ function JournalPreview() {
 }
 
 function DisciplinePreview() {
+  const riskGradientId = `risk-${useId().replace(/:/g, "")}`;
   const rules = [["Risque max par trade", "1,50%", true], ["Perte max journalière", "300 $", true], ["Stop après 2 pertes", "Respectée", true], ["Pas de trade impulsif", "1 écart", false]];
   return (
     <div className="product-preview-context product-preview-context--discipline">
@@ -248,7 +251,7 @@ function DisciplinePreview() {
       </div>
       <div className="product-preview-risk-layout">
         <section className="product-preview-card product-preview-risk-budget"><div className="product-preview-section-title"><strong>Budget de risque</strong><span>En direct</span></div><div className="product-preview-risk-gauge"><div><strong>1,12%</strong><span>utilisé sur 2,00%</span></div></div><div className="product-preview-risk-lines"><span><small>Risque utilisé</small><b>143,50 $</b></span><span><small>Risque disponible</small><b>112,50 $</b></span></div></section>
-        <section className="product-preview-card product-preview-drawdown-chart"><div className="product-preview-section-title"><strong>Évolution du drawdown</strong><span>30 jours</span></div><svg viewBox="0 0 560 230" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="risk-fill" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#ff4f87" stopOpacity=".30"/><stop offset="1" stopColor="#ff4f87" stopOpacity="0"/></linearGradient></defs><g><path d="M0 32H560M0 88H560M0 144H560M0 200H560"/></g><path className="fill" d="M0 35 L35 48 L70 71 L105 62 L140 104 L175 92 L210 122 L245 116 L280 151 L315 139 L350 169 L385 178 L420 165 L455 191 L490 183 L525 197 L560 186 L560 230 L0 230Z"/><path className="line" d="M0 35 L35 48 L70 71 L105 62 L140 104 L175 92 L210 122 L245 116 L280 151 L315 139 L350 169 L385 178 L420 165 L455 191 L490 183 L525 197 L560 186"/></svg></section>
+        <section className="product-preview-card product-preview-drawdown-chart"><div className="product-preview-section-title"><strong>Évolution du drawdown</strong><span>30 jours</span></div><svg viewBox="0 0 560 230" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id={riskGradientId} x1="0" x2="0" y1="0" y2="1"><stop stopColor="#ff4f87" stopOpacity=".30"/><stop offset="1" stopColor="#ff4f87" stopOpacity="0"/></linearGradient></defs><g><path d="M0 32H560M0 88H560M0 144H560M0 200H560"/></g><path className="fill" fill={`url(#${riskGradientId})`} d="M0 35 L35 48 L70 71 L105 62 L140 104 L175 92 L210 122 L245 116 L280 151 L315 139 L350 169 L385 178 L420 165 L455 191 L490 183 L525 197 L560 186 L560 230 L0 230Z"/><path className="line" d="M0 35 L35 48 L70 71 L105 62 L140 104 L175 92 L210 122 L245 116 L280 151 L315 139 L350 169 L385 178 L420 165 L455 191 L490 183 L525 197 L560 186"/></svg></section>
         <section className="product-preview-card product-preview-rule-list"><div className="product-preview-section-title"><strong>Règles clés</strong><span>Cette semaine</span></div>{rules.map(([label, value, valid]) => <div key={label}><span className={valid ? 'is-valid' : 'is-warning'}>{valid ? <CheckCircle2 /> : <AlertTriangle />}</span><p><strong>{label}</strong><small>{value}</small></p></div>)}</section>
       </div>
     </div>

@@ -662,7 +662,7 @@ html, body, #root {
 .product-preview-risk-lines > span { display: flex; justify-content: space-between; color: #9da4b0; font-size: 9px; }.product-preview-risk-lines b { color: #17e6af; }
 .product-preview-drawdown-chart { padding-bottom: 14px; }
 .product-preview-drawdown-chart svg { width: calc(100% - 32px); height: 285px; margin: 15px 16px 0; overflow: visible; }
-.product-preview-drawdown-chart g { stroke: rgba(255,255,255,.05); }.product-preview-drawdown-chart .fill { fill: url(#risk-fill); }.product-preview-drawdown-chart .line { fill: none; stroke: #ff4f87; stroke-width: 3; }
+.product-preview-drawdown-chart g { stroke: rgba(255,255,255,.05); }.product-preview-drawdown-chart .line { fill: none; stroke: #ff4f87; stroke-width: 3; }
 .product-preview-rule-list { padding-bottom: 8px; }
 .product-preview-rule-list > div:not(.product-preview-section-title) { display: flex; align-items: center; gap: 10px; margin: 10px 12px; border: 1px solid rgba(255,255,255,.06); border-radius: 9px; padding: 9px; background: rgba(255,255,255,.02); }
 .product-preview-rule-list > div > span { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 7px; }.product-preview-rule-list svg { width: 13px; }
