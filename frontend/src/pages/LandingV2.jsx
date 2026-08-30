@@ -1,6 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
+import { gsap } from "gsap";
+import { MotionPathPlugin } from "gsap/MotionPathPlugin";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
   ArrowRight,
   BarChart3,
@@ -26,6 +29,8 @@ import PublicHeader from "@/components/PublicHeader";
 import ProductDashboardPreview from "@/components/ProductDashboardPreview";
 import { openCookieSettings } from "@/components/CookieConsent";
 import { useI18n } from "@/context/I18nContext";
+
+gsap.registerPlugin(MotionPathPlugin, ScrollTrigger);
 
 const productTabs = [
   { id: "overview", fr: "Vue d’ensemble", en: "Overview", icon: Layers3 },
@@ -126,59 +131,52 @@ function CheckLine({ children }) {
   return <div className="flex items-start gap-3 text-sm leading-6 text-[#BEC3CD]"><span className="mt-1 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#7C4DFF]/15 text-[#A991FF]"><Check className="h-3 w-3" /></span><span>{children}</span></div>;
 }
 
-function SystemNode({ icon: Icon, label, copy, index, reduceMotion = false }) {
-  return <motion.article
-    initial={reduceMotion ? false : { opacity: 0, y: 18, scale: 0.98 }}
-    whileInView={reduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
-    viewport={{ once: true, amount: 0.35 }}
-    transition={{ duration: 0.5, delay: index * 0.055, ease: [0.22, 1, 0.36, 1] }}
-    whileHover={reduceMotion ? undefined : { y: -5, transition: { duration: 0.22 } }}
-    className="group relative z-10 flex min-h-[154px] flex-col justify-between overflow-hidden rounded-[18px] border border-white/[0.075] bg-[#090B11]/95 p-5 transition-colors duration-300 hover:border-[#7657FF]/35 hover:bg-[#0B0D15] sm:min-h-[168px] sm:p-6"
+function SystemNode({ icon: Icon, label, copy, index }) {
+  return <article
+    data-system-node
+    data-system-index={index}
+    className="group relative z-10 flex min-h-[154px] flex-col justify-between overflow-hidden rounded-[18px] border border-white/[0.075] bg-[#090B11]/95 p-5 transition-colors duration-300 hover:border-[#7657FF]/45 hover:bg-[#0B0D16] sm:min-h-[168px] sm:p-6"
+    style={{ transformStyle: "preserve-3d", willChange: "transform" }}
   >
-    <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" style={{ background: "radial-gradient(circle at 12% 0%, rgba(118,87,255,.13), transparent 48%)" }} />
-    <div className="relative flex items-start justify-between">
-      <motion.span
-        animate={reduceMotion ? undefined : { scale: [1, 1.08, 1], opacity: [0.78, 1, 0.78] }}
-        transition={{ duration: 3.2, repeat: Infinity, delay: index * 0.22, ease: "easeInOut" }}
-        className="grid h-10 w-10 place-items-center rounded-xl border border-[#7657FF]/20 bg-[#7657FF]/[0.09] text-[#9B82FF] shadow-[inset_0_1px_0_rgba(255,255,255,.04)]"
-      ><Icon className="h-[18px] w-[18px]" /></motion.span>
-      <span className="font-mono text-[9px] tracking-[.16em] text-[#545C6B] transition-colors group-hover:text-[#8F80C9]">0{index + 1}</span>
+    <span data-node-glow className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-[#7657FF]/0 blur-[38px] transition-colors duration-300 group-hover:bg-[#7657FF]/[0.14]" />
+    <span data-node-scan className="pointer-events-none absolute -left-1/2 top-0 h-px w-1/2 bg-gradient-to-r from-transparent via-[#A591FF]/70 to-transparent opacity-0" />
+    <div data-node-content className="relative flex items-start justify-between" style={{ transform: "translateZ(18px)" }}>
+      <span data-node-icon className="grid h-10 w-10 place-items-center rounded-xl border border-[#7657FF]/25 bg-[#7657FF]/[0.10] text-[#A58EFF] shadow-[inset_0_1px_0_rgba(255,255,255,.05),0_0_0_rgba(118,87,255,0)]">
+        <Icon className="h-[18px] w-[18px]" />
+      </span>
+      <span className="font-mono text-[9px] tracking-[.16em] text-[#545C6B] transition-colors group-hover:text-[#A394DE]">0{index + 1}</span>
     </div>
-    <div className="relative mt-7">
+    <div className="relative mt-7" style={{ transform: "translateZ(12px)" }}>
       <h3 className="text-[15px] font-semibold text-[#E5E7EC]">{label}</h3>
-      <p className="mt-1.5 text-[11px] leading-[1.55] text-[#737B8B] transition-colors group-hover:text-[#969EAC]">{copy}</p>
+      <p className="mt-1.5 text-[11px] leading-[1.55] text-[#737B8B] transition-colors group-hover:text-[#A0A7B5]">{copy}</p>
+      <div className="mt-4 flex h-1 items-center gap-1 opacity-45 transition-opacity group-hover:opacity-90">
+        {[36, 58, 24].map((width, meterIndex) => <span key={width} className="h-px flex-1 overflow-hidden rounded-full bg-white/[0.06]"><span data-node-meter-line className="block h-full rounded-full bg-gradient-to-r from-[#7657FF] to-[#4F8CFF]" style={{ width: `${width + index * 3 + meterIndex * 2}%` }} /></span>)}
+      </div>
     </div>
-  </motion.article>;
+  </article>;
 }
 
-function SystemCore({ reduceMotion = false, t }) {
-  return <motion.div
-    initial={reduceMotion ? false : { opacity: 0, scale: 0.9 }}
-    whileInView={reduceMotion ? undefined : { opacity: 1, scale: 1 }}
-    viewport={{ once: true, amount: 0.45 }}
-    transition={{ duration: 0.65, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}
-    className="relative flex min-h-[190px] flex-col items-center justify-center overflow-hidden rounded-[22px] border border-[#7657FF]/30 bg-[#0C0D17] p-7 text-center shadow-[0_22px_70px_rgba(39,23,91,.23)] lg:min-h-0"
+function SystemCore({ t }) {
+  return <div
+    data-system-core
+    className="relative flex min-h-[190px] flex-col items-center justify-center overflow-hidden rounded-[22px] border border-[#7657FF]/35 bg-[#0C0D17] p-7 text-center shadow-[0_22px_70px_rgba(39,23,91,.26)] lg:min-h-0"
+    style={{ transformStyle: "preserve-3d", willChange: "transform" }}
   >
-    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(105,72,255,.16),transparent_63%)]" />
+    <div data-core-halo className="pointer-events-none absolute inset-[-25%] rounded-full bg-[radial-gradient(circle_at_center,rgba(105,72,255,.27),rgba(79,140,255,.09)_32%,transparent_66%)]" />
+    <span data-core-beam className="pointer-events-none absolute left-1/2 top-1/2 h-px w-[165%] -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-transparent via-[#8C73FF]/45 to-transparent" />
+    <span data-core-beam className="pointer-events-none absolute left-1/2 top-1/2 h-[165%] w-px -translate-x-1/2 -translate-y-1/2 bg-gradient-to-b from-transparent via-[#4F8CFF]/35 to-transparent" />
     <div className="relative grid h-[86px] w-[86px] place-items-center">
-      <motion.span
-        animate={reduceMotion ? undefined : { rotate: 360 }}
-        transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-        className="absolute inset-0 rounded-full border border-dashed border-[#8C73FF]/35"
-      />
-      <motion.span
-        animate={reduceMotion ? undefined : { rotate: -360 }}
-        transition={{ duration: 11, repeat: Infinity, ease: "linear" }}
-        className="absolute inset-[9px] rounded-full border border-[#4F8CFF]/20"
-      >
+      <span data-core-ring className="absolute inset-[-12px] rounded-full border border-dashed border-[#8C73FF]/20" />
+      <span data-core-ring-reverse className="absolute inset-0 rounded-full border border-dashed border-[#8C73FF]/45" />
+      <span data-core-ring className="absolute inset-[9px] rounded-full border border-[#4F8CFF]/25">
         <span className="absolute -right-1 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[#6E8CFF] shadow-[0_0_14px_rgba(78,140,255,.85)]" />
-      </motion.span>
-      <span className="relative grid h-12 w-12 place-items-center rounded-2xl border border-white/10 bg-[#090A10] shadow-[0_10px_30px_rgba(0,0,0,.35)]"><LogoMark size="lg" /></span>
+      </span>
+      <span data-core-logo className="relative grid h-12 w-12 place-items-center rounded-2xl border border-white/10 bg-[#090A10] shadow-[0_10px_30px_rgba(0,0,0,.35),0_0_28px_rgba(118,87,255,.18)]"><LogoMark size="lg" /></span>
     </div>
     <div className="relative mt-4 text-[10px] font-semibold uppercase tracking-[.2em] text-[#A995FF]">PipsEvo Core</div>
     <p className="relative mt-2 max-w-[230px] text-[11px] leading-5 text-[#7E8796]">{t("Toutes tes données convergent vers une seule lecture.", "All your data converges into one clear view.")}</p>
-    <div className="relative mt-4 inline-flex items-center gap-2 text-[9px] uppercase tracking-[.14em] text-[#697282]"><motion.span animate={reduceMotion ? undefined : { opacity: [0.35, 1, 0.35] }} transition={{ duration: 1.8, repeat: Infinity }} className="h-1.5 w-1.5 rounded-full bg-[#17E6AF]" />{t("Flux synchronisé", "Synchronized flow")}</div>
-  </motion.div>;
+    <div className="relative mt-4 inline-flex items-center gap-2 text-[9px] uppercase tracking-[.14em] text-[#697282]"><span data-sync-dot className="h-1.5 w-1.5 rounded-full bg-[#17E6AF] shadow-[0_0_12px_rgba(23,230,175,.75)]" />{t("Flux synchronisé", "Synchronized flow")}</div>
+  </div>;
 }
 
 function ProductFeature({ id, reverse, eyebrow, title, copy, bullets, section, accent = "#7C4DFF" }) {
@@ -202,6 +200,172 @@ export default function LandingV2() {
   const { language, setLanguage, t } = useI18n();
   const reduceMotion = useReducedMotion();
   const [activeProduct, setActiveProduct] = useState("overview");
+  const systemSectionRef = useRef(null);
+
+  useEffect(() => {
+    const section = systemSectionRef.current;
+    if (!section) return undefined;
+
+    const media = gsap.matchMedia();
+
+    media.add(
+      {
+        desktop: "(min-width: 1024px)",
+        mobile: "(max-width: 1023px)",
+        reduceMotion: "(prefers-reduced-motion: reduce)",
+      },
+      context => {
+        const { desktop, reduceMotion: prefersReducedMotion } = context.conditions;
+        const layout = section.querySelector(`[data-system-layout="${desktop ? "desktop" : "mobile"}"]`);
+        const heading = section.querySelector("[data-system-heading]");
+        const core = layout?.querySelector("[data-system-core]");
+        const nodes = gsap.utils.toArray("[data-system-node]", layout);
+        const icons = gsap.utils.toArray("[data-node-icon]", layout);
+        const meterLines = gsap.utils.toArray("[data-node-meter-line]", layout);
+        const scanLines = gsap.utils.toArray("[data-node-scan]", layout);
+        const rings = gsap.utils.toArray("[data-core-ring]", layout);
+        const reverseRings = gsap.utils.toArray("[data-core-ring-reverse]", layout);
+        const coreBeams = gsap.utils.toArray("[data-core-beam]", layout);
+        const halos = gsap.utils.toArray("[data-core-halo]", layout);
+        const coreLogos = gsap.utils.toArray("[data-core-logo]", layout);
+        const syncDots = gsap.utils.toArray("[data-sync-dot]", layout);
+        const auroras = gsap.utils.toArray("[data-system-aurora]", section);
+        const flowPaths = desktop ? gsap.utils.toArray("[data-flow-path]", layout) : [];
+        const flowDots = desktop ? gsap.utils.toArray("[data-flow-dot]", layout) : [];
+        const interactiveCleanups = [];
+
+        if (!layout || !core) return undefined;
+
+        if (prefersReducedMotion) {
+          gsap.set([heading, core, ...nodes, ...meterLines], { clearProps: "all" });
+          gsap.set(flowDots, { autoAlpha: 0 });
+          return undefined;
+        }
+
+        gsap.set(heading, { autoAlpha: 0, y: 34 });
+        gsap.set(core, { autoAlpha: 0, scale: 0.68, rotationX: -14, transformPerspective: 900 });
+        gsap.set(nodes, { autoAlpha: 0, y: 54, scale: 0.88, rotationX: -12, transformPerspective: 900 });
+        gsap.set(meterLines, { scaleX: 0, transformOrigin: "left center" });
+        gsap.set(flowPaths, { strokeDasharray: "0 900", strokeDashoffset: 0, opacity: 0 });
+        gsap.set(flowDots, { autoAlpha: 0, transformOrigin: "center" });
+
+        const intro = gsap.timeline({
+          defaults: { ease: "power4.out" },
+          scrollTrigger: {
+            trigger: section,
+            start: "top 70%",
+            once: true,
+          },
+        });
+
+        intro
+          .to(heading, { autoAlpha: 1, y: 0, duration: 0.9 })
+          .to(core, { autoAlpha: 1, scale: 1, rotationX: 0, duration: 1.15, ease: "back.out(1.45)" }, "-=0.52")
+          .to(flowPaths, { strokeDasharray: "12 18", opacity: 0.82, duration: 1.15, stagger: { each: 0.045, from: "center" } }, "-=0.82")
+          .to(nodes, { autoAlpha: 1, y: 0, scale: 1, rotationX: 0, duration: 0.82, stagger: { amount: 0.68, from: "center" } }, "-=0.92")
+          .to(meterLines, { scaleX: 1, duration: 0.72, ease: "expo.out", stagger: { amount: 0.42, from: "random" } }, "-=0.55");
+
+        const ambientTweens = [
+          gsap.to(rings, { rotation: 360, duration: 17, repeat: -1, ease: "none", stagger: 1.8, paused: true }),
+          gsap.to(reverseRings, { rotation: -360, duration: 11, repeat: -1, ease: "none", paused: true }),
+          gsap.to(coreBeams, { rotation: "+=180", duration: 13, repeat: -1, ease: "none", stagger: 0.8, paused: true }),
+          gsap.to(halos, { scale: 1.18, autoAlpha: 0.72, duration: 2.4, repeat: -1, yoyo: true, ease: "sine.inOut", paused: true }),
+          gsap.to(coreLogos, { scale: 1.08, boxShadow: "0 12px 34px rgba(0,0,0,.35), 0 0 34px rgba(118,87,255,.48)", duration: 1.6, repeat: -1, yoyo: true, ease: "sine.inOut", paused: true }),
+          gsap.to(syncDots, { scale: 1.75, autoAlpha: 0.38, duration: 0.85, repeat: -1, yoyo: true, ease: "sine.inOut", paused: true }),
+          gsap.to(icons, { y: -5, rotation: 2.5, duration: 1.9, repeat: -1, yoyo: true, ease: "sine.inOut", stagger: { each: 0.22, from: "random" }, paused: true }),
+          gsap.to(flowPaths, { strokeDashoffset: -120, duration: 3.2, repeat: -1, ease: "none", stagger: 0.07, paused: true }),
+          gsap.to(auroras, { xPercent: (_, element) => Number(element.dataset.direction || 1) * 22, yPercent: (_, element) => Number(element.dataset.direction || 1) * -10, duration: 6.5, repeat: -1, yoyo: true, ease: "sine.inOut", stagger: 0.55, paused: true }),
+        ];
+
+        scanLines.forEach((scanLine, index) => {
+          ambientTweens.push(gsap.fromTo(scanLine, { xPercent: -30, autoAlpha: 0 }, { xPercent: 330, autoAlpha: 0.7, duration: 2.15, repeat: -1, repeatDelay: 2.2 + index * 0.24, delay: index * 0.34, ease: "power1.inOut", paused: true }));
+        });
+
+        flowDots.forEach((dot, index) => {
+          const path = flowPaths[index];
+          if (!path) return;
+          const travel = gsap.timeline({ repeat: -1, delay: index * 0.18, paused: true });
+          travel
+            .set(dot, { autoAlpha: 0, scale: 0.55 })
+            .to(dot, { autoAlpha: 1, scale: 1.15, duration: 0.18, ease: "power2.out" })
+            .to(dot, {
+              duration: 2.15 + index * 0.11,
+              ease: "none",
+              motionPath: {
+                path,
+                align: path,
+                alignOrigin: [0.5, 0.5],
+                start: index % 2 ? 1 : 0,
+                end: index % 2 ? 0 : 1,
+              },
+            }, "<")
+            .to(dot, { autoAlpha: 0, scale: 0.35, duration: 0.2 }, "-=0.2");
+          ambientTweens.push(travel);
+        });
+
+        const setActivity = active => ambientTweens.forEach(animation => active ? animation.play() : animation.pause());
+        const activityTrigger = ScrollTrigger.create({
+          trigger: section,
+          start: "top bottom",
+          end: "bottom top",
+          onEnter: () => setActivity(true),
+          onEnterBack: () => setActivity(true),
+          onLeave: () => setActivity(false),
+          onLeaveBack: () => setActivity(false),
+        });
+
+        if (desktop) {
+          nodes.forEach(node => {
+            const glow = node.querySelector("[data-node-glow]");
+            const rotateXTo = gsap.quickTo(node, "rotationX", { duration: 0.36, ease: "power3.out" });
+            const rotateYTo = gsap.quickTo(node, "rotationY", { duration: 0.36, ease: "power3.out" });
+
+            const onMove = event => {
+              const bounds = node.getBoundingClientRect();
+              const px = (event.clientX - bounds.left) / bounds.width;
+              const py = (event.clientY - bounds.top) / bounds.height;
+              rotateYTo((px - 0.5) * 10);
+              rotateXTo((0.5 - py) * 8);
+              if (glow) gsap.to(glow, { x: px * 70, y: py * 52, duration: 0.45, ease: "power3.out", overwrite: "auto" });
+            };
+            const onEnter = () => gsap.to(node, { scale: 1.025, z: 26, duration: 0.34, ease: "power3.out", overwrite: "auto" });
+            const onLeave = () => {
+              rotateXTo(0);
+              rotateYTo(0);
+              gsap.to(node, { scale: 1, z: 0, duration: 0.42, ease: "power3.out", overwrite: "auto" });
+            };
+
+            node.addEventListener("pointermove", onMove);
+            node.addEventListener("pointerenter", onEnter);
+            node.addEventListener("pointerleave", onLeave);
+            interactiveCleanups.push(() => {
+              node.removeEventListener("pointermove", onMove);
+              node.removeEventListener("pointerenter", onEnter);
+              node.removeEventListener("pointerleave", onLeave);
+            });
+          });
+
+          const moveAuroraX = gsap.quickTo(auroras, "x", { duration: 1.1, ease: "power3.out" });
+          const moveAuroraY = gsap.quickTo(auroras, "y", { duration: 1.1, ease: "power3.out" });
+          const onSectionMove = event => {
+            const bounds = section.getBoundingClientRect();
+            moveAuroraX(((event.clientX - bounds.left) / bounds.width - 0.5) * 38);
+            moveAuroraY(((event.clientY - bounds.top) / bounds.height - 0.5) * 26);
+          };
+          section.addEventListener("pointermove", onSectionMove);
+          interactiveCleanups.push(() => section.removeEventListener("pointermove", onSectionMove));
+        }
+
+        return () => {
+          setActivity(false);
+          activityTrigger.kill();
+          interactiveCleanups.forEach(cleanup => cleanup());
+        };
+      },
+    );
+
+    return () => media.revert();
+  }, []);
 
   const outcomes = [
     { icon: ShieldCheck, title: t("Protège ton capital", "Protect your capital"), copy: t("Visualise le drawdown restant et les règles critiques avant qu’une mauvaise session ne devienne une violation.", "See remaining drawdown and critical rules before a bad session becomes a violation.") },
@@ -311,26 +475,24 @@ export default function LandingV2() {
         </div>
       </section>
 
-      <section id="tools" className="relative scroll-mt-28 overflow-hidden border-y border-white/[0.06] bg-[#06070A] px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-32">
-        <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={{ backgroundImage: "radial-gradient(rgba(140,115,255,.24) .7px, transparent .7px)", backgroundSize: "26px 26px" }} />
-        <motion.div
-          aria-hidden="true"
-          animate={reduceMotion ? undefined : { x: ["-18%", "118%"] }}
-          transition={{ duration: 9, repeat: Infinity, ease: "linear", repeatDelay: 1.5 }}
-          className="pointer-events-none absolute top-[44%] h-44 w-44 rounded-full bg-[#6244D8]/[0.07] blur-[70px]"
-        />
+      <section ref={systemSectionRef} id="tools" className="relative scroll-mt-28 overflow-hidden border-y border-white/[0.06] bg-[#06070A] px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-32">
+        <div className="pointer-events-none absolute inset-0 opacity-[0.17]" style={{ backgroundImage: "radial-gradient(rgba(140,115,255,.24) .7px, transparent .7px)", backgroundSize: "26px 26px", maskImage: "linear-gradient(to bottom, transparent, black 16%, black 84%, transparent)" }} />
+        <div data-system-aurora data-direction="1" aria-hidden="true" className="pointer-events-none absolute -left-[8%] top-[20%] h-[420px] w-[420px] rounded-full bg-[#5C3DFF]/[0.09] blur-[110px] will-change-transform" />
+        <div data-system-aurora data-direction="-1" aria-hidden="true" className="pointer-events-none absolute -right-[9%] bottom-[10%] h-[460px] w-[460px] rounded-full bg-[#246DFF]/[0.07] blur-[120px] will-change-transform" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#7657FF]/45 to-transparent" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#4F8CFF]/25 to-transparent" />
         <div className="relative mx-auto max-w-[1180px]">
-          <Reveal><SectionTitle center eyebrow={t("Un système complet", "A complete system")} title={t("De la décision au payout, tout se connecte.", "From decision to payout, everything connects.")} copy={t("Chaque outil alimente la même lecture de ta performance, de ton risque et de ta discipline.", "Every tool feeds the same view of your performance, risk, and discipline.")} /></Reveal>
+          <div data-system-heading><SectionTitle center eyebrow={t("Un système complet", "A complete system")} title={t("De la décision au payout, tout se connecte.", "From decision to payout, everything connects.")} copy={t("Chaque outil alimente la même lecture de ta performance, de ton risque et de ta discipline.", "Every tool feeds the same view of your performance, risk, and discipline.")} /></div>
 
-          <div className="mt-14 lg:hidden">
-            <SystemCore reduceMotion={reduceMotion} t={t} />
+          <div data-system-layout="mobile" className="mt-14 lg:hidden">
+            <SystemCore t={t} />
             <div className="relative mt-4 grid grid-cols-2 gap-3 sm:gap-4">
               <div className="pointer-events-none absolute bottom-0 left-1/2 top-[-16px] w-px -translate-x-1/2 bg-gradient-to-b from-[#7657FF]/35 via-[#7657FF]/10 to-transparent" />
-              {systemTools.map((tool, index) => <SystemNode key={tool.label} {...tool} index={index} reduceMotion={reduceMotion} />)}
+              {systemTools.map((tool, index) => <SystemNode key={tool.label} {...tool} index={index} />)}
             </div>
           </div>
 
-          <div className="relative mt-16 hidden grid-cols-3 gap-[18px] lg:grid">
+          <div data-system-layout="desktop" className="relative mt-16 hidden grid-cols-3 gap-[18px] lg:grid" style={{ perspective: "1100px" }}>
             <svg aria-hidden="true" viewBox="0 0 900 552" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 z-0 h-full w-full overflow-visible">
               <defs>
                 <linearGradient id="system-flow" x1="0" y1="0" x2="1" y2="1">
@@ -338,29 +500,33 @@ export default function LandingV2() {
                   <stop offset="52%" stopColor="#8C73FF" stopOpacity=".8" />
                   <stop offset="100%" stopColor="#17E6AF" stopOpacity=".12" />
                 </linearGradient>
+                <filter id="system-dot-glow" x="-250%" y="-250%" width="600%" height="600%">
+                  <feGaussianBlur stdDeviation="3" result="blur" />
+                  <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                </filter>
               </defs>
               {systemFlowPaths.map(path => <path key={`base-${path}`} d={path} fill="none" stroke="#8C73FF" strokeOpacity=".11" strokeWidth="1" />)}
-              {systemFlowPaths.map((path, index) => <motion.path
+              {systemFlowPaths.map((path, index) => <path
                 key={path}
+                data-flow-path
                 d={path}
                 fill="none"
                 stroke="url(#system-flow)"
-                strokeWidth="1.4"
+                strokeWidth="1.65"
                 strokeLinecap="round"
-                strokeDasharray="4 15"
-                animate={reduceMotion ? undefined : { strokeDashoffset: [0, -38], opacity: [0.28, 0.9, 0.28] }}
-                transition={{ strokeDashoffset: { duration: 2.8 + index * 0.13, repeat: Infinity, ease: "linear" }, opacity: { duration: 3.2, repeat: Infinity, delay: index * 0.16 } }}
+                strokeDasharray="12 18"
               />)}
+              {systemFlowPaths.map((_, index) => <circle key={`dot-${index}`} data-flow-dot r={index % 3 === 0 ? 4.2 : 3.2} fill={index % 2 ? "#8C73FF" : "#5F9BFF"} filter="url(#system-dot-glow)" />)}
             </svg>
-            <SystemNode {...systemTools[0]} index={0} reduceMotion={reduceMotion} />
-            <SystemNode {...systemTools[1]} index={1} reduceMotion={reduceMotion} />
-            <SystemNode {...systemTools[2]} index={2} reduceMotion={reduceMotion} />
-            <SystemNode {...systemTools[3]} index={3} reduceMotion={reduceMotion} />
-            <SystemCore reduceMotion={reduceMotion} t={t} />
-            <SystemNode {...systemTools[4]} index={4} reduceMotion={reduceMotion} />
-            <SystemNode {...systemTools[5]} index={5} reduceMotion={reduceMotion} />
-            <SystemNode {...systemTools[6]} index={6} reduceMotion={reduceMotion} />
-            <SystemNode {...systemTools[7]} index={7} reduceMotion={reduceMotion} />
+            <SystemNode {...systemTools[0]} index={0} />
+            <SystemNode {...systemTools[1]} index={1} />
+            <SystemNode {...systemTools[2]} index={2} />
+            <SystemNode {...systemTools[3]} index={3} />
+            <SystemCore t={t} />
+            <SystemNode {...systemTools[4]} index={4} />
+            <SystemNode {...systemTools[5]} index={5} />
+            <SystemNode {...systemTools[6]} index={6} />
+            <SystemNode {...systemTools[7]} index={7} />
           </div>
         </div>
       </section>
