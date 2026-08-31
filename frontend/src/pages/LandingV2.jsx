@@ -191,6 +191,162 @@ function SystemCore({ t }) {
   </div>;
 }
 
+function RiskControlSection({ t }) {
+  const sectionRef = useRef(null);
+
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return undefined;
+
+    const media = gsap.matchMedia();
+    media.add({ reduceMotion: "(prefers-reduced-motion: reduce)" }, context => {
+      const { reduceMotion } = context.conditions;
+      const copy = section.querySelector("[data-risk-copy]");
+      const panel = section.querySelector("[data-risk-panel]");
+      const status = section.querySelector("[data-risk-status]");
+      const cards = gsap.utils.toArray("[data-risk-card]", section);
+      const bars = gsap.utils.toArray("[data-risk-bar]", section);
+      const counts = gsap.utils.toArray("[data-risk-count]", section);
+
+      if (reduceMotion) {
+        gsap.set([copy, panel, status, ...cards], { clearProps: "all" });
+        gsap.set(bars, { scaleX: 1, transformOrigin: "left center" });
+        return undefined;
+      }
+
+      gsap.set(copy, { autoAlpha: 0, x: -34 });
+      gsap.set(panel, { autoAlpha: 0, y: 48, scale: 0.96, rotationX: 7, transformPerspective: 1000 });
+      gsap.set(status, { autoAlpha: 0, y: 18, scale: 0.96 });
+      gsap.set(cards, { autoAlpha: 0, y: 26 });
+      gsap.set(bars, { scaleX: 0, transformOrigin: "left center" });
+
+      const locale = document.documentElement.lang === "en" ? "en-US" : "fr-FR";
+      const formatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
+      const timeline = gsap.timeline({
+        defaults: { ease: "power4.out" },
+        scrollTrigger: { trigger: section, start: "top 68%", once: true },
+      });
+
+      timeline
+        .to(copy, { autoAlpha: 1, x: 0, duration: 0.85 })
+        .to(panel, { autoAlpha: 1, y: 0, scale: 1, rotationX: 0, duration: 1, ease: "back.out(1.3)" }, "-=0.58")
+        .to(status, { autoAlpha: 1, y: 0, scale: 1, duration: 0.68 }, "-=0.55")
+        .to(cards, { autoAlpha: 1, y: 0, duration: 0.66, stagger: 0.14 }, "-=0.45")
+        .to(bars, { scaleX: 1, duration: 1.45, ease: "power3.inOut", stagger: 0.18 }, "-=0.42");
+
+      counts.forEach((element, index) => {
+        const target = Number(element.dataset.value || 0);
+        const counter = { value: 0 };
+        timeline.to(counter, {
+          value: target,
+          duration: 1.35,
+          ease: "power3.out",
+          onUpdate: () => { element.textContent = formatter.format(Math.round(counter.value)); },
+        }, index ? "<0.16" : "-=1.42");
+      });
+
+      const sheenTween = gsap.to(gsap.utils.toArray("[data-risk-sheen]", section), {
+        xPercent: 360,
+        duration: 2.2,
+        repeat: -1,
+        repeatDelay: 1.4,
+        ease: "power1.inOut",
+        stagger: 0.5,
+        paused: true,
+      });
+      const activityTrigger = ScrollTrigger.create({
+        trigger: section,
+        start: "top bottom",
+        end: "bottom top",
+        onEnter: () => sheenTween.play(),
+        onEnterBack: () => sheenTween.play(),
+        onLeave: () => sheenTween.pause(),
+        onLeaveBack: () => sheenTween.pause(),
+      });
+
+      return () => {
+        sheenTween.kill();
+        activityTrigger.kill();
+      };
+    });
+
+    return () => media.revert();
+  }, []);
+
+  const riskCards = [
+    {
+      title: t("Budget de perte du jour", "Daily loss budget"),
+      badge: t("Stable", "Stable"),
+      value: 1750,
+      description: t("encore disponibles pour la session", "still available for this session"),
+      progress: 30,
+      footer: t("30 % du budget quotidien utilisés", "30% of the daily budget used"),
+      accent: "#17E6AF",
+      badgeClass: "border-[#17E6AF]/30 bg-[#17E6AF]/[0.06] text-[#43DDB2]",
+    },
+    {
+      title: t("Marge avant drawdown", "Buffer before drawdown"),
+      badge: t("Prioritaire", "Priority"),
+      value: 2100,
+      description: t("avant d’atteindre le seuil global", "before reaching the global threshold"),
+      progress: 58,
+      footer: t("58 % de la limite globale utilisés", "58% of the global limit used"),
+      accent: "#F5A524",
+      badgeClass: "border-[#F5A524]/30 bg-[#F5A524]/[0.06] text-[#F7B94E]",
+    },
+  ];
+
+  return <section ref={sectionRef} id="risk-control" className="relative scroll-mt-28 overflow-hidden border-y border-white/[0.06] bg-[#060709] px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-32">
+    <div className="pointer-events-none absolute left-[48%] top-[12%] h-[520px] w-[520px] rounded-full bg-[#123E35]/20 blur-[125px]" />
+    <div className="pointer-events-none absolute inset-0 opacity-[0.13]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px)", backgroundSize: "48px 48px", maskImage: "linear-gradient(to bottom, transparent, black 18%, black 82%, transparent)" }} />
+    <div className="relative mx-auto grid max-w-[1280px] items-center gap-12 lg:grid-cols-12 lg:gap-16">
+      <div data-risk-copy className="lg:col-span-5">
+        <Eyebrow>{t("Ta marge de manœuvre", "Your room to maneuver")}</Eyebrow>
+        <h2 className="text-balance text-[36px] font-semibold leading-[1.05] tracking-[-0.04em] text-[#F3F4F6] sm:text-[44px] lg:text-[54px]">{t("Lis ton risque avant qu’il ne décide pour toi.", "Read your risk before it decides for you.")}</h2>
+        <p className="mt-6 max-w-xl text-[15px] leading-7 text-[#969EAE] sm:text-base">{t("PipsEvo réunit les règles de la session et la limite globale pour t’aider à dimensionner chaque décision avec une vision claire.", "PipsEvo brings session rules and the global limit together so you can size every decision with a clear view.")}</p>
+        <div className="mt-8 space-y-3">
+          <CheckLine>{t("Deux limites réunies dans une seule lecture", "Two limits combined into one view")}</CheckLine>
+          <CheckLine>{t("Priorité de risque visible en un coup d’œil", "Risk priority visible at a glance")}</CheckLine>
+          <CheckLine>{t("Décisions adaptées à tes propres paramètres", "Decisions aligned with your own settings")}</CheckLine>
+        </div>
+        <p className="mt-7 text-[10px] leading-5 text-[#596170]">{t("Simulation illustrative basée sur un compte fictif. Les règles réelles dépendent de chaque prop firm.", "Illustrative simulation based on a fictional account. Actual rules vary by prop firm.")}</p>
+      </div>
+
+      <div data-risk-panel className="relative lg:col-span-7">
+        <div className="pointer-events-none absolute inset-x-[10%] bottom-[-6%] h-32 rounded-full bg-[#17E6AF]/[0.09] blur-[80px]" />
+        <div className="relative overflow-hidden rounded-[28px] border border-white/[0.09] bg-[#0A0B10] p-5 shadow-[0_35px_100px_rgba(0,0,0,.52)] sm:p-7 lg:p-8">
+          <div className="flex flex-col gap-4 border-b border-white/[0.07] pb-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[#7657FF]/20 bg-[#11131A]"><LogoMark size="md" /></div>
+              <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-base font-semibold text-[#F0F1F4] sm:text-lg">PipsEvo Challenge — 50 000 $</h3><span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[.12em] text-[#8E96A5]">{t("Étape active", "Active stage")}</span></div><p className="mt-1 text-[10px] text-[#656E7D]">{t("Scénario fictif de démonstration", "Fictional demo scenario")}</p></div>
+            </div>
+            <div className="inline-flex items-center gap-2 self-start rounded-full border border-white/[0.07] bg-white/[0.025] px-3 py-2 text-[10px] text-[#7C8493] sm:self-auto"><span className="h-1.5 w-1.5 rounded-full bg-[#17E6AF] shadow-[0_0_10px_rgba(23,230,175,.7)]" />{t("Règles synchronisées", "Rules synchronized")}</div>
+          </div>
+
+          <div data-risk-status className="mt-6 flex items-start gap-4 rounded-[20px] border border-[#17E6AF]/20 bg-[#17E6AF]/[0.045] p-5 sm:p-6">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[#17E6AF]/25 bg-[#17E6AF]/10 text-[#31D9AA]"><ShieldCheck className="h-6 w-6" /></span>
+            <div><div className="text-xl font-semibold text-[#31D9AA] sm:text-2xl">{t("Session autorisée", "Session cleared")}</div><p className="mt-1.5 max-w-lg text-sm leading-6 text-[#929AA8]"><strong className="font-semibold text-[#D8DCE4]">2 100 $</strong> {t("de coussin global — environ 3 prises de risque à ton niveau habituel.", "of global buffer — about 3 positions at your usual risk level.")}</p></div>
+          </div>
+
+          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+            {riskCards.map(card => <article data-risk-card key={card.title} className="rounded-[20px] border border-white/[0.07] bg-[#0D0F14] p-5 sm:p-6">
+              <div className="flex items-start justify-between gap-3"><h3 className="text-sm font-semibold text-[#BFC4CE]">{card.title}</h3><span className={`shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-semibold ${card.badgeClass}`}>{card.badge}</span></div>
+              <div className="mt-6 flex items-baseline gap-1.5" style={{ color: card.accent }}><span data-risk-count data-value={card.value} className="text-[38px] font-semibold leading-none tracking-[-0.045em] sm:text-[44px]">{card.value.toLocaleString("fr-FR")}</span><span className="text-xl font-semibold">$</span></div>
+              <p className="mt-2 text-xs leading-5 text-[#606978]">{card.description}</p>
+              <div className="mt-6 h-2 overflow-hidden rounded-full bg-white/[0.055]">
+                <div data-risk-bar className="relative h-full rounded-full" style={{ width: `${card.progress}%`, backgroundColor: card.accent, boxShadow: `0 0 18px ${card.accent}55` }}><span data-risk-sheen className="absolute inset-y-0 -left-1/3 w-1/3 skew-x-[-18deg] bg-gradient-to-r from-transparent via-white/70 to-transparent opacity-70" /></div>
+              </div>
+              <p className="mt-3 text-[10px] text-[#555E6D]">{card.footer}</p>
+            </article>)}
+          </div>
+
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-[#F5A524]/15 bg-[#F5A524]/[0.035] px-4 py-3.5 text-xs leading-5 text-[#858D9B]"><Gauge className="mt-0.5 h-4 w-4 shrink-0 text-[#F5A524]" /><span>{t("Point d’attention : la marge globale se réduit plus vite que le budget de la session.", "Key insight: the global buffer is shrinking faster than the session budget.")}</span></div>
+        </div>
+      </div>
+    </div>
+  </section>;
+}
+
 function ProductFeature({ id, reverse, eyebrow, title, copy, bullets, section, accent = "#7C4DFF" }) {
   return <section id={id} className="scroll-mt-32 px-5 py-16 sm:px-6 sm:py-20 lg:px-10 lg:py-28">
     <div className={`mx-auto grid max-w-[1280px] items-center gap-11 lg:grid-cols-12 lg:gap-14 ${reverse ? "" : ""}`}>
@@ -512,6 +668,8 @@ export default function LandingV2() {
           </div>
         </div>
       </section>
+
+      <RiskControlSection t={t} />
 
       <section id="product" className="scroll-mt-28 px-5 py-16 sm:px-6 sm:py-20 lg:px-10 lg:py-28">
         <div className="mx-auto max-w-[1380px] rounded-[28px] border border-white/[0.08] bg-[#080A10] p-4 shadow-[0_40px_100px_rgba(0,0,0,.40)] sm:p-7 lg:p-10">
