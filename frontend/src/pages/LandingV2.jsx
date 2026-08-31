@@ -29,6 +29,7 @@ import {
 import { Logo, LogoMark } from "@/components/Logo";
 import PublicHeader from "@/components/PublicHeader";
 import ProductDashboardPreview from "@/components/ProductDashboardPreview";
+import AmbientCandleField from "@/components/AmbientCandleField";
 import { openCookieSettings } from "@/components/CookieConsent";
 import { useI18n } from "@/context/I18nContext";
 
@@ -609,9 +610,10 @@ export default function LandingV2() {
     },
   ];
 
-  return <div data-i18n-managed className="min-h-screen overflow-hidden bg-[#050505] text-white selection:bg-[#7657FF]/40">
+  return <div data-i18n-managed className="relative isolate min-h-screen overflow-hidden bg-[#050505] text-white selection:bg-[#7657FF]/40">
+    <AmbientCandleField />
     <PublicHeader variant="landing" />
-    <main id="main-content">
+    <main id="main-content" className="relative z-10">
       <section className="relative px-5 pb-16 pt-[138px] sm:px-6 sm:pt-[154px] lg:flex lg:min-h-[100svh] lg:items-center lg:px-10 lg:pb-20 lg:pt-[142px]">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -right-[16%] top-[8%] h-[620px] w-[620px] rounded-full bg-[#4630B8]/[0.11] blur-[120px]" />
@@ -688,9 +690,9 @@ export default function LandingV2() {
 
       <section id="prop-firms" className="scroll-mt-28 px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-32">
         <div className="mx-auto grid max-w-[1280px] overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#080A10] lg:grid-cols-12">
-          <Reveal className="p-7 sm:p-10 lg:col-span-5 lg:p-14"><SectionTitle eyebrow="Prop firms" title={t("Ce qui fait perdre un challenge n’est pas toujours visible à temps.", "What loses a challenge is not always visible in time.")} copy={t("PipsEvo t’aide à suivre les limites saisies pour tes comptes. Il ne remplace ni les règles officielles de la prop firm ni ta propre vérification.", "PipsEvo helps track the limits entered for your accounts. It does not replace the prop firm’s official rules or your own verification.")} /><Link to="/register" className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-[#AE97FF] transition hover:text-white">{t("Configurer mon premier compte", "Set up my first account")}<ArrowRight className="h-4 w-4" /></Link></Reveal>
+          <Reveal className="p-7 sm:p-10 lg:col-span-5 lg:p-14"><SectionTitle eyebrow="Prop firms" title={t("Ce qui fait perdre un challenge n’est pas toujours visible à temps.", "What loses a challenge is not always visible in time.")} copy={t("PipsEvo t’aide à suivre les limites saisies pour tes comptes. Il ne remplace ni les règles officielles de la prop firm ni ta propre vérification.", "PipsEvo helps track the limits entered for your accounts. It does not replace the prop firm’s official rules or your own verification.")} /><div className="mt-8 flex flex-wrap gap-x-5 gap-y-3"><Link to="/platforms" className="inline-flex items-center gap-2 text-sm font-semibold text-[#AE97FF] transition hover:text-white">{t("Voir les plateformes supportées", "View supported platforms")}<ArrowRight className="h-4 w-4" /></Link><Link to="/register" className="inline-flex items-center gap-2 text-sm font-semibold text-[#858D9C] transition hover:text-white">{t("Configurer un compte", "Set up an account")}<ArrowRight className="h-4 w-4" /></Link></div></Reveal>
           <div className="border-t border-white/[0.08] lg:col-span-7 lg:border-l lg:border-t-0">
-            {[{ n: "01", title: t("Définis les règles", "Define the rules"), copy: t("Perte quotidienne, drawdown, objectif et taille du compte.", "Daily loss, drawdown, target, and account size."), icon: FileText }, { n: "02", title: t("Journalise le processus", "Log the process"), copy: t("Ajoute contexte et respect du plan à chaque trade.", "Add context and plan compliance to every trade."), icon: BookOpen }, { n: "03", title: t("Surveille les écarts", "Monitor deviations"), copy: t("Lis les alertes comme une aide à la discipline, jamais comme une garantie.", "Read alerts as a discipline aid, never as a guarantee."), icon: ShieldCheck }].map(({ n, title, copy, icon: Icon }, index) => <Reveal key={n} delay={index * .07} className={`grid grid-cols-[42px_1fr_auto] items-center gap-4 p-6 sm:p-8 ${index ? "border-t border-white/[0.08]" : ""}`}><span className="font-mono text-xs text-[#6D7481]">{n}</span><div><h3 className="font-semibold text-[#E8EAF0]">{title}</h3><p className="mt-1.5 text-sm leading-6 text-[#818999]">{copy}</p></div><Icon className="hidden h-5 w-5 text-[#755CDE] sm:block" /></Reveal>)}
+            {[{ n: "01", title: t("Définis les règles", "Define the rules"), copy: t("Perte quotidienne, drawdown, objectif et taille du compte.", "Daily loss, drawdown, target, and account size."), icon: FileText }, { n: "02", title: t("Journalise le processus", "Log the process"), copy: t("Ajoute contexte et respect du plan à chaque trade.", "Add context and plan compliance to every trade."), icon: BookOpen }, { n: "03", title: t("Surveille les écarts", "Monitor deviations"), copy: t("Lis les alertes comme une aide à la discipline, jamais comme une garantie.", "Read alerts as a discipline aid, never as a guarantee."), icon: ShieldCheck }, { n: "04", title: t("Ajuste la prochaine session", "Adjust the next session"), copy: t("Transforme les écarts observés en une action simple à appliquer dès le prochain trade.", "Turn observed deviations into one simple action for the next trade."), icon: Target }].map(({ n, title, copy, icon: Icon }, index) => <Reveal key={n} delay={index * .07} className={`grid grid-cols-[42px_1fr_auto] items-center gap-4 p-6 sm:p-8 ${index ? "border-t border-white/[0.08]" : ""}`}><span className="font-mono text-xs text-[#6D7481]">{n}</span><div><h3 className="font-semibold text-[#E8EAF0]">{title}</h3><p className="mt-1.5 text-sm leading-6 text-[#818999]">{copy}</p></div><Icon className="hidden h-5 w-5 text-[#755CDE] sm:block" /></Reveal>)}
           </div>
         </div>
       </section>
@@ -770,10 +772,51 @@ export default function LandingV2() {
           </Reveal>
 
           <Reveal delay={0.08} className="mt-12 sm:mt-14">
-            <div className="mb-3 flex items-center justify-end gap-2 text-[10px] uppercase tracking-[.14em] text-[#626B79] lg:hidden">
-              {t("Fais glisser pour comparer", "Swipe to compare")}<ArrowRight className="h-3.5 w-3.5" />
+            <div className="space-y-3 lg:hidden">
+              {comparisonRows.map((row, index) => (
+                <article key={row.label} className="overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#080A10] shadow-[0_18px_46px_rgba(0,0,0,.22)]">
+                  <div className="flex items-start gap-3 border-b border-white/[0.07] px-4 py-4">
+                    <span className="mt-0.5 font-mono text-[9px] tracking-[.16em] text-[#706681]">{String(index + 1).padStart(2, "0")}</span>
+                    <h3 className="text-[14px] font-semibold leading-5 text-[#E1E3E8]">{row.label}</h3>
+                  </div>
+                  <div className="grid gap-2 p-3">
+                    <div className="rounded-[14px] border border-white/[0.055] bg-white/[0.018] px-3.5 py-3">
+                      <div className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[.1em] text-[#747D8C]">
+                        <FileText className="h-3.5 w-3.5" />Excel / Notion
+                      </div>
+                      <div className="[&>div]:justify-start [&>div]:text-left">
+                        <ComparisonCell state={row.manual.state}>{row.manual.text}</ComparisonCell>
+                      </div>
+                    </div>
+                    <div className="rounded-[14px] border border-white/[0.055] bg-white/[0.018] px-3.5 py-3">
+                      <div className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[.1em] text-[#747D8C]">
+                        <BookOpen className="h-3.5 w-3.5" />{t("Journal générique", "Generic journal")}
+                      </div>
+                      <div className="[&>div]:justify-start [&>div]:text-left">
+                        <ComparisonCell state={row.generic.state}>{row.generic.text}</ComparisonCell>
+                      </div>
+                    </div>
+                    <div className="relative overflow-hidden rounded-[14px] border border-[#7657FF]/35 bg-[#7657FF]/[0.085] px-3.5 py-3">
+                      <span className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full bg-[#7657FF]/[0.14] blur-2xl" />
+                      <div className="relative mb-2 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.1em] text-[#B7A8F5]">
+                          <LogoMark size="sm" />PipsEvo
+                        </div>
+                        <span className="rounded-full border border-[#7657FF]/30 bg-[#7657FF]/15 px-2 py-1 text-[8px] font-semibold uppercase tracking-[.1em] text-[#BEAFFF]">{t("Recommandé", "Recommended")}</span>
+                      </div>
+                      <div className="relative [&>div]:justify-start [&>div]:text-left">
+                        <ComparisonCell state={row.pipsevo.state} featured>{row.pipsevo.text}</ComparisonCell>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))}
+              <div className="rounded-[20px] border border-[#7657FF]/25 bg-[#7657FF]/[0.06] px-5 py-5">
+                <p className="text-xs leading-5 text-[#8E96A5]">{t("PipsEvo ne remplace pas ta stratégie : il rend ton processus mesurable, lisible et améliorable.", "PipsEvo does not replace your strategy: it makes your process measurable, readable, and improvable.")}</p>
+                <Link to="/register" className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-[#C4B6FF] transition hover:text-white">{t("Commencer gratuitement", "Start for free")}<ArrowRight className="h-3.5 w-3.5" /></Link>
+              </div>
             </div>
-            <div className="overflow-x-auto rounded-[24px] border border-white/[0.08] bg-[#080A10] shadow-[0_26px_80px_rgba(0,0,0,.34)] [scrollbar-color:#403267_transparent]">
+            <div className="hidden overflow-x-auto rounded-[24px] border border-white/[0.08] bg-[#080A10] shadow-[0_26px_80px_rgba(0,0,0,.34)] [scrollbar-color:#403267_transparent] lg:block">
               <table className="w-full min-w-[880px] table-fixed border-separate border-spacing-0 text-left">
                 <caption className="sr-only">{t("Comparaison entre les méthodes manuelles, les journaux génériques et PipsEvo", "Comparison between manual methods, generic journals, and PipsEvo")}</caption>
                 <colgroup><col className="w-[34%]" /><col className="w-[22%]" /><col className="w-[22%]" /><col className="w-[22%]" /></colgroup>
@@ -848,7 +891,7 @@ export default function LandingV2() {
 
     <footer className="border-t border-white/[0.07] px-5 py-12 sm:px-6 lg:px-10 lg:py-16">
       <div className="mx-auto grid max-w-[1280px] gap-10 lg:grid-cols-[1.4fr_repeat(3,1fr)]"><div><Logo size="md" /><p className="mt-4 max-w-xs text-sm leading-6 text-[#777F8E]">{t("Le système d’exploitation pour protéger, comprendre et faire progresser tes comptes financés.", "The operating system to protect, understand, and grow your funded accounts.")}</p><p className="mt-5 text-[11px] text-[#5F6673]">{t("PipsEvo ne fournit aucun signal ni conseil financier.", "PipsEvo provides no signals or financial advice.")}</p></div>{[
-        [t("Produit", "Product"), [[t("Fonctionnalités", "Features"), "/#product"], ["Prop Firms", "/#prop-firms"], [t("Tarifs", "Pricing"), "/pricing"], [t("Bêta", "Beta"), "/#beta"], [t("Plateformes", "Platforms"), "/platforms"]]],
+        [t("Produit", "Product"), [[t("Fonctionnalités", "Features"), "/#product"], ["Prop Firms", "/platforms"], [t("Tarifs", "Pricing"), "/pricing"], [t("Bêta", "Beta"), "/#beta"], [t("Plateformes", "Platforms"), "/platforms"]]],
         [t("Ressources", "Resources"), [["FAQ", "/faq"], [t("Centre d’aide", "Help center"), "/help"], ["Contact", "/contact"], [t("Guides", "Guides"), "/blog"]]],
         [t("Légal", "Legal"), [[t("Confidentialité", "Privacy"), "/privacy"], [t("Conditions d’utilisation", "Terms of use"), "/terms"], [t("Sécurité", "Security"), "/security"]]],
       ].map(([title, links]) => <div key={title}><h3 className="text-xs font-semibold uppercase tracking-[.16em] text-[#AEB4BF]">{title}</h3><div className="mt-5 space-y-3">{links.map(([label, href]) => <Link key={label} to={href} className="block text-sm text-[#747C8B] transition hover:text-white">{label}</Link>)}</div></div>)}</div>

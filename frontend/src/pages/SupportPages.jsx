@@ -9,7 +9,6 @@ import { openCookieSettings } from "@/components/CookieConsent";
 import { BILLING_CONFIG, COMMERCIAL_PHASES, PLANS, PRICING_COMPARISON, formatBillingPrice, launchOfferCopy } from "@/config/billing";
 import { captureCommercialEvent } from "@/lib/commercialAnalytics";
 import { useAuth } from "@/context/AuthContext";
-import { INTEGRATIONS } from "@/config/integrations";
 
 const faqs = [
   ["Comment ajouter mes trades ?", "Depuis le Journal, clique sur Nouveau trade, choisis ton compte puis renseigne le résultat et le contexte du trade."],
@@ -132,8 +131,6 @@ const legal = {
   ]},
 };
 export function LegalPage({type}){const page=legal[type];return <PublicLayout title={page.title} subtitle={page.intro}><div className="card-elev p-6 sm:p-8 max-w-3xl mx-auto"><div className="flex items-center justify-between gap-3 border-b border-white/[0.07] pb-5"><ShieldCheck className="text-[#B58BFF]"/><span className="text-pe-micro text-[#6B7280]">Mise à jour : 13 juillet 2026</span></div><div className="mt-6 space-y-7">{page.sections.map(([heading,text])=><section key={heading}><h2 className="font-semibold">{heading}</h2><p className="text-sm text-[#B5BBC9] mt-2 leading-relaxed">{text}</p></section>)}</div>{type==="privacy"&&<button onClick={openCookieSettings} className="btn-ghost mt-8">Gérer mes préférences de cookies</button>}</div></PublicLayout>}
-
-export function PlatformsPage(){const{user}=useAuth();return <PublicLayout title="Plateformes et imports" subtitle="L’import CSV sécurisé est disponible. Les connexions automatiques resteront désactivées tant qu’un accès officiel n’est pas validé."><div className="grid sm:grid-cols-2 gap-4">{INTEGRATIONS.map(item=><div key={item.id} className="card-elev p-6"><div className="flex flex-wrap items-start justify-between gap-3"><h2 className="font-semibold">{item.name}</h2><span className={`pe-badge whitespace-nowrap ${item.status==="available"?"border-[#00E676]/30 bg-[#00E676]/[0.06] text-[#6AFFB1]":"border-[#7C4DFF]/30 text-[#B58BFF]"}`}>{item.statusLabel}</span></div><p className="text-sm text-[#9CA3AF] mt-3">{item.description}</p>{item.id==="csv"&&<Link to={user?"/app/journal":"/register"} className="mt-4 inline-flex text-xs font-semibold text-[#B58BFF] hover:text-white">{user?"Ouvrir l’import dans le Journal →":"Créer un compte pour importer →"}</Link>}</div>)}</div><div className="mt-6 rounded-2xl border border-[#FFB855]/20 bg-[#FFB855]/5 p-4 text-xs text-[#B5BBC9]">Les noms de plateformes et prop firms indiquent une compatibilité de saisie ou une piste d’intégration. Ils n’impliquent aucun partenariat officiel.</div></PublicLayout>}
 
 const posts=[
   {title:"Construire un journal de trading utile",intro:"Un bon journal relie le résultat, le contexte, l'émotion et le respect du plan.",steps:["Note le setup et la raison d'entrée avant d'évaluer le résultat.","Ajoute le risque prévu, le résultat en R et le respect de tes règles.","Relis chaque semaine les erreurs qui se répètent, pas seulement les pertes."]},

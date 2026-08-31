@@ -39,7 +39,7 @@ const featureGroups = [
     { label: "Discipline", href: "/#discipline", icon: Shield },
     { label: "Gestion du risque", href: "/#discipline", icon: Gauge },
     { label: "Payouts", href: "/#payouts", icon: WalletCards },
-    { label: "Prop firms", href: "/#prop-firms", icon: LayoutDashboard },
+    { label: "Prop firms", href: "/platforms", icon: LayoutDashboard },
   ] },
   { title: "Intelligence", items: [
     { label: "Atlas IA", href: "/#atlas", icon: Brain },
@@ -336,13 +336,14 @@ export default function PublicHeader({ variant = "default" }) {
                 </div>)}
               </div>
             </MegaMenu>
-            <a href="#prop-firms" className="py-3 transition hover:text-white">Prop Firms</a>
+            <Link to="/platforms" className="py-3 transition hover:text-white">Prop Firms</Link>
             <a href="#pricing" className="py-3 transition hover:text-white">{t("Tarifs", "Pricing")}</a>
             <MegaMenu id="resources-menu" label={t("Ressources", "Resources")} open={openMenu === "resources"} onToggle={() => setOpenMenu(value => value === "resources" ? null : "resources")} widthClass="w-[330px]">
               <div className="space-y-1">{resourceItems.map(({ label, href, icon: Icon }) => <Link role="menuitem" key={label} to={href} onClick={() => setOpenMenu(null)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-[#C9CDD6] transition hover:bg-white/[0.055] hover:text-white"><Icon className="h-4 w-4 text-[#8E72FF]" /><span>{t(label, label)}</span></Link>)}</div>
             </MegaMenu>
             <Link to="/help" className="py-3 transition hover:text-white">{t("Centre d’aide", "Help center")}</Link>
           </> : <>
+            <Link to="/platforms" className="transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">{t("Plateformes", "Platforms")}</Link>
             <Link to="/pricing" className="transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">{t("Tarifs", "Pricing")}</Link>
             <Link to="/faq" className="transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">FAQ</Link>
             <Link to="/contact" className="hidden transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60 lg:inline">Contact</Link>
@@ -384,7 +385,7 @@ export default function PublicHeader({ variant = "default" }) {
           <a href="/#journal" onClick={closeMenu} className={itemClass}>Journal</a>
           <a href="/#discipline" onClick={closeMenu} className={itemClass}>{t("Discipline et risque", "Discipline and risk")}</a>
           <a href="/#atlas" onClick={closeMenu} className={itemClass}>Atlas IA</a>
-          <a href="/#prop-firms" onClick={closeMenu} className={itemClass}>Prop Firms</a>
+          <Link to="/platforms" onClick={closeMenu} className={itemClass}>Prop Firms</Link>
           <a href="/#pricing" onClick={closeMenu} className={itemClass}>{t("Tarifs", "Pricing")}</a>
           <div className="px-4 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-[.18em] text-[#686F7D]">{t("Ressources", "Resources")}</div>
           <Link to="/help" onClick={closeMenu} className={itemClass}>{t("Centre d’aide", "Help center")}</Link>
