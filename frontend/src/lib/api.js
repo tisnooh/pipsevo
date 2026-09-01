@@ -476,6 +476,18 @@ export const economicCalendar = {
 export const integrationConnections = {
   capabilities: () => api.get("/integrations/capabilities"),
   list: () => api.get("/integrations/connections"),
+  startOAuth: (provider, returnPath = "/app/settings") =>
+    api.post("/integrations/oauth/start", { provider, return_path: returnPath }),
+  completeOAuth: (provider, code, state) =>
+    api.post("/integrations/oauth/complete", { provider, code, state }),
+  connectTradeLocker: (credentials) =>
+    api.post("/integrations/tradelocker/connect", credentials),
+  startMetaApi: (payload) => api.post("/integrations/metaapi/start", payload),
+  finalizeMetaApi: (connectionId) =>
+    api.post(`/integrations/metaapi/${connectionId}/finalize`),
+  selectAccounts: (connectionId, accountIds) =>
+    api.post(`/integrations/${connectionId}/accounts/select`, { account_ids: accountIds }),
+  syncAccount: (accountId) => api.post(`/integrations/accounts/${accountId}/sync`),
   testMT5: (credentials) => api.post("/integrations/mt5/test", credentials),
   connectMT5: (credentials) => api.post("/integrations/mt5/connect", credentials),
   sync: (connectionId) => api.post(`/integrations/${connectionId}/sync`),

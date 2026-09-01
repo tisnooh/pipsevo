@@ -4,7 +4,9 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from .models import (
+    AuthenticationResult,
     DetectedAccount,
+    IntegrationAccount,
     IntegrationConnection,
     MT5Credentials,
     ProviderConnectionResult,
@@ -12,103 +14,125 @@ from .models import (
 )
 
 
+class TradingConnector(ABC):
+    """Read-only contract shared by all supported trading sources."""
+
+    provider_id: str
+    platforms: tuple[str, ...]
+    auth_type: str
+    read_only: bool = True
+
+    def capability(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider_id,
+            "platforms": list(self.platforms),
+            "auth_type": self.auth_type,
+            "read_only": self.read_only,
+        }
+
+    async def start_auth(self, **_kwargs) -> dict[str, Any]:
+        raise NotImplementedError
+
+    async def complete_auth(self, **_kwargs) -> AuthenticationResult:
+        raise NotImplementedError
+
+    async def refresh_auth(self, access: dict[str, Any]) -> dict[str, Any]:
+        return access
+
+    @abstractmethod
+    async def list_accounts(self, access: dict[str, Any]) -> list[DetectedAccount]: ...
+
+    async def get_account(
+        self, external_account_id: str, access: dict[str, Any]
+    ) -> DetectedAccount | None:
+        return next(
+            (
+                account
+                for account in await self.list_accounts(access)
+                if account.external_account_id == external_account_id
+            ),
+            None,
+        )
+
+    async def get_open_positions(
+        self, _account: IntegrationAccount, _access: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Optional read-only capability; an empty list is never persisted as history."""
+        return []
+
+    @abstractmethod
+    async def sync_historical(self, account: IntegrationAccount, access: dict[str, Any]) -> SyncBatch: ...
+
+    @abstractmethod
+    async def sync_recent(self, account: IntegrationAccount, access: dict[str, Any], cursor: dict[str, Any]) -> SyncBatch: ...
+
+    async def disconnect(self, _connection: IntegrationConnection, _access: dict[str, Any]) -> None:
+        return None
+
+    async def get_connection_status(self, _connection: IntegrationConnection, _access: dict[str, Any]) -> str:
+        return "connected"
+
+
 class BrokerIntegrationProvider(ABC):
-    """Common contract for every current or future broker connector."""
+    """Legacy connector contract kept while old MT5 adapters migrate."""
 
     provider_id: str
     platform: str
 
     @abstractmethod
-    async def test_connection(self, credentials: MT5Credentials) -> DetectedAccount:
-        raise NotImplementedError
-
+    async def test_connection(self, credentials: MT5Credentials) -> DetectedAccount: ...
     @abstractmethod
-    async def connect_account(
-        self, credentials: MT5Credentials
-    ) -> ProviderConnectionResult:
-        raise NotImplementedError
-
+    async def connect_account(self, credentials: MT5Credentials) -> ProviderConnectionResult: ...
     @abstractmethod
-    async def disconnect_account(
-        self, connection: IntegrationConnection, access: dict[str, Any]
-    ) -> None:
-        raise NotImplementedError
-
+    async def disconnect_account(self, connection: IntegrationConnection, access: dict[str, Any]) -> None: ...
     @abstractmethod
-    async def fetch_account(
-        self, connection: IntegrationConnection, access: dict[str, Any]
-    ) -> DetectedAccount:
-        raise NotImplementedError
-
+    async def fetch_account(self, connection: IntegrationConnection, access: dict[str, Any]) -> DetectedAccount: ...
     @abstractmethod
-    async def fetch_historical_trades(
-        self, connection: IntegrationConnection, access: dict[str, Any]
-    ) -> SyncBatch:
-        raise NotImplementedError
-
+    async def fetch_historical_trades(self, connection: IntegrationConnection, access: dict[str, Any]) -> SyncBatch: ...
     @abstractmethod
-    async def fetch_recent_trades(
-        self,
-        connection: IntegrationConnection,
-        access: dict[str, Any],
-        cursor: dict[str, Any],
-    ) -> SyncBatch:
-        raise NotImplementedError
-
+    async def fetch_recent_trades(self, connection: IntegrationConnection, access: dict[str, Any], cursor: dict[str, Any]) -> SyncBatch: ...
     @abstractmethod
-    async def refresh_connection(
-        self,
-        connection: IntegrationConnection,
-        credentials: MT5Credentials,
-    ) -> ProviderConnectionResult:
-        raise NotImplementedError
-
+    async def refresh_connection(self, connection: IntegrationConnection, credentials: MT5Credentials) -> ProviderConnectionResult: ...
     @abstractmethod
-    async def get_connection_status(
-        self, connection: IntegrationConnection, access: dict[str, Any]
-    ) -> str:
-        raise NotImplementedError
-
-    async def verify_webhook(self, _headers: dict[str, str], _body: bytes) -> bool:
-        return False
+    async def get_connection_status(self, connection: IntegrationConnection, access: dict[str, Any]) -> str: ...
 
 
 class MT5IntegrationProvider(BrokerIntegrationProvider, ABC):
-    """Provider-independent MT5 contract.
-
-    Concrete network adapters are intentionally absent until PipsEvo has a
-    real provider contract and test credentials.
-    """
-
     platform = "mt5"
 
 
 class MetaApiProvider(MT5IntegrationProvider, ABC):
-    """Reserved extension point; no MetaApi network integration is shipped."""
+    pass
 
 
 class BrokerDirectProvider(MT5IntegrationProvider, ABC):
-    """Reserved extension point for an authorized broker/prop-firm API."""
+    pass
 
 
 class HostedMT5Provider(MT5IntegrationProvider, ABC):
-    """Reserved extension point for PipsEvo-controlled MT5 infrastructure."""
+    pass
 
 
 class ProviderRegistry:
     def __init__(self):
-        self._providers: dict[str, BrokerIntegrationProvider] = {}
+        self._providers: dict[str, Any] = {}
 
-    def register(self, provider: BrokerIntegrationProvider) -> None:
+    def register(self, provider: Any) -> None:
         if not provider.provider_id:
             raise ValueError("Un provider_id est requis")
         self._providers[provider.provider_id] = provider
 
-    def get(self, provider_id: str | None) -> BrokerIntegrationProvider | None:
+    def get(self, provider_id: str | None):
         return self._providers.get(provider_id or "")
 
     def has(self, provider_id: str | None) -> bool:
         return self.get(provider_id) is not None
+
+    def has_legacy(self, provider_id: str | None) -> bool:
+        return isinstance(self.get(provider_id), BrokerIntegrationProvider)
+
+    def all(self) -> list[Any]:
+        return list(self._providers.values())
 
 
 provider_registry = ProviderRegistry()

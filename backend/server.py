@@ -20,6 +20,7 @@ import requests
 
 from economic_calendar import FOREX_FACTORY_WEEK_URL, normalize_forex_factory_events
 
+from integrations import register_configured_connectors
 from integrations.config import IntegrationConfig
 from integrations.providers import provider_registry
 from integrations.repository import SupabaseIntegrationRepository
@@ -47,6 +48,7 @@ SUPABASE_PUBLISHABLE_KEY = os.environ.get(
 SUPABASE_SECRET_KEY = os.environ.get('SUPABASE_SECRET_KEY') or os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
 
 integration_config = IntegrationConfig.from_env()
+register_configured_connectors(integration_config, provider_registry)
 integration_vault = (
     CredentialVault(
         integration_config.encryption_keys,
@@ -59,6 +61,7 @@ integration_repository = SupabaseIntegrationRepository(
     SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY,
     SUPABASE_SECRET_KEY,
+    mirror_db=db,
 )
 integration_service = IntegrationService(
     integration_config,
@@ -97,6 +100,21 @@ async def ensure_database_indexes():
     await db.trades.create_index(
         [("user_id", ASCENDING), ("account_id", ASCENDING), ("date", DESCENDING)],
         name="trades_user_account_date",
+    )
+    await db.trades.create_index(
+        [
+            ("user_id", ASCENDING),
+            ("source_provider", ASCENDING),
+            ("external_account_id", ASCENDING),
+            ("provider_trade_id", ASCENDING),
+        ],
+        unique=True,
+        partialFilterExpression={
+            "source_provider": {"$type": "string"},
+            "external_account_id": {"$type": "string"},
+            "provider_trade_id": {"$type": "string"},
+        },
+        name="trades_provider_identity_unique",
     )
 
     await db.payouts.create_index([("id", ASCENDING)], unique=True, name="payouts_id_unique")
@@ -964,7 +982,7 @@ logging.basicConfig(level=logging.INFO)
 @app.on_event("startup")
 async def startup_db():
     integration_config.validate_for_startup(
-        provider_registry.has(integration_config.provider),
+        provider_registry.has_legacy(integration_config.provider),
         bool(SUPABASE_SECRET_KEY),
     )
     await db.command("ping")

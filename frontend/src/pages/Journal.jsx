@@ -50,7 +50,13 @@ export function JournalPage() {
     finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    if (new URLSearchParams(window.location.search).get("import") === "1") {
+      setImportOpen(true)
+      window.history.replaceState({}, "", "/app/journal")
+    }
+  }, [])
 
   const saveTrade = async (payload) => {
     setSaving(true)

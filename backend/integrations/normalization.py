@@ -21,6 +21,7 @@ def normalize_trade(
     connection_id: str,
     provider: str,
     external_account_id: str,
+    integration_account_id: str | None = None,
     imported_at: datetime | None = None,
 ) -> NormalizedTrade | None:
     if record.transaction_type in NON_TRADE_OPERATIONS:
@@ -33,8 +34,10 @@ def normalize_trade(
     return NormalizedTrade(
         provider_trade_id=record.provider_trade_id,
         provider_order_id=record.provider_order_id,
+        provider_position_id=record.provider_position_id,
         account_id=account_id,
         integration_connection_id=connection_id,
+        integration_account_id=integration_account_id,
         source_provider=provider,
         external_account_id=external_account_id,
         symbol=record.symbol,
@@ -60,6 +63,12 @@ def normalize_trade(
         pnl=net_profit,
         provider_comment=record.comment,
         magic_number=record.magic_number,
+        source=(
+            "mt5_api"
+            if provider in {"fake", "mt5", "metaapi"}
+            else f"{provider}_api"
+        ),
+        market_type="futures" if record.market_type == "futures" else "cfd",
         result_status="closed" if closed else "open",
         imported_at=imported_at or datetime.now(timezone.utc),
     )
@@ -72,6 +81,7 @@ def normalize_batch(
     connection_id: str,
     provider: str,
     external_account_id: str,
+    integration_account_id: str | None = None,
 ) -> tuple[list[NormalizedTrade], int]:
     normalized: dict[tuple[str, str, str], NormalizedTrade] = {}
     skipped = 0
@@ -82,6 +92,7 @@ def normalize_batch(
             connection_id=connection_id,
             provider=provider,
             external_account_id=external_account_id,
+            integration_account_id=integration_account_id,
         )
         if trade is None:
             skipped += 1
@@ -95,12 +106,10 @@ def normalize_batch(
 
 def json_safe_trade(trade: NormalizedTrade) -> dict:
     payload = trade.model_dump(mode="json")
-    # Existing journal columns remain populated so dashboards need no refactor.
-    payload["market_type"] = "cfd"
-    payload["plan_respected"] = True
-    payload["setups"] = []
-    payload["screenshots"] = []
-    payload["mistakes"] = []
-    payload["tags"] = []
-    payload["checklist_results"] = []
+    payload["external_position_id"] = payload.pop("provider_position_id", None)
+    # stop_loss is the provider model name; the journal schema stores it in stop.
+    payload.pop("stop_loss", None)
+    # An external provider cannot know whether the user's plan was respected.
+    # Null means "not reviewed" and avoids inventing discipline data.
+    payload["plan_respected"] = None
     return payload
