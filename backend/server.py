@@ -18,6 +18,8 @@ import anthropic
 import asyncio
 import requests
 
+from economic_calendar import FOREX_FACTORY_WEEK_URL, normalize_forex_factory_events
+
 from integrations.config import IntegrationConfig
 from integrations.providers import provider_registry
 from integrations.repository import SupabaseIntegrationRepository
@@ -68,6 +70,8 @@ integration_service = IntegrationService(
 app = FastAPI(title="PipsEvo API")
 api = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
+economic_calendar_cache: Dict[str, Any] = {"events": [], "fetched_at": None, "expires_at": None}
+economic_calendar_lock = asyncio.Lock()
 
 
 async def ensure_database_indexes():
@@ -864,6 +868,68 @@ async def billing_checkout(plan: str, user=Depends(get_current_user)):
     # user.id as metadata, then let a signed webhook update subscriptions.
     # Never return a fabricated checkout URL while the provider is absent.
     raise HTTPException(status_code=503, detail="La facturation sécurisée n’est pas encore disponible.")
+
+
+# ============= ECONOMIC CALENDAR =============
+@api.get("/economic-calendar")
+async def economic_calendar(force: bool = False, user=Depends(get_current_user)):
+    now = datetime.now(timezone.utc)
+    expires_at = economic_calendar_cache.get("expires_at")
+    if not force and economic_calendar_cache["events"] and expires_at and now < expires_at:
+        return {
+            "events": economic_calendar_cache["events"],
+            "fetched_at": economic_calendar_cache["fetched_at"],
+            "source": "Forex Factory",
+            "cached": True,
+        }
+
+    async with economic_calendar_lock:
+        now = datetime.now(timezone.utc)
+        expires_at = economic_calendar_cache.get("expires_at")
+        if not force and economic_calendar_cache["events"] and expires_at and now < expires_at:
+            return {
+                "events": economic_calendar_cache["events"],
+                "fetched_at": economic_calendar_cache["fetched_at"],
+                "source": "Forex Factory",
+                "cached": True,
+            }
+        try:
+            response = await asyncio.to_thread(
+                requests.get,
+                FOREX_FACTORY_WEEK_URL,
+                headers={"Accept": "application/json", "User-Agent": "PipsEvo/1.0 economic-calendar"},
+                timeout=12,
+            )
+            response.raise_for_status()
+            rows = response.json()
+            if not isinstance(rows, list):
+                raise ValueError("Unexpected economic calendar response")
+            events = normalize_forex_factory_events(rows[:1000])
+            if not events:
+                raise ValueError("Economic calendar response was empty")
+            fetched_at = now.isoformat()
+            economic_calendar_cache.update(
+                events=events,
+                fetched_at=fetched_at,
+                expires_at=now + timedelta(minutes=5),
+            )
+            return {
+                "events": events,
+                "fetched_at": fetched_at,
+                "source": "Forex Factory",
+                "cached": False,
+            }
+        except Exception:
+            logging.exception("Economic calendar synchronization failed")
+            if economic_calendar_cache["events"]:
+                return {
+                    "events": economic_calendar_cache["events"],
+                    "fetched_at": economic_calendar_cache["fetched_at"],
+                    "source": "Forex Factory",
+                    "cached": True,
+                    "stale": True,
+                }
+            raise HTTPException(status_code=503, detail="Le calendrier économique est temporairement indisponible.")
 
 
 @api.get("/")

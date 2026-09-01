@@ -469,6 +469,9 @@ export const coach = {
   },
 };
 export const billing = { checkout: (plan = "pro") => api.post("/billing/checkout", null, { params: { plan } }) };
+export const economicCalendar = {
+  list: (force = false) => api.get("/economic-calendar", { params: force ? { force: true } : undefined }),
+};
 
 export const integrationConnections = {
   capabilities: () => api.get("/integrations/capabilities"),
