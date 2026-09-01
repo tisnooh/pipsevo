@@ -129,6 +129,7 @@ input[type="time"] {
   background: linear-gradient(180deg, rgba(16, 19, 33, 0.92) 0%, rgba(11, 14, 23, 0.92) 100%);
   border: 1px solid var(--pe-border);
   border-radius: var(--pe-radius-xl);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
 }
 .card-flat {
   background: var(--pe-surface-soft);

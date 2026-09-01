@@ -1,32 +1,28 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { BarChart3, Calculator, CheckCircle2, ExternalLink, ShieldCheck } from "lucide-react";
+import { BarChart3, CheckCircle2, ExternalLink, ShieldCheck } from "lucide-react";
 import TradingViewChart from "@/components/TradingViewChart";
+import PositionCalculator from "@/components/PositionCalculator";
 import { useAuth } from "@/context/AuthContext";
 import { normalizeTradingRules } from "@/components/TradingRulesEditor";
-import { useAppSettings } from "@/hooks/useAppSettings";
 
 const MARKET_GROUPS={cfd:[{label:"EUR/USD",symbol:"OANDA:EURUSD"},{label:"Or CFD",symbol:"OANDA:XAUUSD"},{label:"Nasdaq CFD",symbol:"NASDAQ:NDX"},{label:"Bitcoin CFD",symbol:"BINANCE:BTCUSDT"}],futures:[{label:"Nasdaq Futures",symbol:"CME_MINI:NQ1!"},{label:"S&P Futures",symbol:"CME_MINI:ES1!"},{label:"Or Futures",symbol:"COMEX:GC1!"},{label:"Pétrole Futures",symbol:"NYMEX:CL1!"}]};
 export default function MarketTerminal(){
-  const {user}=useAuth(); const {settings,money}=useAppSettings(); const markets=useMemo(()=>user?.trader_type==="both"?[...MARKET_GROUPS.futures,...MARKET_GROUPS.cfd]:MARKET_GROUPS[user?.trader_type]||MARKET_GROUPS.futures,[user?.trader_type]);
+  const {user}=useAuth(); const markets=useMemo(()=>user?.trader_type==="both"?[...MARKET_GROUPS.futures,...MARKET_GROUPS.cfd]:MARKET_GROUPS[user?.trader_type]||MARKET_GROUPS.futures,[user?.trader_type]);
   const checklist=useMemo(()=>normalizeTradingRules(user?.rules).pre_trade_checklist.filter(item=>item.enabled!==false),[user?.rules]);
   const [market,setMarket]=useState(markets[0]); const [interval,setInterval]=useState("60");
-  const [calc,setCalc]=useState({capital:50000,risk:1,stop:20,value:10});
   const [checks,setChecks]=useState(()=>{try{return JSON.parse(localStorage.getItem("pipsevo_pretrade_checks"))||{}}catch{return{}}});
   useEffect(()=>{if(!markets.some(m=>m.symbol===market.symbol))setMarket(markets[0])},[markets,market.symbol]);
   useEffect(()=>{setChecks(current=>Array.isArray(current)?Object.fromEntries(checklist.map((item,index)=>[item.id,Boolean(current[index])])):current)},[checklist]);
   useEffect(()=>{localStorage.setItem("pipsevo_pretrade_checks",JSON.stringify(checks))},[checks]);
-  const riskAmount=useMemo(()=>+calc.capital*(+calc.risk/100),[calc]);
-  const lots=useMemo(()=>riskAmount/Math.max(0.01,+calc.stop*+calc.value),[riskAmount,calc]);
   const toggle=id=>setChecks(current=>({...current,[id]:!current[id]}));
   const checkedCount=checklist.filter(item=>Boolean(checks[item.id])).length;
   return <div className="pe-page pe-page-stack mx-auto max-w-[1800px]">
-    <div className="pe-page-header"><div><div className="pe-eyebrow">Contexte de marché</div><h1 className="pe-page-title flex items-center gap-2"><BarChart3 className="h-6 w-6 text-[#B58BFF]"/>Marchés</h1><p className="pe-page-copy">Analyse le contexte, calcule ton risque, puis documente ta décision.</p></div><a href="https://www.tradingview.com/" target="_blank" rel="noreferrer" className="btn-ghost inline-flex items-center gap-2 text-sm">Ouvrir TradingView <ExternalLink className="w-4 h-4"/></a></div>
+    <div className="pe-page-header"><div><div className="pe-eyebrow">Contexte de marché</div><h1 className="pe-page-title mt-2 flex items-center gap-2"><BarChart3 className="h-6 w-6 text-[#B58BFF]"/>Marchés</h1><p className="pe-page-copy mt-1">Analyse le contexte, calcule ton risque, puis documente ta décision.</p></div><a href="https://www.tradingview.com/" target="_blank" rel="noreferrer" className="btn-ghost inline-flex items-center gap-2 text-sm">Ouvrir TradingView <ExternalLink className="w-4 h-4"/></a></div>
     <div className="pe-card p-3 sm:p-5"><div className="mb-4 flex flex-col justify-between gap-3 lg:flex-row"><div className="flex gap-2 overflow-x-auto pb-1">{markets.map(x=><button key={x.symbol} onClick={()=>setMarket(x)} className={`min-h-10 whitespace-nowrap rounded-xl border px-3 text-xs font-medium transition-colors ${market.symbol===x.symbol?"border-[#7C4DFF]/50 bg-[#7C4DFF]/20 text-white":"border-white/5 text-[#9CA3AF] hover:border-white/15 hover:text-white"}`}>{x.label}</button>)}</div><div className="flex gap-1">{[["15","15m"],["60","1h"],["240","4h"],["D","1j"]].map(([v,l])=><button key={v} onClick={()=>setInterval(v)} className={`min-h-10 min-w-10 rounded-lg px-3 text-xs font-medium transition-colors ${interval===v?"bg-white/10 text-white":"text-[#6B7280] hover:text-white"}`}>{l}</button>)}</div></div><div className="h-[430px] overflow-hidden rounded-pe-md border border-white/10 bg-[#131722] sm:h-[620px]"><TradingViewChart symbol={market.symbol} interval={interval}/></div></div>
     <div className="grid lg:grid-cols-2 gap-4">
-      <div className="pe-card pe-card-pad"><div className="pe-section-title flex items-center gap-2"><Calculator className="w-5 h-5 text-[#4F8CFF]"/>Calculateur de position</div><div className="mt-5 grid gap-3 sm:grid-cols-2">{[["capital",`Capital du compte (${settings.currency})`],["risk","Risque (%)"],["stop","Stop loss (points/pips)"],["value",`Valeur d'un point par lot (${settings.currency})`]].map(([k,l])=><label key={k} className="text-xs font-medium text-[#9CA3AF]">{l}<input type="number" min="0.01" step="0.01" value={calc[k]} onChange={e=>setCalc({...calc,[k]:e.target.value})} className="pe-control mt-2 w-full"/></label>)}</div><div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2"><Out label="Montant risqué" value={money(riskAmount,{minimumFractionDigits:2,maximumFractionDigits:2})} color="#FFB855"/><Out label="Taille estimée" value={`${lots.toFixed(2)} lots`} color="#4F8CFF"/></div><p className="mt-4 text-xs leading-relaxed text-[#6B7280]">Estimation uniquement : vérifie la valeur du point et les spécifications de ton courtier.</p></div>
+      <PositionCalculator defaultMode={user?.trader_type === "futures" ? "futures" : "cfd"}/>
       <div className="pe-card pe-card-pad"><div className="pe-section-title flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-[#00E676]"/>Check-list avant trade</div><div className="mt-5 space-y-3">{checklist.map(item=><button type="button" key={item.id} aria-pressed={Boolean(checks[item.id])} onClick={()=>toggle(item.id)} className={`flex min-h-11 w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${checks[item.id]?"border-[#00E676]/40 bg-[#00E676]/5":"border-white/5 bg-white/[0.02] hover:border-white/15"}`}><CheckCircle2 className={`w-5 h-5 shrink-0 ${checks[item.id]?"text-[#00E676]":"text-[#374151]"}`}/><span className="text-sm">{item.label}</span></button>)}</div><div className="mt-5 h-2 overflow-hidden rounded-full bg-white/5"><div className="h-full bg-[#00E676] transition-all" style={{width:`${checklist.length?checkedCount/checklist.length*100:0}%`}}/></div><div className="mt-2 flex items-baseline gap-1.5 font-sans text-sm font-medium tabular-nums text-[#B5BBC9]" aria-live="polite"><span className="text-white">{checkedCount}</span><span>conditions validées sur</span><span className="text-white">{checklist.length}</span></div></div>
     </div>
     <p className="text-xs leading-relaxed text-[#6B7280]">Les graphiques sont fournis par TradingView. PipsEvo ne fournit aucun signal, conseil financier ou recommandation d'investissement.</p>
   </div>;
 }
-const Out=({label,value,color})=><div className="card-flat p-4"><div className="text-pe-caption text-[#9CA3AF]">{label}</div><div className="font-numeric mt-2 text-2xl font-bold" style={{color}}>{value}</div></div>;

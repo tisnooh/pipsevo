@@ -369,6 +369,7 @@ export default function LandingV2() {
   const { language, setLanguage, t } = useI18n();
   const reduceMotion = useReducedMotion();
   const [activeProduct, setActiveProduct] = useState("overview");
+  const [mobileComparison, setMobileComparison] = useState("manual");
   const systemSectionRef = useRef(null);
 
   useEffect(() => {
@@ -772,48 +773,68 @@ export default function LandingV2() {
           </Reveal>
 
           <Reveal delay={0.08} className="mt-12 sm:mt-14">
-            <div className="space-y-3 lg:hidden">
-              {comparisonRows.map((row, index) => (
-                <article key={row.label} className="overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#080A10] shadow-[0_18px_46px_rgba(0,0,0,.22)]">
-                  <div className="flex items-start gap-3 border-b border-white/[0.07] px-4 py-4">
-                    <span className="mt-0.5 font-mono text-[9px] tracking-[.16em] text-[#706681]">{String(index + 1).padStart(2, "0")}</span>
-                    <h3 className="text-[14px] font-semibold leading-5 text-[#E1E3E8]">{row.label}</h3>
+            <div className="lg:hidden">
+              <div className="overflow-hidden rounded-[22px] border border-white/[0.09] bg-[#080A10] shadow-[0_22px_60px_rgba(0,0,0,.28)]">
+                <div className="border-b border-white/[0.07] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[9px] font-semibold uppercase tracking-[.18em] text-[#687181]">{t("Comparer PipsEvo avec", "Compare PipsEvo with")}</div>
+                      <div className="mt-1 text-sm font-semibold text-[#E6E8ED]">{t("Choisis ta méthode actuelle", "Choose your current method")}</div>
+                    </div>
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#7657FF]/25 bg-[#7657FF]/10"><LogoMark size="sm" /></span>
                   </div>
-                  <div className="grid gap-2 p-3">
-                    <div className="rounded-[14px] border border-white/[0.055] bg-white/[0.018] px-3.5 py-3">
-                      <div className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[.1em] text-[#747D8C]">
-                        <FileText className="h-3.5 w-3.5" />Excel / Notion
-                      </div>
-                      <div className="[&>div]:justify-start [&>div]:text-left">
-                        <ComparisonCell state={row.manual.state}>{row.manual.text}</ComparisonCell>
-                      </div>
-                    </div>
-                    <div className="rounded-[14px] border border-white/[0.055] bg-white/[0.018] px-3.5 py-3">
-                      <div className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[.1em] text-[#747D8C]">
-                        <BookOpen className="h-3.5 w-3.5" />{t("Journal générique", "Generic journal")}
-                      </div>
-                      <div className="[&>div]:justify-start [&>div]:text-left">
-                        <ComparisonCell state={row.generic.state}>{row.generic.text}</ComparisonCell>
-                      </div>
-                    </div>
-                    <div className="relative overflow-hidden rounded-[14px] border border-[#7657FF]/35 bg-[#7657FF]/[0.085] px-3.5 py-3">
-                      <span className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full bg-[#7657FF]/[0.14] blur-2xl" />
-                      <div className="relative mb-2 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.1em] text-[#B7A8F5]">
-                          <LogoMark size="sm" />PipsEvo
+                  <div className="mt-4 grid grid-cols-2 rounded-xl border border-white/[0.075] bg-black/20 p-1" role="tablist" aria-label={t("Méthode comparée", "Compared method")}>
+                    {[
+                      { id: "manual", label: "Excel / Notion", icon: FileText },
+                      { id: "generic", label: t("Journal", "Journal"), icon: BookOpen },
+                    ].map(({ id, label, icon: Icon }) => (
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={mobileComparison === id}
+                        key={id}
+                        onClick={() => setMobileComparison(id)}
+                        className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-2 text-[11px] font-semibold transition-colors ${mobileComparison === id ? "bg-white/[0.08] text-white shadow-[0_4px_18px_rgba(0,0,0,.24)]" : "text-[#737C8C]"}`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />{label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 border-b border-white/[0.07] bg-white/[0.012] text-center">
+                  <div className="border-r border-white/[0.07] px-3 py-3 text-[10px] font-semibold uppercase tracking-[.12em] text-[#737C8C]">
+                    {mobileComparison === "manual" ? "Excel / Notion" : t("Journal générique", "Generic journal")}
+                  </div>
+                  <div className="bg-[#7657FF]/[0.055] px-3 py-3 text-[10px] font-semibold uppercase tracking-[.12em] text-[#B6A6F8]">PipsEvo</div>
+                </div>
+
+                <div role="tabpanel" key={mobileComparison} className="divide-y divide-white/[0.065]">
+                  {comparisonRows.map((row, index) => {
+                    const compared = row[mobileComparison];
+                    return (
+                      <article key={row.label} className="px-4 py-4">
+                        <div className="flex items-start gap-2.5">
+                          <span className="mt-0.5 font-mono text-[8px] tracking-[.14em] text-[#545D6C]">{String(index + 1).padStart(2, "0")}</span>
+                          <h3 className="text-[13px] font-medium leading-[1.45] text-[#D8DBE2]">{row.label}</h3>
                         </div>
-                        <span className="rounded-full border border-[#7657FF]/30 bg-[#7657FF]/15 px-2 py-1 text-[8px] font-semibold uppercase tracking-[.1em] text-[#BEAFFF]">{t("Recommandé", "Recommended")}</span>
-                      </div>
-                      <div className="relative [&>div]:justify-start [&>div]:text-left">
-                        <ComparisonCell state={row.pipsevo.state} featured>{row.pipsevo.text}</ComparisonCell>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              ))}
-              <div className="rounded-[20px] border border-[#7657FF]/25 bg-[#7657FF]/[0.06] px-5 py-5">
-                <p className="text-xs leading-5 text-[#8E96A5]">{t("PipsEvo ne remplace pas ta stratégie : il rend ton processus mesurable, lisible et améliorable.", "PipsEvo does not replace your strategy: it makes your process measurable, readable, and improvable.")}</p>
-                <Link to="/register" className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-[#C4B6FF] transition hover:text-white">{t("Commencer gratuitement", "Start for free")}<ArrowRight className="h-3.5 w-3.5" /></Link>
+                        <div className="mt-3 grid grid-cols-2">
+                          <div className="min-w-0 border-r border-white/[0.07] pr-3 [&>div]:justify-start [&>div]:text-left [&>div]:text-[11px] [&>div_span:last-child]:break-words">
+                            <ComparisonCell state={compared.state}>{compared.text}</ComparisonCell>
+                          </div>
+                          <div className="min-w-0 pl-3 [&>div]:justify-start [&>div]:text-left [&>div]:text-[11px] [&>div_span:last-child]:break-words">
+                            <ComparisonCell state={row.pipsevo.state} featured>{row.pipsevo.text}</ComparisonCell>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <div className="border-t border-[#7657FF]/25 bg-[#7657FF]/[0.065] p-4">
+                  <p className="text-[11px] leading-5 text-[#8E96A5]">{t("Un même espace pour mesurer ton processus, ton risque et ta progression.", "One workspace to measure your process, risk, and progress.")}</p>
+                  <Link to="/register" className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#7657FF] px-4 text-xs font-semibold text-white shadow-[0_10px_30px_rgba(118,87,255,.2)]">{t("Commencer gratuitement", "Start for free")}<ArrowRight className="h-3.5 w-3.5" /></Link>
+                </div>
               </div>
             </div>
             <div className="hidden overflow-x-auto rounded-[24px] border border-white/[0.08] bg-[#080A10] shadow-[0_26px_80px_rgba(0,0,0,.34)] [scrollbar-color:#403267_transparent] lg:block">

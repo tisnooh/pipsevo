@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X, PanelLeftClose, PanelLeftOpen, CalendarDays } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { LogoMark } from "@/components/Logo";
 import { dashboard, accounts as accountsAPI, trades as tradesAPI } from "@/lib/api";
@@ -15,6 +15,7 @@ const NAV_LINKS = [
   { to: "/app/accounts", fr: "Comptes", en: "Accounts", icon: Wallet, testid: "nav-accounts" },
   { to: "/app/journal", fr: "Journal", en: "Journal", icon: BookOpen, testid: "nav-journal" },
   { to: "/app/markets", fr: "Marchés", en: "Markets", icon: BarChart3, testid: "nav-markets" },
+  { to: "/app/economic-calendar", fr: "Calendrier éco", en: "Economic calendar", icon: CalendarDays, testid: "nav-economic-calendar" },
   { to: "/app/backtest", fr: "Simulateur", en: "Simulator", icon: FlaskConical, testid: "nav-backtest" },
   { to: "/app/analytics", fr: "Statistiques", en: "Analytics", icon: BarChart3, testid: "nav-analytics" },
   { to: "/app/coach", fr: "Analyse IA", en: "AI Analysis", icon: Brain, testid: "nav-coach" },

@@ -16,7 +16,7 @@ export default function Register() {
   const field="w-full mt-2 bg-[#0A0D18]/90 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder:text-[#4B5563] focus:border-[#7C4DFF]/70 focus:ring-4 focus:ring-[#7C4DFF]/10 outline-none transition";
   return <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden px-4 py-6 sm:p-8 flex items-center justify-center">
     <div className="absolute right-4 top-4 z-20 sm:right-7 sm:top-7"><LanguageSwitcher compact /></div>
-    <div className="absolute inset-0 grid-floor opacity-25"/><div className="absolute -top-40 -right-20 w-[650px] h-[650px] rounded-full blur-3xl opacity-20 bg-[#7C4DFF]"/><div className="absolute -bottom-40 -left-20 w-[600px] h-[600px] rounded-full blur-3xl opacity-15 bg-[#FF4FD8]"/>
+    <div className="absolute inset-0 grid-floor opacity-25"/><div className="absolute -top-40 -right-20 w-[650px] h-[650px] rounded-full blur-3xl opacity-20 bg-[#7C4DFF]"/><div className="absolute -bottom-40 -left-20 w-[600px] h-[600px] rounded-full blur-3xl opacity-15 bg-[#4F8CFF]"/>
     <div className="relative z-10 w-full max-w-6xl grid lg:grid-cols-[1.05fr_.95fr] rounded-[28px] overflow-hidden border border-white/10 shadow-[0_30px_100px_rgba(0,0,0,.65)] bg-[#080A12]/90 backdrop-blur-xl">
       <section className="hidden lg:flex p-12 xl:p-16 flex-col justify-between relative overflow-hidden border-r border-white/5">
         <div className="absolute inset-0 opacity-70" style={{background:"radial-gradient(circle at 20% 20%,rgba(124,77,255,.28),transparent 48%),radial-gradient(circle at 80% 90%,rgba(79,140,255,.16),transparent 45%)"}}/>

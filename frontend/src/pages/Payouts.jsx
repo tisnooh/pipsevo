@@ -70,8 +70,8 @@ export default function Payouts() {
       <div className="pe-page-header">
         <div>
           <div className="pe-eyebrow">Retraits et objectifs</div>
-          <h1 className="pe-page-title">Payouts</h1>
-          <p className="pe-page-copy">Suis tes retraits et projette ton prochain payout.</p>
+          <h1 className="pe-page-title mt-2">Payouts</h1>
+          <p className="pe-page-copy mt-1">Suis tes retraits et projette ton prochain payout.</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row"><CsvExportButton rows={payoutExportRows} type="payouts" filename="pipsevo-payouts" className="btn-ghost w-full py-2.5 text-sm sm:w-auto"/><button onClick={()=>accs.length ? setOpen(true) : toast.error("Ajoute d’abord un compte")} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 w-full sm:w-auto" data-testid="add-payout-btn"><Plus className="w-4 h-4"/> Enregistrer un payout</button></div>
       </div>

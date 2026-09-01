@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Star, Edit2, Trash2, Camera, Check, Plus, Upload } from "lucide-react"
+import { Star, Edit2, Trash2, Camera, Check, Plus, Upload, BarChart3, Target, TrendingUp, ArrowUpRight, ArrowDownRight, Ruler } from "lucide-react"
 import { AreaChart, Area, ResponsiveContainer } from "recharts"
 import { trades as tradesAPI, accounts as accAPI } from "@/lib/api"
 import { toast } from "sonner"
@@ -10,6 +10,7 @@ import TradeFormModal from "@/components/TradeFormModal"
 import { createEmptyTradeForm, hydrateTradeForm } from "@/lib/tradeFormModel"
 import CsvExportButton from "@/components/CsvExportButton"
 import TradeCsvImportModal from "@/components/TradeCsvImportModal"
+import { useAppSettings } from "@/hooks/useAppSettings"
 
 const miniChartData = [
   { t: 1, v: 1.0784 }, { t: 2, v: 1.0790 }, { t: 3, v: 1.0785 },
@@ -19,6 +20,7 @@ const miniChartData = [
 
 export function JournalPage() {
   const { user } = useAuth()
+  const { money } = useAppSettings()
   const [tradeList, setTradeList] = useState([])
   const [accounts, setAccounts] = useState([])
   const [selectedTrade, setSelectedTrade] = useState(null)
@@ -141,12 +143,12 @@ export function JournalPage() {
   const avgR = filtered.length ? filtered.reduce((s, t) => s + (t.r || 0), 0) / filtered.length : 0
 
   const kpis = [
-    { label: "Trades", value: filtered.length.toString(), sub: "", icon: "📊", color: "#4F8CFF" },
-    { label: "Win Rate", value: `${winRate}%`, sub: "", icon: "🎯", color: "#00E676" },
-    { label: "Profit net", value: `${totalPnl >= 0 ? "+" : ""}$${Math.abs(totalPnl).toFixed(2)}`, sub: "", icon: "📈", color: totalPnl >= 0 ? "#00E676" : "#FF5252" },
-    { label: "Gain moyen", value: `+$${avgWin.toFixed(2)}`, sub: "", icon: "⬆️", color: "#00E676" },
-    { label: "Perte moyenne", value: `$${avgLoss.toFixed(2)}`, sub: "", icon: "⬇️", color: "#FF5252" },
-    { label: "R Multiple moyen", value: avgR.toFixed(2), sub: "", icon: "📐", color: "#7C4DFF" },
+    { label: "Trades", value: filtered.length.toString(), sub: "", Icon: BarChart3, color: "#4F8CFF" },
+    { label: "Win Rate", value: `${winRate}%`, sub: "", Icon: Target, color: "#00E676" },
+    { label: "Profit net", value: money(totalPnl,{signDisplay:"always"}), sub: "", Icon: TrendingUp, color: totalPnl >= 0 ? "#00E676" : "#FF5252" },
+    { label: "Gain moyen", value: money(avgWin,{signDisplay:"always"}), sub: "", Icon: ArrowUpRight, color: "#00E676" },
+    { label: "Perte moyenne", value: money(avgLoss), sub: "", Icon: ArrowDownRight, color: "#FF5252" },
+    { label: "R Multiple moyen", value: `${avgR.toFixed(2)}R`, sub: "", Icon: Ruler, color: "#7C4DFF" },
   ]
 
   const detailTabs = ["Aperçu", "Notes", "Statistiques"]
@@ -199,7 +201,7 @@ export function JournalPage() {
             <div key={kpi.label} className="pe-card min-h-[104px] p-4">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-pe-caption text-[#9CA3AF]">{kpi.label}</span>
-                <span className="text-xs">{kpi.icon}</span>
+                <kpi.Icon className="h-4 w-4" style={{ color: kpi.color }}/>
               </div>
               <div className="font-numeric text-xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
               {kpi.sub && <p className="mt-1 text-pe-caption text-[#9CA3AF]">{kpi.sub}</p>}

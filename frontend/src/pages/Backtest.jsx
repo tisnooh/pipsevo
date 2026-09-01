@@ -26,7 +26,7 @@ export default function Backtest() {
   };
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   return <div className="pe-page pe-page-stack mx-auto max-w-[1800px]">
-    <div className="pe-page-header"><div><div className="pe-eyebrow">Projection statistique</div><h1 className="pe-page-title flex items-center gap-2"><FlaskConical className="h-6 w-6 text-[#B58BFF]"/>Simulateur de stratégie</h1><p className="pe-page-copy">Teste des hypothèses avec un risque composé. Ce module n’utilise pas encore de données de marché historiques.</p></div></div>
+    <div className="pe-page-header"><div><div className="pe-eyebrow">Projection statistique</div><h1 className="pe-page-title mt-2 flex items-center gap-2"><FlaskConical className="h-6 w-6 text-[#B58BFF]"/>Simulateur de stratégie</h1><p className="pe-page-copy mt-1">Teste des hypothèses avec un risque composé. Ce module n’utilise pas encore de données de marché historiques.</p></div></div>
     <div className="grid lg:grid-cols-3 gap-4">
       <form onSubmit={e=>{e.preventDefault();setRan(true)}} className="pe-card pe-card-pad space-y-4">
         {[["capital",`Capital initial (${settings.currency})`,100],['trades','Nombre de trades',1],['winrate','Win rate (%)',1],['gain','Gain moyen (R)',0.1],['loss','Perte moyenne (R)',0.1],['risk','Risque par trade (%)',0.1]].map(([k,l,s])=><label key={k} className="block text-xs font-medium text-[#9CA3AF]">{l}<input type="number" min={k==='winrate'?0:0.01} max={k==='winrate'?100:k==='risk'?10:k==='trades'?5000:undefined} step={s} value={form[k]} onChange={e=>set(k,e.target.value)} className="pe-control mt-2 w-full"/></label>)}
