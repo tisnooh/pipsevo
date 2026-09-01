@@ -27,7 +27,7 @@ export default function Register() {
       <section className="p-6 sm:p-10 lg:p-12 xl:p-14 bg-[#090B14]/85">
         <div className="lg:hidden mb-9"><Logo/></div>
           <div className="inline-flex items-center gap-2 font-mono text-pe-micro uppercase tracking-[.2em] text-[#B58BFF]"><span className="h-1.5 w-1.5 rounded-full bg-[#00E676]"/>Inscription gratuite</div>
-        <h2 className="text-3xl sm:text-4xl font-bold mt-4">Crée ton espace PipsEvo.</h2><p className="text-sm text-[#9CA3AF] mt-2">Configure ensuite ton profil en moins de deux minutes.</p>
+        <h2 className="text-3xl sm:text-4xl font-bold mt-4">Crée ton espace PipsEvo.</h2><p className="text-sm text-[#9CA3AF] mt-2">Configure ton profil, puis connecte automatiquement ton compte de trading ou ajoute-le manuellement.</p>
         <form onSubmit={submit} className="space-y-5 mt-8" aria-busy={loading}>
           <label className="block text-xs font-medium text-[#B5BBC9]">Nom affiché<input required value={name} onChange={e=>setName(e.target.value)} placeholder="Ex. Alex" data-testid="register-name" className={field}/></label>
           <label className="block text-xs font-medium text-[#B5BBC9]">Adresse e-mail<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="alex@email.com" data-testid="register-email" className={field}/></label>

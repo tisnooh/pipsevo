@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle, CheckCircle2, ChevronRight, Clock3, Database, ExternalLink,
   FileUp, Link2, Loader2, LockKeyhole, RefreshCw, Server, Unplug,
@@ -42,7 +42,8 @@ const clearIntegrationQuery = () => {
   window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 };
 
-export default function IntegrationConnections() {
+export default function IntegrationConnections({ compact = false, returnPath = "/app/settings", onConnectionReady }) {
+  const connectionReadyRef = useRef(onConnectionReady);
   const [capabilities, setCapabilities] = useState({ providers: [] });
   const [connections, setConnections] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +54,8 @@ export default function IntegrationConnections() {
   const [configuration, setConfiguration] = useState(null);
   const [selectConnection, setSelectConnection] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
+
+  useEffect(() => { connectionReadyRef.current = onConnectionReady; }, [onConnectionReady]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,6 +77,7 @@ export default function IntegrationConnections() {
           );
         } else if (connection) {
           toast.success("Compte connecté. L’historique va être synchronisé en arrière-plan.");
+          connectionReadyRef.current?.({ provider: connection.provider, connection });
         }
         clearIntegrationQuery();
       } else if (params.get("integration") === "error") {
@@ -101,7 +105,7 @@ export default function IntegrationConnections() {
     if (["ctrader", "tradovate"].includes(provider.id)) {
       setActionId(provider.id);
       try {
-        const { data } = await integrationConnections.startOAuth(provider.id);
+        const { data } = await integrationConnections.startOAuth(provider.id, returnPath);
         window.location.assign(data.authorization_url);
       } catch (error) {
         toast.error(publicError(error, "Impossible de démarrer l’autorisation"));
@@ -133,6 +137,7 @@ export default function IntegrationConnections() {
           toast.success("TradeLocker autorisé. Choisis les comptes à synchroniser.");
         } else {
           toast.success("Compte TradeLocker connecté. Synchronisation en arrière-plan lancée.");
+          onConnectionReady?.({ provider: "tradelocker", connection: data.connection });
         }
       }
     } catch (error) {
@@ -153,6 +158,7 @@ export default function IntegrationConnections() {
         openSelection(data.connection.id, data.accounts);
       } else {
         toast.success("Compte MetaTrader connecté. Synchronisation en arrière-plan lancée.");
+        onConnectionReady?.({ provider: "metaapi", connection: data.connection });
       }
     } catch (error) {
       toast.error(publicError(error, "La configuration MetaApi n’est pas encore terminée"));
@@ -176,6 +182,7 @@ export default function IntegrationConnections() {
     try {
       await integrationConnections.selectAccounts(selectConnection.id, selectedIds);
       toast.success("Comptes sélectionnés et import initial lancé");
+      onConnectionReady?.({ provider: selectConnection.provider, connection: selectConnection });
       setSelectConnection(null);
       await load();
     } catch (error) {
@@ -205,14 +212,14 @@ export default function IntegrationConnections() {
   };
 
   return <div className="space-y-5">
-    <section className="card-elev overflow-hidden">
-      <div className="flex flex-col gap-4 border-b border-white/[0.06] p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
+    <section className={`${compact ? "overflow-hidden rounded-2xl border border-white/[0.07] bg-[#090C15]" : "card-elev overflow-hidden"}`}>
+      {!compact && <div className="flex flex-col gap-4 border-b border-white/[0.06] p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
         <div className="flex items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#7C4DFF]/12 text-[#A98BFF]"><Database className="h-5 w-5"/></span>
           <div><h2 className="font-semibold">Centre de connexions</h2><p className="mt-1 max-w-2xl text-xs leading-relaxed text-[#7E8798]">Autorise une plateforme, choisis précisément les comptes à suivre, puis laisse PipsEvo importer uniquement les données de lecture.</p></div>
         </div>
         <span className="inline-flex w-fit items-center gap-2 rounded-full border border-[#00E676]/15 bg-[#00E676]/[0.04] px-3 py-1 text-[10px] text-[#61E7AE]"><LockKeyhole className="h-3 w-3"/>Jetons chiffrés côté serveur</span>
-      </div>
+      </div>}
       <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-3">
         {PROVIDERS.map(provider => {
           const capability = capabilityMap[provider.id];
@@ -230,7 +237,7 @@ export default function IntegrationConnections() {
       </div>
     </section>
 
-    {!loading && connections.length > 0 && <section className="card-elev overflow-hidden"><div className="border-b border-white/[0.06] p-5 sm:p-6"><h2 className="font-semibold">Sources autorisées</h2><p className="mt-1 text-xs text-[#737C8D]">La dernière synchronisation et les erreurs restent visibles compte par compte.</p></div><div className="grid gap-3 p-5 sm:p-6">{connections.map(connection => <ConnectionCard key={connection.id} connection={connection} busyId={actionId} onChoose={() => openSelection(connection.id)} onSync={syncAccount} onFinalize={() => finalizeMetaApi(connection)} onReconnect={() => launchProvider(PROVIDERS.find(item => item.id === connection.provider))} onDisconnect={() => disconnect(connection)}/>)}</div></section>}
+    {!compact && !loading && connections.length > 0 && <section className="card-elev overflow-hidden"><div className="border-b border-white/[0.06] p-5 sm:p-6"><h2 className="font-semibold">Sources autorisées</h2><p className="mt-1 text-xs text-[#737C8D]">La dernière synchronisation et les erreurs restent visibles compte par compte.</p></div><div className="grid gap-3 p-5 sm:p-6">{connections.map(connection => <ConnectionCard key={connection.id} connection={connection} busyId={actionId} onChoose={() => openSelection(connection.id)} onSync={syncAccount} onFinalize={() => finalizeMetaApi(connection)} onReconnect={() => launchProvider(PROVIDERS.find(item => item.id === connection.provider))} onDisconnect={() => disconnect(connection)}/>)}</div></section>}
 
     <Dialog open={Boolean(formProvider)} onOpenChange={open => { if (!open) { setFormProvider(null); setConfiguration(null); setMetaForm(EMPTY_META); setTlForm(EMPTY_TL); } }}>
       <DialogContent className="max-h-[92vh] overflow-y-auto border-white/[0.1] bg-[#090B13] text-white sm:max-w-xl">

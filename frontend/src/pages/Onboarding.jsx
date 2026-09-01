@@ -50,8 +50,8 @@ export default function Onboarding() {
       const savedRules = rulesTiming === "later" ? { ...DEFAULT_TRADING_RULES, configured: false, assets } : { ...normalizeTradingRules(rules), configured: true, assets };
       const { data: updatedUser } = await onboarding({ trader_type: traderType, prop_firms: firms, num_accounts: +numAccounts, rules: savedRules, journal_preferences: journalPreferences });
       setUser(updatedUser || { ...user, onboarded: true, onboarding_completed: true, trader_type: traderType, prop_firms: firms, rules: savedRules, journal_preferences: journalPreferences });
-      toast.success(rulesTiming === "later" ? "Profil créé — complète tes règles quand tu veux" : "Tes règles sont enregistrées");
-      nav("/app/dashboard", { replace: true });
+      toast.success(rulesTiming === "later" ? "Profil créé — ajoute maintenant ton premier compte" : "Profil enregistré — connecte maintenant ton premier compte");
+      nav("/app/accounts?setup=1&welcome=1", { replace: true });
     } catch (error) { toast.error(error.response?.data?.detail || "Impossible de terminer la configuration") } finally { setLoading(false); }
   };
 
@@ -118,7 +118,7 @@ export default function Onboarding() {
           {step === 6 && (
             <div className="mt-3">
               <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Tes règles de trading</h2>
-              <p className="mt-2 text-sm text-[#8B93A3]">Construis tes garde-fous maintenant ou commence directement et complète-les ensuite dans Paramètres.</p>
+              <p className="mt-2 text-sm text-[#8B93A3]">Construis tes garde-fous maintenant. À l’étape suivante, tu pourras connecter automatiquement ton premier compte ou le configurer manuellement.</p>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <button type="button" onClick={()=>setRulesTiming("now")} className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${rulesTiming === "now" ? "border-[#7C4DFF]/70 bg-[#7C4DFF]/10 shadow-[0_12px_35px_rgba(124,77,255,.12)]" : "border-white/[0.07] bg-white/[0.025] hover:border-white/20"}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#7C4DFF]/12 text-[#B58BFF]"><SlidersHorizontal className="h-5 w-5"/></span><span><span className="block text-sm font-semibold">Configurer maintenant</span><span className="mt-1 block text-xs leading-relaxed text-[#7E8798]">Définis tes limites, ta check-list et tes règles personnelles.</span></span></button>
                 <button type="button" onClick={()=>setRulesTiming("later")} className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${rulesTiming === "later" ? "border-[#4F8CFF]/70 bg-[#4F8CFF]/10 shadow-[0_12px_35px_rgba(79,140,255,.12)]" : "border-white/[0.07] bg-white/[0.025] hover:border-white/20"}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#4F8CFF]/12 text-[#8FB4FF]"><Clock3 className="h-5 w-5"/></span><span><span className="block text-sm font-semibold">Ajouter ultérieurement</span><span className="mt-1 block text-xs leading-relaxed text-[#7E8798]">Utilise les valeurs conseillées et personnalise-les plus tard.</span></span></button>
@@ -132,7 +132,7 @@ export default function Onboarding() {
             {step < 6 ? (
               <button onClick={()=>setStep(s=>s+1)} disabled={!canContinue} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed" data-testid="onb-next">Continuer <ArrowRight className="w-4 h-4"/></button>
             ) : (
-              <button onClick={finish} disabled={loading || !canFinish} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed" data-testid="onb-finish">{loading?"Sauvegarde…":(<>{rulesTiming === "later" ? "Continuer et configurer plus tard" : "Enregistrer et entrer dans PipsEvo"} <ArrowRight className="w-4 h-4"/></>)}</button>
+              <button onClick={finish} disabled={loading || !canFinish} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed" data-testid="onb-finish">{loading?"Sauvegarde…":(<>Enregistrer et ajouter mon compte <ArrowRight className="w-4 h-4"/></>)}</button>
             )}
           </div>
           </div>
