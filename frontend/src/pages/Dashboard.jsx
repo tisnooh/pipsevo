@@ -82,9 +82,9 @@ export default function Dashboard() {
       {loading && <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{Array.from({length:4}).map((_,i)=><div key={i} className="h-40 rounded-2xl bg-white/[0.035] animate-pulse"/>)}</div>}
 
       {!loading && <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-        <DashboardKpiCard label="Profit net" value={money(periodProfit,{signDisplay:"always"})} sub={`Sur les ${period} derniers jours`} sparkColor={periodProfit < 0 ? "red" : "green"} icon={TrendingUp} testid="kpi-profit" />
-        <DashboardKpiCard label="Score de discipline" value={<><span>{k.discipline_score}</span><span className="text-[#9CA3AF] text-base"> /100</span></>} sub={`${planRateLabel} · plan respecté`} sparkColor="purple" icon={BarChart3} testid="kpi-discipline" />
-        <DashboardKpiCard label="Comptes actifs" value={k.active_accounts} sub={`${k.active_accounts} compte${k.active_accounts>1?"s":""} suivi${k.active_accounts>1?"s":""}`} sparkColor="blue" icon={Shield} testid="kpi-accounts" />
+        <DashboardKpiCard label="Profit net" value={money(periodProfit,{signDisplay:"always"})} sub={`Sur les ${period} derniers jours`} sparkColor={periodProfit < 0 ? "red" : "green"} icon={TrendingUp} testid="kpi-profit" flat={periodProfit === 0} />
+        <DashboardKpiCard label="Score de discipline" value={<><span>{k.discipline_score}</span><span className="text-[#9CA3AF] text-base"> /100</span></>} sub={`${planRateLabel} · plan respecté`} sparkColor="purple" icon={BarChart3} testid="kpi-discipline" flat={Number(k.discipline_score) === 0} />
+        <DashboardKpiCard label="Comptes actifs" value={k.active_accounts} sub={`${k.active_accounts} compte${k.active_accounts>1?"s":""} suivi${k.active_accounts>1?"s":""}`} sparkColor="blue" icon={Shield} testid="kpi-accounts" flat={Number(k.active_accounts) === 0} />
         <DashboardKpiCard label="Drawdown restant" value={money(k.remaining_drawdown)} sub="Marge de risque disponible" sparkColor="red" icon={ArrowDownRight} testid="kpi-dd" />
       </div>}
 

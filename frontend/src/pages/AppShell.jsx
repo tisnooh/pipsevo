@@ -173,8 +173,8 @@ export default function AppShell() {
         <div className={`px-3 mt-2 shrink-0 ${sidebarCollapsed ? "md:hidden" : ""}`}>
           <div className="card-flat px-3 py-2.5 text-center">
             <div className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.18em] text-[#9CA3AF]">Discipline du jour</div>
-            <div className="relative mt-1">
-              <svg viewBox="0 0 80 50" className="mx-auto h-9 w-24 max-w-full">
+            <div className="mt-2">
+              <svg viewBox="0 0 80 46" className="mx-auto h-8 w-24 max-w-full" aria-label={`Score de discipline : ${discipline} sur 100`}>
                 <defs>
                   <linearGradient id="gauge-a" x1="0" y1="0" x2="1" y2="0">
                     <stop offset="0%" stopColor="#7C4DFF" />
@@ -192,16 +192,14 @@ export default function AppShell() {
                   strokeDashoffset={95 - (discipline / 100) * 95}
                 />
               </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pt-1">
-                <div className="font-mono text-base font-bold leading-none">
-                  {discipline}
-                  <span className="ml-0.5 text-[8px] text-[#9CA3AF]">/100</span>
-                </div>
+              <div className="mt-1 font-mono text-base font-bold leading-none">
+                {discipline}
+                <span className="ml-1 text-[8px] text-[#9CA3AF]">/100</span>
               </div>
             </div>
-            <div className={`text-[9px] leading-tight ${discipline>=80?"text-[#00E676]":discipline>=60?"text-[#FFB855]":"text-[#FF7272]"}`}>{discipline>=80?"Excellent":discipline>=60?"À consolider":discipline?"À améliorer":"En attente"}</div>
+            <div className={`mt-1 text-[9px] leading-tight ${discipline>=80?"text-[#00E676]":discipline>=60?"text-[#FFB855]":"text-[#FF7272]"}`}>{discipline>=80?"Excellent":discipline>=60?"À consolider":discipline?"À améliorer":"En attente"}</div>
             <svg viewBox="0 0 80 18" className="mx-auto mt-1 h-3 w-24 max-w-full">
-              <path d="M0,15 L10,12 L20,13 L30,9 L40,10 L50,6 L60,7 L70,3 L80,4" stroke="#7C4DFF" strokeWidth="1.5" fill="none" />
+              <path d={discipline > 0 ? "M0,15 L10,12 L20,13 L30,9 L40,10 L50,6 L60,7 L70,3 L80,4" : "M0,13 L80,13"} stroke={discipline > 0 ? "#7C4DFF" : "#343A47"} strokeWidth="1.5" fill="none" />
             </svg>
           </div>
         </div>
