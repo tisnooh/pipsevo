@@ -125,7 +125,9 @@ class IntegrationConfig:
             ),
             allowed_plans=tuple(
                 plan.strip().lower()
-                for plan in os.environ.get("MT5_ALLOWED_PLANS", "beta,pro").split(",")
+                for plan in os.environ.get(
+                    "MT5_ALLOWED_PLANS", "free,beta,essential,pro"
+                ).split(",")
                 if plan.strip()
             ),
             public_api_url=api_url,

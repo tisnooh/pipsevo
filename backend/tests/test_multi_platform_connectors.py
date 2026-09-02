@@ -37,6 +37,14 @@ def test_provider_flags_require_complete_credentials(monkeypatch):
     assert "tradelocker" in config.enabled_providers
 
 
+def test_default_integration_plans_match_current_subscription_catalog(monkeypatch):
+    monkeypatch.delenv("MT5_ALLOWED_PLANS", raising=False)
+
+    config = IntegrationConfig.from_env()
+
+    assert config.allowed_plans == ("free", "beta", "essential", "pro")
+
+
 def test_normalized_provider_trade_does_not_invent_plan_compliance():
     trade = normalize_trade(
         ProviderTradeRecord(
