@@ -89,6 +89,14 @@ def build_integration_router(get_current_user, service) -> APIRouter:
     async def start_metaapi(body: MetaApiLinkRequest, user=Depends(get_current_user)):
         return await invoke(service.start_metaapi(user["id"], plan_for(user), body))
 
+    @router.get("/metaapi/servers")
+    async def search_metaapi_servers(
+        platform: str = Query(default="mt5", pattern="^mt[45]$"),
+        query: str = Query(..., min_length=2, max_length=80),
+        user=Depends(get_current_user),
+    ):
+        return await invoke(service.search_metaapi_servers(plan_for(user), platform, query))
+
     @router.post("/metaapi/{connection_id}/finalize")
     async def finalize_metaapi(connection_id: str, user=Depends(get_current_user)):
         return await invoke(service.finalize_metaapi(user["id"], plan_for(user), connection_id))

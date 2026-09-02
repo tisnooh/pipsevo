@@ -33,6 +33,22 @@ class MetaApiConnector(TradingConnector):
     def headers(self) -> dict[str, str]:
         return {"auth-token": self.token, "Content-Type": "application/json"}
 
+    async def search_servers(self, platform: str, query: str) -> list[dict[str, str]]:
+        version = 4 if platform == "mt4" else 5
+        result = await request_json(
+            "GET",
+            f"{self.provisioning_url}/known-mt-servers/{version}/search",
+            headers=self.headers,
+            params={"query": query},
+        )
+        if not isinstance(result, dict):
+            return []
+        return [
+            {"broker": str(broker), "server": str(server)}
+            for broker, servers in result.items()
+            for server in (servers if isinstance(servers, list) else [])
+        ][:50]
+
     async def create_configuration_link(self, request: MetaApiLinkRequest) -> dict:
         body = {
             "name": request.name,
@@ -150,7 +166,15 @@ class MetaApiConnector(TradingConnector):
         ]
 
     async def sync_historical(self, account: IntegrationAccount, access: dict) -> SyncBatch:
-        return await self._sync(account, access, datetime.now(timezone.utc) - timedelta(days=3650))
+        configured_start = (account.provider_metadata or {}).get("start_date")
+        if configured_start:
+            try:
+                start = datetime.fromisoformat(str(configured_start)).replace(tzinfo=timezone.utc)
+            except ValueError:
+                start = datetime.now(timezone.utc) - timedelta(days=3650)
+        else:
+            start = datetime.now(timezone.utc) - timedelta(days=3650)
+        return await self._sync(account, access, start)
 
     async def sync_recent(self, account: IntegrationAccount, access: dict, cursor: dict) -> SyncBatch:
         value = cursor.get("last_close_time")

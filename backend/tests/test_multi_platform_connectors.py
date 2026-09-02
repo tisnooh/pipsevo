@@ -77,6 +77,27 @@ def test_metaapi_password_uses_direct_connection_without_configuration_link(monk
     assert requests[0][2]["json"]["type"] == "cloud-g2"
 
 
+def test_metaapi_server_search_uses_platform_version_and_flattens_brokers(monkeypatch):
+    requests = []
+
+    async def fake_request(method, url, **kwargs):
+        requests.append((method, url, kwargs))
+        return {"FTMO": ["FTMO-Demo", "FTMO-Demo2"]}
+
+    monkeypatch.setattr("integrations.connectors.metaapi.request_json", fake_request)
+    connector = MetaApiConnector("token")
+
+    result = asyncio.run(connector.search_servers("mt5", "FTMO"))
+
+    assert result == [
+        {"broker": "FTMO", "server": "FTMO-Demo"},
+        {"broker": "FTMO", "server": "FTMO-Demo2"},
+    ]
+    assert requests[0][0] == "GET"
+    assert requests[0][1].endswith("/known-mt-servers/5/search")
+    assert requests[0][2]["params"] == {"query": "FTMO"}
+
+
 def test_normalized_provider_trade_does_not_invent_plan_compliance():
     trade = normalize_trade(
         ProviderTradeRecord(

@@ -13,14 +13,16 @@ export const INTEGRATIONS = Object.freeze([
     name: "Import CSV",
     status: "available",
     statusLabel: "Disponible en bêta",
-    description: "Prévisualisation, validation, détection des doublons et annulation d’un lot importé.",
+    description: "Prévisualisation, validation, détection des doublons et annulation pour les fichiers CSV et rapports HTML MetaTrader.",
   },
   {
     id: "mt5",
     name: "MetaTrader 5",
     status: FEATURE_FLAGS.mt5AutoSync ? "available" : "coming_soon",
     statusLabel: FEATURE_FLAGS.mt5AutoSync ? "Disponible" : "Bientôt disponible",
-    description: "Architecture prévue, mais aucune synchronisation n’est annoncée sans accès officiel et tests de fiabilité.",
+    description: FEATURE_FLAGS.mt5AutoSync
+      ? "Connexion en lecture seule, recherche du serveur et import automatique de l’historique MetaTrader."
+      : "Connexion préparée, mais non annoncée tant que le fournisseur et les tests de fiabilité ne sont pas activés.",
   },
   {
     id: "ctrader",

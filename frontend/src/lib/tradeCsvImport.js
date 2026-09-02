@@ -17,9 +17,9 @@ const HEADER_ALIASES = {
   plan_respected: ["plan respected", "plan respecte", "plan respecté"],
   entry_time: ["entry time", "heure entree", "heure d'entrée"],
   exit_time: ["exit time", "heure sortie", "heure de sortie"],
-  size: ["size", "quantity", "quantite", "quantité", "lots"],
+  size: ["size", "quantity", "quantite", "quantité", "lots", "volume"],
   commission: ["commission", "fees", "frais"],
-  external_trade_id: ["trade id", "external id", "ticket", "order id"],
+  external_trade_id: ["trade id", "external id", "ticket", "order id", "position", "deal"],
 };
 
 const canonical = (value) => String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -57,6 +57,57 @@ export const parseCsv = (text) => {
   });
 };
 
+const aliasFor = (header) => Object.entries(HEADER_ALIASES)
+  .find(([, aliases]) => aliases.includes(canonical(header)))?.[0] || canonical(header);
+
+export const parseMetaTraderHtml = (text) => {
+  if (typeof DOMParser === "undefined") throw new Error("La lecture HTML n’est pas disponible dans ce navigateur.");
+  const document = new DOMParser().parseFromString(String(text || ""), "text/html");
+  const tables = [...document.querySelectorAll("table")];
+  const parsed = [];
+
+  tables.forEach(table => {
+    const tableRows = [...table.querySelectorAll("tr")];
+    const headerIndex = tableRows.findIndex(row => {
+      const labels = [...row.querySelectorAll("th,td")].map(cell => canonical(cell.textContent));
+      return labels.includes("symbol")
+        && labels.some(label => ["type", "side", "direction"].includes(label))
+        && labels.some(label => ["profit", "pnl", "p&l"].includes(label));
+    });
+    if (headerIndex < 0) return;
+
+    const headers = [...tableRows[headerIndex].querySelectorAll("th,td")].map(cell => canonical(cell.textContent));
+    tableRows.slice(headerIndex + 1).forEach((row, rowOffset) => {
+      const cells = [...row.querySelectorAll("td")].map(cell => cell.textContent.trim());
+      if (cells.length < 4 || cells.every(cell => !cell)) return;
+      const raw = {};
+      const occurrences = {};
+      headers.forEach((header, index) => {
+        const value = cells[index] ?? "";
+        occurrences[header] = (occurrences[header] || 0) + 1;
+        if (["time", "date/time", "date time"].includes(header)) {
+          if (occurrences[header] === 1) {
+            raw.date = value;
+            raw.entry_time = value;
+          } else raw.exit_time = value;
+          return;
+        }
+        if (header === "price") {
+          raw[occurrences[header] === 1 ? "entry" : "exit_price"] = value;
+          return;
+        }
+        raw[aliasFor(header)] = value;
+      });
+      parsed.push({ rowNumber: headerIndex + rowOffset + 2, raw });
+    });
+  });
+
+  if (!parsed.length) {
+    throw new Error("Aucun tableau de trades MetaTrader reconnu dans ce rapport HTML.");
+  }
+  return parsed;
+};
+
 const parseNumber = (value) => {
   if (value === "" || value === null || value === undefined) return null;
   const cleaned = String(value).replace(/[$€£\s]/g, "").replace(/,(?=\d{1,2}$)/, ".");
@@ -69,6 +120,8 @@ const parseDate = (value) => {
   if (!source) return null;
   const french = source.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
   if (french) return `${french[3]}-${french[2].padStart(2, "0")}-${french[1].padStart(2, "0")}`;
+  const metaTrader = source.match(/^(\d{4})[.\/-](\d{1,2})[.\/-](\d{1,2})(?:\s|$)/);
+  if (metaTrader) return `${metaTrader[1]}-${metaTrader[2].padStart(2, "0")}-${metaTrader[3].padStart(2, "0")}`;
   const parsed = new Date(source);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
 };
@@ -99,15 +152,17 @@ const normalizeBoolean = (value) => {
 };
 
 const accountKey = (account) => [account.id, account.name, `${account.firm} ${account.name}`, account.firm].map(canonical);
-const findAccounts = (value, accounts) => accounts.filter(account => accountKey(account).includes(canonical(value)));
+const findAccounts = (value, accounts) => {
+  if (!canonical(value) && accounts.length === 1) return accounts;
+  return accounts.filter(account => accountKey(account).includes(canonical(value)));
+};
 
 export const tradeFingerprint = (trade) => [
   trade.account_id, trade.date, canonical(trade.instrument), trade.direction,
   trade.entry ?? "", trade.exit_price ?? "", trade.pnl ?? "", trade.external_trade_id ?? "",
 ].join("|");
 
-export const prepareTradeImport = ({ text, accounts = [], existingTrades = [] }) => {
-  const rows = parseCsv(text);
+const prepareRows = ({ rows, accounts = [], existingTrades = [], importSource = "csv" }) => {
   const existing = new Set(existingTrades.map(tradeFingerprint));
   const seen = new Set();
   return rows.map(({ rowNumber, raw }) => {
@@ -140,7 +195,7 @@ export const prepareTradeImport = ({ text, accounts = [], existingTrades = [] })
       entry_time: String(raw.entry_time || "").trim() || null,
       exit_time: String(raw.exit_time || "").trim() || null,
       external_trade_id: String(raw.external_trade_id || "").trim() || null,
-      import_source: "csv",
+      import_source: importSource,
     };
     const fingerprint = tradeFingerprint(trade);
     trade.import_fingerprint = fingerprint;
@@ -148,5 +203,19 @@ export const prepareTradeImport = ({ text, accounts = [], existingTrades = [] })
     if (duplicate) warnings.push("Doublon ignoré");
     seen.add(fingerprint);
     return { rowNumber, raw, trade, errors, warnings, duplicate, valid: errors.length === 0 && !duplicate };
+  });
+};
+
+export const prepareTradeImport = ({ text, accounts = [], existingTrades = [] }) => prepareRows({
+  rows: parseCsv(text), accounts, existingTrades, importSource: "csv",
+});
+
+export const prepareTradeFileImport = ({ text, fileName = "", accounts = [], existingTrades = [] }) => {
+  const html = /\.html?$/i.test(fileName) || /^\s*(?:<!doctype\s+html|<html|<table)/i.test(String(text || ""));
+  return prepareRows({
+    rows: html ? parseMetaTraderHtml(text) : parseCsv(text),
+    accounts,
+    existingTrades,
+    importSource: html ? "metatrader_html" : "csv",
   });
 };

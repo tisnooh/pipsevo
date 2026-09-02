@@ -32,6 +32,7 @@ import ProductDashboardPreview from "@/components/ProductDashboardPreview";
 import AmbientCandleField from "@/components/AmbientCandleField";
 import { openCookieSettings } from "@/components/CookieConsent";
 import { useI18n } from "@/context/I18nContext";
+import { FEATURE_FLAGS } from "@/config/billing";
 
 gsap.registerPlugin(MotionPathPlugin, ScrollTrigger);
 
@@ -91,8 +92,12 @@ const faqs = [
   {
     fr: "La synchronisation automatique est-elle active ?",
     en: "Is automatic synchronization active?",
-    answerFr: "Pas encore. Les connexions MetaTrader 5, cTrader, Tradovate et NinjaTrader restent annoncées comme à venir tant qu’un accès officiel et des tests fiables ne sont pas validés.",
-    answerEn: "Not yet. MetaTrader 5, cTrader, Tradovate, and NinjaTrader connections remain upcoming until official access and reliable testing are validated.",
+    answerFr: FEATURE_FLAGS.mt5AutoSync
+      ? "Oui pour MetaTrader 4 et 5 lorsque le connecteur est disponible. PipsEvo importe l’historique en lecture seule. L’import CSV ou HTML reste disponible en secours."
+      : "Pas encore. La connexion MetaTrader reste annoncée comme à venir tant que le fournisseur et les tests fiables ne sont pas activés.",
+    answerEn: FEATURE_FLAGS.mt5AutoSync
+      ? "Yes for MetaTrader 4 and 5 whenever the connector is available. PipsEvo imports history in read-only mode, with CSV or HTML import as a fallback."
+      : "Not yet. MetaTrader remains upcoming until the provider and reliability tests are enabled.",
   },
   {
     fr: "Atlas IA donne-t-il des signaux ?",

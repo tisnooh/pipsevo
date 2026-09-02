@@ -158,6 +158,17 @@ class IntegrationService:
             )
         return provider
 
+    async def search_metaapi_servers(
+        self, plan: str, platform: str, query: str
+    ) -> dict[str, Any]:
+        provider = self._generic_provider("metaapi", plan)
+        if not hasattr(provider, "search_servers"):
+            raise ProviderUnavailableError()
+        try:
+            return {"servers": await provider.search_servers(platform, query)}
+        except Exception as exc:
+            raise self._safe_error(exc) from None
+
     async def _store_access(
         self, connection: dict | IntegrationConnection, user_id: str, provider_id: str, access: dict
     ) -> None:
@@ -285,7 +296,12 @@ class IntegrationService:
                     "display_name": request.name,
                     "auth_type": "credentials_exchange" if direct else "provider_link",
                     "permission_scope": "read",
-                    "provider_metadata": {"platform": request.platform},
+                    "broker_name": request.broker_name,
+                    "provider_metadata": {
+                        "platform": request.platform,
+                        "account_kind": request.account_kind,
+                        "start_date": request.start_date.isoformat() if request.start_date else None,
+                    },
                     "connection_status": "pending",
                     "sync_status": "idle",
                 }
@@ -324,7 +340,7 @@ class IntegrationService:
         provider = self._generic_provider("metaapi", plan)
         row = await self.repository.get_connection(connection_id, user_id)
         if not row or row.get("provider") != "metaapi":
-            raise IntegrationError("connection_not_found", "Connexion MetaApi introuvable.", 404)
+            raise IntegrationError("connection_not_found", "Connexion MetaTrader introuvable.", 404)
         connection = IntegrationConnection.model_validate(row)
         access = await self._access(connection)
         await provider.deploy(access["provider_account_id"])
@@ -332,7 +348,7 @@ class IntegrationService:
         if not accounts:
             raise IntegrationError(
                 "provider_configuration_pending",
-                "Termine la configuration MetaApi avant de continuer.",
+                "La connexion MetaTrader est encore en cours. Réessaie dans quelques instants.",
                 409,
             )
         await self._persist_detected_accounts(connection, accounts)
@@ -431,7 +447,10 @@ class IntegrationService:
                     "status": "available",
                     "balance": float(account.balance) if account.balance is not None else None,
                     "equity": float(account.equity) if account.equity is not None else None,
-                    "provider_metadata": account.provider_metadata,
+                    "provider_metadata": {
+                        **(connection.provider_metadata or {}),
+                        **(account.provider_metadata or {}),
+                    },
                 }
             )
 

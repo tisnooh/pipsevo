@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -40,9 +40,12 @@ class MetaApiLinkRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     platform: Literal["mt4", "mt5"] = "mt5"
     name: str = Field(min_length=2, max_length=100)
-    login: str = Field(min_length=3, max_length=32)
+    login: str = Field(min_length=3, max_length=32, pattern=r"^[0-9]+$")
     server: str = Field(min_length=2, max_length=160)
     password: SecretStr | None = None
+    account_kind: Literal["demo", "challenge", "funded", "personal"] = "personal"
+    broker_name: str | None = Field(default=None, max_length=160)
+    start_date: date | None = None
 
 
 class TradeLockerCredentials(BaseModel):

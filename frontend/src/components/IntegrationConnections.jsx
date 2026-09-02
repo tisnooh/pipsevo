@@ -11,13 +11,16 @@ import {
 
 const PROVIDERS = [
   { id: "ctrader", name: "cTrader", mark: "cT", copy: "OAuth officiel et comptes cTrader autorisés en lecture seule." },
-  { id: "metaapi", name: "MetaTrader 4 / 5", mark: "M5", copy: "Configuration sécurisée via MetaApi, sans conserver ton mot de passe MetaTrader." },
+  { id: "metaapi", name: "MetaTrader 4 / 5", mark: "M5", copy: "Connexion directe en lecture seule avec import automatique de l’historique." },
   { id: "tradelocker", name: "TradeLocker", mark: "TL", copy: "Jeton JWT officiel, comptes détectés puis sélectionnés séparément." },
   { id: "tradovate", name: "Tradovate", mark: "TV", copy: "OAuth officiel pour comptes Futures, fills et historique de trades." },
   { id: "ninjatrader", name: "NinjaTrader", mark: "NT", copy: "Import de fichier disponible en attendant l’accès développeur officiel." },
 ];
 
-const EMPTY_META = { platform: "mt5", name: "", login: "", server: "", password: "" };
+const EMPTY_META = {
+  platform: "mt5", name: "", login: "", server: "", password: "",
+  broker_name: "", account_kind: "personal", start_date: "",
+};
 const EMPTY_TL = { email: "", password: "", server: "", environment: "demo" };
 const statusCopy = {
   connected: ["Connectée", "text-[#00E676]"],
@@ -52,6 +55,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
   const [metaForm, setMetaForm] = useState(EMPTY_META);
   const [tlForm, setTlForm] = useState(EMPTY_TL);
   const [configuration, setConfiguration] = useState(null);
+  const [providerIssue, setProviderIssue] = useState("");
   const [selectConnection, setSelectConnection] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
 
@@ -122,16 +126,19 @@ export default function IntegrationConnections({ compact = false, returnPath = "
     try {
       if (formProvider === "metaapi") {
         const payload = { ...metaForm };
+        if (!payload.start_date) delete payload.start_date;
+        if (!payload.broker_name) delete payload.broker_name;
         const { data } = await integrationConnections.startMetaApi(payload);
+        setProviderIssue("");
         setMetaForm(EMPTY_META);
         if (data.next_step === "configure_provider_then_finalize" && data.configuration_link) {
           setConfiguration(data);
           window.open(data.configuration_link, "_blank", "noopener,noreferrer");
-          toast.success("Lien MetaApi ouvert dans un nouvel onglet");
+          toast.success("Configuration sécurisée ouverte dans un nouvel onglet");
         } else {
           setFormProvider(null);
           await load();
-          toast.success("Compte transmis à MetaApi. Connexion et import en cours.");
+          toast.success("Compte MetaTrader reçu. Connexion et import en cours.");
           void pollMetaApi(data.connection);
         }
       } else if (formProvider === "tradelocker") {
@@ -148,6 +155,11 @@ export default function IntegrationConnections({ compact = false, returnPath = "
         }
       }
     } catch (error) {
+      const detail = error?.response?.data?.detail;
+      const code = typeof detail === "object" ? detail?.code : null;
+      if (["provider_unavailable", "provider_not_configured", "feature_disabled"].includes(code)) {
+        setProviderIssue("La connexion automatique est temporairement indisponible. Tu peux importer un export CSV ou HTML sans perdre ton historique.");
+      }
       toast.error(publicError(error, "La connexion n’a pas pu être terminée"));
     } finally { setActionId(null); }
   };
@@ -168,7 +180,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
         onConnectionReady?.({ provider: "metaapi", connection: data.connection });
       }
     } catch (error) {
-      toast.error(publicError(error, "La configuration MetaApi n’est pas encore terminée"));
+      toast.error(publicError(error, "La connexion MetaTrader n’est pas encore terminée"));
     } finally { setActionId(null); }
   };
 
@@ -191,7 +203,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
         }
       }
     }
-    toast.info("MetaApi termine encore la connexion. Elle apparaîtra automatiquement dès qu’elle sera prête.");
+    toast.info("La plateforme termine encore la connexion. Le compte apparaîtra automatiquement dès qu’il sera prêt.");
     await load();
   };
 
@@ -242,6 +254,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
   };
 
   return <div className="space-y-5">
+    {providerIssue && <div className="flex flex-col gap-3 rounded-2xl border border-[#FFB855]/20 bg-[#FFB855]/[0.055] p-4 text-xs leading-relaxed text-[#D7B777] sm:flex-row sm:items-center sm:justify-between"><span className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>{providerIssue}</span><a href="/app/journal?import=1" className="shrink-0 font-medium text-[#E8C98B] underline underline-offset-4">Importer un fichier</a></div>}
     <section className={`${compact ? "overflow-hidden rounded-2xl border border-white/[0.07] bg-[#090C15]" : "card-elev overflow-hidden"}`}>
       {!compact && <div className="flex flex-col gap-4 border-b border-white/[0.06] p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
         <div className="flex items-start gap-3">
@@ -256,13 +269,13 @@ export default function IntegrationConnections({ compact = false, returnPath = "
           const available = Boolean(capability?.available);
           const busy = actionId === provider.id;
           return <article key={provider.id} className="flex min-h-44 flex-col rounded-2xl border border-white/[0.07] bg-[#0B0E18] p-4 transition-colors hover:border-white/[0.12]">
-            <div className="flex items-start justify-between gap-3"><span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-[#7C4DFF]/20 to-[#4F8CFF]/15 font-semibold text-[#C8B9FF]">{provider.mark}</span><span className={`rounded-full border px-2.5 py-1 text-[9px] ${available ? "border-[#00E676]/15 text-[#00E676]" : "border-white/[0.08] text-[#737C8D]"}`}>{available ? "Disponible" : provider.id === "ninjatrader" ? "Accès développeur requis" : "Configuration serveur requise"}</span></div>
+            <div className="flex items-start justify-between gap-3"><span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-[#7C4DFF]/20 to-[#4F8CFF]/15 font-semibold text-[#C8B9FF]">{provider.mark}</span><span className={`rounded-full border px-2.5 py-1 text-[9px] ${available ? "border-[#00E676]/15 text-[#00E676]" : "border-white/[0.08] text-[#737C8D]"}`}>{available ? "Disponible" : provider.id === "ninjatrader" ? "Bientôt disponible" : "Indisponible"}</span></div>
             <h3 className="mt-4 text-sm font-semibold">{provider.name}</h3><p className="mt-1 flex-1 text-xs leading-relaxed text-[#7E8798]">{provider.copy}</p>
             <button onClick={() => launchProvider(provider)} disabled={!available || busy} className="mt-4 inline-flex items-center gap-2 text-xs font-medium text-[#B69CFF] disabled:cursor-not-allowed disabled:text-[#555D6C]">{busy ? <Loader2 className="h-4 w-4 animate-spin"/> : available ? <Link2 className="h-4 w-4"/> : <Clock3 className="h-4 w-4"/>}{available ? "Connecter" : "Non activé"}<ChevronRight className="ml-auto h-4 w-4"/></button>
           </article>;
         })}
         <a href="/app/journal" className="flex min-h-44 flex-col rounded-2xl border border-dashed border-[#4F8CFF]/20 bg-[#4F8CFF]/[0.025] p-4 transition-colors hover:border-[#4F8CFF]/40">
-          <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#4F8CFF]/10 text-[#8FB4FF]"><FileUp className="h-5 w-5"/></span><h3 className="mt-4 text-sm font-semibold">Import de fichier</h3><p className="mt-1 flex-1 text-xs leading-relaxed text-[#7E8798]">Solution de repli disponible pour CSV et exports de plateformes non autorisées.</p><span className="mt-4 inline-flex items-center gap-2 text-xs font-medium text-[#8FB4FF]">Ouvrir l’import <ChevronRight className="ml-auto h-4 w-4"/></span>
+          <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#4F8CFF]/10 text-[#8FB4FF]"><FileUp className="h-5 w-5"/></span><h3 className="mt-4 text-sm font-semibold">Import de fichier</h3><p className="mt-1 flex-1 text-xs leading-relaxed text-[#7E8798]">Solution de repli pour CSV et rapports HTML exportés depuis MetaTrader.</p><span className="mt-4 inline-flex items-center gap-2 text-xs font-medium text-[#8FB4FF]">Ouvrir l’import <ChevronRight className="ml-auto h-4 w-4"/></span>
         </a>
       </div>
     </section>
@@ -271,7 +284,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
 
     <Dialog open={Boolean(formProvider)} onOpenChange={open => { if (!open) { setFormProvider(null); setConfiguration(null); setMetaForm(EMPTY_META); setTlForm(EMPTY_TL); } }}>
       <DialogContent className="max-h-[92vh] overflow-y-auto border-white/[0.1] bg-[#090B13] text-white sm:max-w-xl">
-        <DialogHeader><DialogTitle>{formProvider === "metaapi" ? "Connecter MetaTrader via MetaApi" : "Connecter TradeLocker"}</DialogTitle><DialogDescription className="text-[#8B93A3]">{formProvider === "metaapi" ? "Le lien officiel termine la configuration chez MetaApi. Un mot de passe éventuellement saisi est transmis à MetaApi puis immédiatement oublié par PipsEvo." : "Le mot de passe est échangé contre des jetons TradeLocker puis supprimé du formulaire et jamais stocké."}</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{formProvider === "metaapi" ? "Connecter MetaTrader" : "Connecter TradeLocker"}</DialogTitle><DialogDescription className="text-[#8B93A3]">{formProvider === "metaapi" ? "Renseigne les accès en lecture seule de ton compte. Le mot de passe est transmis au fournisseur sécurisé puis immédiatement oublié par PipsEvo." : "Le mot de passe est échangé contre des jetons TradeLocker puis supprimé du formulaire et jamais stocké."}</DialogDescription></DialogHeader>
         {configuration ? <ConfigurationStep configuration={configuration} busy={actionId === configuration.connection.id} onFinalize={finalizeMetaApi}/> : <ProviderForm provider={formProvider} metaForm={metaForm} setMetaForm={setMetaForm} tlForm={tlForm} setTlForm={setTlForm} busy={actionId === formProvider} onSubmit={submitCredentials}/>}
       </DialogContent>
     </Dialog>
@@ -292,12 +305,49 @@ function ProviderForm({ provider, metaForm, setMetaForm, tlForm, setTlForm, busy
   const setForm = meta ? setMetaForm : setTlForm;
   const field = (key, value) => setForm(current => ({ ...current, [key]: value }));
   return <form onSubmit={onSubmit} className="space-y-4">
-    {meta ? <><div className="grid gap-3 sm:grid-cols-2"><Field label="Plateforme"><select value={form.platform} onChange={e => field("platform", e.target.value)} className="field"><option value="mt5">MetaTrader 5</option><option value="mt4">MetaTrader 4</option></select></Field><Field label="Nom dans PipsEvo"><input required maxLength={100} value={form.name} onChange={e => field("name", e.target.value)} className="field"/></Field></div><Field label="Numéro de compte"><input required inputMode="numeric" value={form.login} onChange={e => field("login", e.target.value)} className="field"/></Field><Field label="Serveur exact"><input required value={form.server} onChange={e => field("server", e.target.value)} className="field"/></Field><Field label="Mot de passe investisseur"><input required type="password" autoComplete="new-password" value={form.password} onChange={e => field("password", e.target.value)} className="field"/></Field><p className="text-[11px] leading-relaxed text-[#737C8D]">Utilise de préférence le mot de passe investisseur : PipsEvo importe les données en lecture seule et ne conserve pas ce mot de passe.</p></> : <><Field label="Environnement"><select value={form.environment} onChange={e => field("environment", e.target.value)} className="field"><option value="demo">Démo</option><option value="live">Réel</option></select></Field><Field label="Email TradeLocker"><input type="email" autoComplete="username" required value={form.email} onChange={e => field("email", e.target.value)} className="field"/></Field><Field label="Serveur"><input required value={form.server} onChange={e => field("server", e.target.value)} className="field"/></Field><Field label="Mot de passe"><input type="password" autoComplete="current-password" required value={form.password} onChange={e => field("password", e.target.value)} className="field"/></Field></>}
+    {meta ? <MetaTraderFields form={form} field={field}/> : <><Field label="Environnement"><select value={form.environment} onChange={e => field("environment", e.target.value)} className="field"><option value="demo">Démo</option><option value="live">Réel</option></select></Field><Field label="Email TradeLocker"><input type="email" autoComplete="username" required value={form.email} onChange={e => field("email", e.target.value)} className="field"/></Field><Field label="Serveur"><input required value={form.server} onChange={e => field("server", e.target.value)} className="field"/></Field><Field label="Mot de passe"><input type="password" autoComplete="current-password" required value={form.password} onChange={e => field("password", e.target.value)} className="field"/></Field></>}
     <DialogFooter><button disabled={busy} className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin"/> : <Server className="h-4 w-4"/>}{meta ? "Connecter MetaTrader" : "Autoriser TradeLocker"}</button></DialogFooter>
   </form>;
 }
+
+const ACCOUNT_KINDS = [
+  ["demo", "Démo"], ["challenge", "Phase de challenge"],
+  ["funded", "Financé"], ["personal", "Fonds propres"],
+];
+
+function MetaTraderFields({ form, field }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+
+  useEffect(() => {
+    const query = form.server.trim();
+    if (query.length < 2) { setSuggestions([]); setSearchError(""); return undefined; }
+    const timer = window.setTimeout(async () => {
+      setSearching(true); setSearchError("");
+      try {
+        const { data } = await integrationConnections.searchMetaTraderServers(form.platform, query);
+        setSuggestions(data?.servers || []);
+      } catch (_error) {
+        setSuggestions([]);
+        setSearchError("Recherche indisponible — saisis le serveur exact manuellement.");
+      } finally { setSearching(false); }
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [form.platform, form.server]);
+
+  return <>
+    <div className="grid gap-3 sm:grid-cols-2"><Field label="Plateforme"><select value={form.platform} onChange={e => { field("platform", e.target.value); field("server", ""); field("broker_name", ""); }}><option value="mt5">MetaTrader 5</option><option value="mt4">MetaTrader 4</option></select></Field><Field label="Nom dans PipsEvo"><input required maxLength={100} value={form.name} onChange={e => field("name", e.target.value)}/></Field></div>
+    <div><div className="text-xs text-[#9CA3AF]">Type de compte</div><div className="mt-2 grid grid-cols-2 gap-2">{ACCOUNT_KINDS.map(([value, label]) => <button key={value} type="button" onClick={() => field("account_kind", value)} className={`rounded-xl border px-3 py-3 text-left text-xs transition ${form.account_kind === value ? "border-[#7C4DFF]/65 bg-[#7C4DFF]/12 text-white" : "border-white/10 bg-[#0D1020] text-[#8B93A3] hover:border-white/20"}`}>{label}</button>)}</div></div>
+    <Field label="Numéro de compte"><input required inputMode="numeric" pattern="[0-9]+" value={form.login} onChange={e => field("login", e.target.value.replace(/\D/g, ""))}/></Field>
+    <div className="relative"><Field label="Serveur"><input required autoComplete="off" placeholder="Ex. FTMO-Demo" value={form.server} onChange={e => { field("server", e.target.value); field("broker_name", ""); }}/></Field>{searching && <Loader2 className="absolute bottom-3.5 right-4 h-4 w-4 animate-spin text-[#7C4DFF]"/>}{suggestions.length > 0 && <div className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#111421] p-1 shadow-2xl">{suggestions.map(item => <button key={`${item.broker}-${item.server}`} type="button" onClick={() => { field("server", item.server); field("broker_name", item.broker); setSuggestions([]); }} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-white/5"><span className="block text-xs text-white">{item.server}</span><span className="mt-0.5 block text-[10px] text-[#737C8D]">{item.broker}</span></button>)}</div>}{searchError && <p className="mt-1.5 text-[10px] text-[#FFB855]">{searchError}</p>}{form.broker_name && <p className="mt-1.5 text-[10px] text-[#67E9AD]">Serveur reconnu · {form.broker_name}</p>}</div>
+    <Field label="Mot de passe investisseur"><input required type="password" autoComplete="new-password" value={form.password} onChange={e => field("password", e.target.value)}/></Field>
+    <Field label="Importer l’historique depuis"><input type="date" max={new Date().toISOString().slice(0, 10)} value={form.start_date} onChange={e => field("start_date", e.target.value)}/></Field>
+    <p className="text-[11px] leading-relaxed text-[#737C8D]">Laisse la date vide pour importer tout l’historique disponible. Utilise le mot de passe investisseur : PipsEvo importe en lecture seule et ne le conserve pas.</p>
+  </>;
+}
 function Field({ label, children }) { return <label className="block text-xs text-[#9CA3AF]">{label}{React.cloneElement(children, { className: `${children.props.className || ""} mt-2 w-full rounded-xl border border-white/10 bg-[#0D1020] px-4 py-3 text-white outline-none focus:border-[#7C4DFF]` })}</label>; }
-function ConfigurationStep({ configuration, busy, onFinalize }) { return <div className="space-y-4"><div className="rounded-2xl border border-[#4F8CFF]/20 bg-[#4F8CFF]/[0.05] p-4"><div className="font-medium text-[#9DBDFF]">1. Termine la configuration MetaApi</div><p className="mt-2 text-xs leading-relaxed text-[#8B93A3]">Le lien s’ouvre chez le fournisseur. Reviens ici quand le compte y apparaît comme connecté.</p><a href={configuration.configuration_link} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 text-xs text-[#B69CFF]">Rouvrir MetaApi <ExternalLink className="h-4 w-4"/></a></div><button onClick={() => onFinalize()} disabled={busy} className="btn-primary inline-flex w-full items-center justify-center gap-2 disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin"/> : <CheckCircle2 className="h-4 w-4"/>}J’ai terminé la configuration</button></div>; }
+function ConfigurationStep({ configuration, busy, onFinalize }) { return <div className="space-y-4"><div className="rounded-2xl border border-[#4F8CFF]/20 bg-[#4F8CFF]/[0.05] p-4"><div className="font-medium text-[#9DBDFF]">1. Termine la connexion sécurisée</div><p className="mt-2 text-xs leading-relaxed text-[#8B93A3]">Le lien s’ouvre chez notre fournisseur de connexion. Reviens ici lorsque le compte est indiqué comme connecté.</p><a href={configuration.configuration_link} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 text-xs text-[#B69CFF]">Rouvrir la configuration <ExternalLink className="h-4 w-4"/></a></div><button onClick={() => onFinalize()} disabled={busy} className="btn-primary inline-flex w-full items-center justify-center gap-2 disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin"/> : <CheckCircle2 className="h-4 w-4"/>}J’ai terminé la configuration</button></div>; }
 
 function ConnectionCard({ connection, busyId, onChoose, onSync, onFinalize, onReconnect, onDisconnect }) {
   const [label, color] = statusCopy[connection.connection_status] || statusCopy.pending;

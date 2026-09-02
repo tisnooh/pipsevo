@@ -483,6 +483,8 @@ export const integrationConnections = {
   connectTradeLocker: (credentials) =>
     api.post("/integrations/tradelocker/connect", credentials),
   startMetaApi: (payload) => api.post("/integrations/metaapi/start", payload),
+  searchMetaTraderServers: (platform, query) =>
+    api.get("/integrations/metaapi/servers", { params: { platform, query } }),
   finalizeMetaApi: (connectionId) =>
     api.post(`/integrations/metaapi/${connectionId}/finalize`),
   selectAccounts: (connectionId, accountIds) =>
