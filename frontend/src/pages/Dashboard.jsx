@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { dashboard, trades, accounts as accAPI } from "@/lib/api";
 import { Link } from "react-router-dom";
-import { Plus, Sparkles, Calendar, BarChart3, RefreshCw, ShieldCheck, WalletCards, ChevronLeft, ChevronRight, Flame } from "lucide-react";
+import { Plus, Sparkles, Calendar, BarChart3, RefreshCw, ShieldCheck, WalletCards, ChevronLeft, ChevronRight, Flame, X, BookOpen } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, CartesianGrid, ReferenceLine, ResponsiveContainer, ScatterChart, Scatter, Cell, XAxis, YAxis, Tooltip } from "recharts";
 import { useAuth } from "@/context/AuthContext";
 import useAppSettings from "@/hooks/useAppSettings";
@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [accountFilter, setAccountFilter] = useState("");
   const [assetFilter, setAssetFilter] = useState("");
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [selectedDay, setSelectedDay] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [templateState, setTemplateState] = useState(readDashboardTemplateState);
@@ -37,6 +38,17 @@ export default function Dashboard() {
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!selectedDay) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event) => { if (event.key === "Escape") setSelectedDay(null); };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [selectedDay]);
 
   const k = d?.kpis || EMPTY_KPIS;
   const m = d?.metrics || EMPTY_METRICS;
@@ -170,7 +182,10 @@ export default function Dashboard() {
         onPrevious={() => setCalendarMonth(shiftMonth(calendarMonth, -1))}
         onNext={() => setCalendarMonth(shiftMonth(calendarMonth, 1))}
         onToday={() => setCalendarMonth(new Date().toISOString().slice(0, 7))}
+        onSelect={setSelectedDay}
       />
+
+      {selectedDay && <DayTradeModal day={selectedDay} accounts={accList} accent={accent} money={money} onClose={() => setSelectedDay(null)} />}
 
       {(visible("tradeTime") || visible("tradeDuration")) && <div className="grid gap-3 xl:grid-cols-2">
         {visible("tradeTime") && <PerformanceScatter
@@ -323,7 +338,7 @@ function StreakValue({ label, streak, accent }) {
   </div>;
 }
 
-function TradeCalendarPanel({ cells, label, accent, money, onPrevious, onNext, onToday }) {
+function TradeCalendarPanel({ cells, label, accent, money, onPrevious, onNext, onToday, onSelect }) {
   const monthCells = cells.filter((cell) => cell.inMonth);
   const monthPnl = monthCells.reduce((sum, cell) => sum + cell.pnl, 0);
   const activeDays = monthCells.filter((cell) => cell.trades.length).length;
@@ -335,7 +350,7 @@ function TradeCalendarPanel({ cells, label, accent, money, onPrevious, onNext, o
         <button type="button" onClick={onNext} className="grid h-8 w-8 place-items-center rounded-lg border border-[#6571CF]/15 text-[#8690A5] transition hover:border-[#7881E8]/35 hover:text-white" aria-label="Mois suivant"><ChevronRight className="h-4 w-4" /></button>
         <button type="button" onClick={onToday} className="ml-1 rounded-lg border border-[#6571CF]/15 px-3 py-2 text-[10px] text-[#98A1B5] transition hover:border-[#7881E8]/35 hover:text-white">Ce mois</button>
       </div>
-      <div className="flex items-center gap-2 text-[10px]"><span className="rounded-lg border border-[#6571CF]/15 bg-[#090E1C] px-2.5 py-1.5 text-[#8B95A9]">{activeDays} jour{activeDays > 1 ? "s" : ""} tradé{activeDays > 1 ? "s" : ""}</span><span className={`rounded-lg border px-2.5 py-1.5 font-mono ${monthPnl < 0 ? "border-[#F05F75]/20 bg-[#F05F75]/[0.07] text-[#F27A8B]" : "border-[#5B88FF]/20 bg-[#5B88FF]/[0.07] text-[#8CABFF]"}`}>{money(monthPnl, { signDisplay: "always" })}</span></div>
+      <div className="flex flex-wrap items-center gap-2 text-[10px]"><Link to="/app/day-view" className="rounded-lg border border-[#8067F4]/30 bg-[#8067F4]/10 px-2.5 py-1.5 font-semibold text-[#B7A8FF] transition hover:border-[#8067F4]/55 hover:text-white">Vue journalière</Link><span className="rounded-lg border border-[#6571CF]/15 bg-[#090E1C] px-2.5 py-1.5 text-[#8B95A9]">{activeDays} jour{activeDays > 1 ? "s" : ""} tradé{activeDays > 1 ? "s" : ""}</span><span className={`rounded-lg border px-2.5 py-1.5 font-mono ${monthPnl < 0 ? "border-[#F05F75]/20 bg-[#F05F75]/[0.07] text-[#F27A8B]" : "border-[#5B88FF]/20 bg-[#5B88FF]/[0.07] text-[#8CABFF]"}`}>{money(monthPnl, { signDisplay: "always" })}</span></div>
     </div>
     <div className="p-2 sm:p-4">
       <div className="grid grid-cols-7 gap-1 text-center text-[8px] font-medium uppercase tracking-[.12em] text-[#5F6A80] sm:gap-2 sm:text-[9px]">{["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => <div key={day} className="py-1.5">{day}</div>)}</div>
@@ -343,19 +358,77 @@ function TradeCalendarPanel({ cells, label, accent, money, onPrevious, onNext, o
         {cells.map((cell) => {
           const hasTrades = cell.trades.length > 0;
           const positive = cell.pnl >= 0;
-          return <Link
+          return <button
+            type="button"
             key={cell.key}
-            to={`/app/journal?date=${cell.key}`}
-            className={`relative min-h-[58px] rounded-lg border p-1.5 transition sm:min-h-[92px] sm:p-2.5 ${!cell.inMonth ? "border-transparent bg-transparent opacity-25" : hasTrades ? positive ? "border-[#4F8DFF]/30 bg-[#4F8DFF]/[0.08] hover:border-[#4F8DFF]/55" : "border-[#D95C82]/30 bg-[#D95C82]/[0.08] hover:border-[#D95C82]/55" : "border-[#6571CF]/12 bg-[#090E1C] hover:border-[#727DDE]/28"}`}
+            onClick={() => onSelect(cell)}
+            disabled={!cell.inMonth}
+            className={`relative min-h-[58px] rounded-lg border p-1.5 text-left transition sm:min-h-[92px] sm:p-2.5 ${!cell.inMonth ? "cursor-default border-transparent bg-transparent opacity-25" : hasTrades ? positive ? "border-[#4F8DFF]/30 bg-[#4F8DFF]/[0.08] hover:border-[#4F8DFF]/55" : "border-[#D95C82]/30 bg-[#D95C82]/[0.08] hover:border-[#D95C82]/55" : "border-[#6571CF]/12 bg-[#090E1C] hover:border-[#727DDE]/28"}`}
             aria-label={`${cell.key}, ${cell.trades.length} trades, ${money(cell.pnl)}`}
           >
             <div className="text-right font-mono text-[9px] text-[#7F899E] sm:text-[10px]">{cell.day}</div>
             {hasTrades && <div className="mt-1 text-center sm:mt-3"><div className={`truncate font-mono text-[8px] font-semibold sm:text-xs ${positive ? "text-[#85A9FF]" : "text-[#F17A91]"}`}>{money(cell.pnl, { signDisplay: "always", maximumFractionDigits: 0 })}</div><div className="mt-1 hidden text-[8px] text-[#69758B] sm:block">{cell.trades.length} trade{cell.trades.length > 1 ? "s" : ""}</div><span className="mx-auto mt-1 block h-1 w-1 rounded-full sm:hidden" style={{ background: positive ? accent : "#D95C82" }} /></div>}
-          </Link>;
+          </button>;
         })}
       </div>
     </div>
   </section>;
+}
+
+function DayTradeModal({ day, accounts, accent, money, onClose }) {
+  const orderedTrades = [...day.trades].sort((a, b) => tradeTimestamp(a) - tradeTimestamp(b));
+  let cumulative = 0;
+  const curve = [{ index: 0, label: "Début", pnl: 0 }, ...orderedTrades.map((trade, index) => ({
+    index: index + 1,
+    label: tradeTimeLabel(trade),
+    pnl: Math.round((cumulative += Number(trade.pnl || 0)) * 100) / 100,
+  }))];
+  const wins = orderedTrades.filter((trade) => Number(trade.pnl) > 0);
+  const losses = orderedTrades.filter((trade) => Number(trade.pnl) < 0);
+  const grossProfit = wins.reduce((sum, trade) => sum + Number(trade.pnl || 0), 0);
+  const grossLoss = Math.abs(losses.reduce((sum, trade) => sum + Number(trade.pnl || 0), 0));
+  const profitFactor = grossLoss ? grossProfit / grossLoss : grossProfit > 0 ? grossProfit : 0;
+  const commissions = orderedTrades.reduce((sum, trade) => sum + Number(trade.commission ?? trade.commissions ?? trade.fees ?? 0), 0);
+  const volume = orderedTrades.reduce((sum, trade) => sum + Number(trade.volume ?? trade.quantity ?? trade.size ?? 0), 0);
+  const dateLabel = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(new Date(`${day.key}T12:00:00`));
+  const summary = [
+    ["Total trades", orderedTrades.length],
+    ["P&L net", money(day.pnl, { signDisplay: "always" })],
+    ["Gagnants / Perdants", `${wins.length} / ${losses.length}`],
+    ["Win rate", `${orderedTrades.length ? (wins.length / orderedTrades.length * 100).toFixed(1) : "0.0"}%`],
+    ["Volume", volume ? volume.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) : "—"],
+    ["Profit factor", profitFactor ? profitFactor.toFixed(2) : "—"],
+    ["Commissions", commissions ? money(commissions) : "—"],
+  ];
+
+  return <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#03050C]/80 backdrop-blur-sm sm:items-center sm:p-4" role="presentation" onMouseDown={onClose}>
+    <section role="dialog" aria-modal="true" aria-labelledby="day-trades-title" onMouseDown={(event) => event.stopPropagation()} className="flex max-h-[96dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl border border-[#6571CF]/25 bg-[#090E1C] shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
+      <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[#6571CF]/15 px-4 py-4 sm:px-6">
+        <div className="min-w-0"><div className="pe-eyebrow">Détail de la séance</div><h2 id="day-trades-title" className="mt-1 truncate text-lg font-semibold capitalize text-[#F3F5FA] sm:text-xl">{dateLabel}</h2><div className={`mt-1 font-numeric text-sm font-semibold ${day.pnl < 0 ? "text-[#F17A91]" : "text-[#85A9FF]"}`}>P&amp;L net · {money(day.pnl, { signDisplay: "always" })}</div></div>
+        <button type="button" onClick={onClose} aria-label="Fermer le détail de la journée" className="pe-icon-button !h-9 !w-9"><X className="h-4 w-4" /></button>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        <div className="grid gap-4 border-b border-[#6571CF]/15 p-4 sm:p-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="h-52 rounded-xl border border-[#6571CF]/15 bg-[#0D1120] p-3">
+            {orderedTrades.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={curve} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}><defs><linearGradient id="day-modal-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={day.pnl < 0 ? "#D95C82" : accent} stopOpacity="0.35"/><stop offset="100%" stopColor={day.pnl < 0 ? "#D95C82" : accent} stopOpacity="0"/></linearGradient></defs><CartesianGrid vertical={false} stroke="rgba(101,113,207,.14)" strokeDasharray="3 4"/><XAxis dataKey="index" tick={{ fill: "#687288", fontSize: 9 }} tickLine={false} axisLine={false}/><YAxis width={52} tick={{ fill: "#687288", fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={(value) => money(value, { maximumFractionDigits: 0 })}/><ReferenceLine y={0} stroke="rgba(255,255,255,.18)"/><Tooltip contentStyle={{ background: "#0B1020", border: "1px solid rgba(112,119,218,.3)", borderRadius: 8, fontSize: 11 }} formatter={(value) => [money(value, { signDisplay: "always" }), "P&L cumulé"]}/><Area type="monotone" dataKey="pnl" stroke={day.pnl < 0 ? "#D95C82" : accent} strokeWidth={2} fill="url(#day-modal-fill)"/></AreaChart></ResponsiveContainer> : <div className="grid h-full place-items-center text-center text-xs text-[#687288]">Aucun trade enregistré ce jour.</div>}
+          </div>
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3 lg:grid-cols-4">{summary.map(([label, value]) => <div key={label} className="min-w-0 border-b border-[#6571CF]/10 pb-3"><div className="text-[10px] text-[#747E93]">{label}</div><div className="font-numeric mt-1 truncate text-sm font-semibold text-[#E6E9F1] sm:text-base">{value}</div></div>)}</div>
+        </div>
+
+        <div className="p-4 sm:p-6">
+          <div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">Trades de la journée</h3><p className="mt-1 text-[10px] text-[#687288]">{orderedTrades.length} opération{orderedTrades.length > 1 ? "s" : ""} dans le journal</p></div></div>
+          {orderedTrades.length ? <div className="overflow-x-auto rounded-xl border border-[#6571CF]/15"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-[#11162A] text-[10px] uppercase tracking-[.08em] text-[#747E93]"><tr><th className="px-4 py-3">Heure</th><th className="px-4 py-3">Actif</th><th className="px-4 py-3">Sens</th><th className="px-4 py-3">Compte</th><th className="px-4 py-3">P&amp;L net</th><th className="px-4 py-3">R réalisé</th><th className="px-4 py-3">Setup</th></tr></thead><tbody>{orderedTrades.map((trade, index) => { const pnl = Number(trade.pnl || 0); const account = accounts.find((item) => item.id === trade.account_id); return <tr key={trade.id || `${day.key}-${index}`} className="border-t border-[#6571CF]/10 text-[#C7CCDA]"><td className="px-4 py-3 font-mono text-[#8D96AA]">{tradeTimeLabel(trade)}</td><td className="px-4 py-3 font-semibold text-white">{trade.instrument || trade.asset || "—"}</td><td className="px-4 py-3"><span className={`rounded-md px-2 py-1 text-[10px] ${String(trade.direction).toLowerCase() === "long" ? "bg-[#4F8DFF]/10 text-[#85A9FF]" : "bg-[#8067F4]/10 text-[#B7A8FF]"}`}>{tradeDirectionLabel(trade.direction)}</span></td><td className="px-4 py-3 text-[#8D96AA]">{account?.name || account?.firm || "—"}</td><td className={`px-4 py-3 font-numeric font-semibold ${pnl < 0 ? "text-[#F17A91]" : pnl > 0 ? "text-[#64D6AA]" : "text-[#98A1B5]"}`}>{money(pnl, { signDisplay: "always" })}</td><td className="px-4 py-3 font-mono">{Number.isFinite(Number(trade.r)) ? `${Number(trade.r).toFixed(2)}R` : "—"}</td><td className="px-4 py-3 text-[#8D96AA]">{trade.setup || trade.setups?.[0] || trade.tags?.[0] || "—"}</td></tr>; })}</tbody></table></div> : <div className="rounded-xl border border-dashed border-[#6571CF]/20 py-12 text-center text-xs text-[#687288]">Aucun trade enregistré pour cette date.</div>}
+        </div>
+      </div>
+
+      <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-[#6571CF]/15 bg-[#070B16]/95 p-4 sm:flex-row sm:justify-end sm:px-6">
+        <button type="button" onClick={onClose} className="btn-ghost">Fermer</button>
+        <Link to={`/app/day-view?date=${day.key}`} className="btn-ghost inline-flex items-center justify-center gap-2"><Calendar className="h-4 w-4"/>Vue journalière</Link>
+        <Link to={`/app/journal?date=${day.key}`} className="btn-primary inline-flex items-center justify-center gap-2"><BookOpen className="h-4 w-4"/>Voir dans le journal</Link>
+      </footer>
+    </section>
+  </div>;
 }
 
 function PerformanceScatter({ title, detail, data, xKey, xDomain, xFormatter, empty, accent, money }) {
@@ -451,6 +524,34 @@ function calculateStreak(values) {
     count += 1;
   }
   return { count, positive };
+}
+
+function tradeTimestamp(trade) {
+  const raw = trade.entry_time || trade.open_time || trade.opened_at;
+  if (typeof raw === "string" && /^\d{1,2}:\d{2}/.test(raw)) {
+    const [hours, minutes, seconds = 0] = raw.split(":").map(Number);
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+  const timestamp = raw ? new Date(raw).getTime() : Number.NaN;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function tradeTimeLabel(trade) {
+  const raw = trade.entry_time || trade.open_time || trade.opened_at;
+  if (typeof raw === "string") {
+    const plainTime = raw.match(/^(\d{1,2}:\d{2})(?::(\d{2}))?/);
+    if (plainTime) return plainTime[2] ? `${plainTime[1]}:${plainTime[2]}` : plainTime[1];
+    const date = new Date(raw);
+    if (!Number.isNaN(date.getTime())) return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(date);
+  }
+  return "—";
+}
+
+function tradeDirectionLabel(direction) {
+  const value = String(direction || "").toLowerCase();
+  if (value === "long" || value === "buy" || value === "achat") return "Long";
+  if (value === "short" || value === "sell" || value === "vente") return "Short";
+  return direction || "—";
 }
 
 function tradeHour(trade) {

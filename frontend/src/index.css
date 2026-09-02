@@ -222,6 +222,19 @@ input[type="time"] {
 }
 .pe-app-shell select,
 .pe-app-shell option { color-scheme: dark; }
+.pe-app-shell,
+.pe-app-shell button,
+.pe-app-shell input,
+.pe-app-shell select,
+.pe-app-shell textarea {
+  font-family: 'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.pe-app-shell h1,
+.pe-app-shell h2,
+.pe-app-shell h3,
+.pe-app-shell h4,
+.pe-app-shell strong { color: var(--pe-text); }
+.pe-app-shell ::placeholder { color: var(--pe-text-subtle); opacity: 1; }
 
 /* PipsEvo design system -------------------------------------------------- */
 .pe-page {
@@ -230,6 +243,10 @@ input[type="time"] {
   padding: var(--pe-page-gutter);
 }
 .pe-page-stack { display: flex; flex-direction: column; gap: var(--pe-section-gap); }
+.pe-page > section,
+.pe-page > article,
+.pe-page-stack > section,
+.pe-page-stack > article { min-width: 0; }
 .pe-page-header {
   display: flex;
   align-items: flex-end;
@@ -291,6 +308,22 @@ input[type="time"] {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025), 0 14px 38px rgba(0, 0, 0, 0.16);
 }
 .pe-card-pad { padding: var(--pe-card-padding); }
+.pe-card-header {
+  display: flex;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgba(101, 113, 207, 0.14);
+  padding: .875rem var(--pe-card-padding);
+}
+.pe-card-title {
+  color: var(--pe-text);
+  font-size: .875rem;
+  font-weight: 650;
+  letter-spacing: -.015em;
+}
+.pe-card-meta { color: var(--pe-text-subtle); font-size: .6875rem; }
 .pe-control {
   min-height: var(--pe-control);
   border: 1px solid var(--pe-border-strong);

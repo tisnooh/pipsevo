@@ -132,7 +132,7 @@ export default function Settings() {
 
   const initials = (user?.name || user?.email || "P E").split(" ").map(x=>x[0]).join("").slice(0,2).toUpperCase();
 
-  return <div className="pe-page pe-page-stack mx-auto max-w-[1500px]">
+  return <div className="pe-page pe-page-stack mx-auto max-w-[1800px]">
     <section className="pe-card relative overflow-hidden p-5 sm:p-7">
       <div className="absolute -right-24 -top-28 h-64 w-64 rounded-full bg-[#7C4DFF]/20 blur-3xl"/>
       <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">

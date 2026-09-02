@@ -8,7 +8,7 @@ export default function TradingDNA() {
   const load=()=>{setError("");setD(null);dna().then(r=>setD(r.data)).catch(e=>setError(e.response?.data?.detail||"Impossible de générer le rapport."))};
   useEffect(() => { load(); }, []);
   return (
-    <div className="pe-page pe-page-stack mx-auto max-w-[1500px]">
+    <div className="pe-page pe-page-stack mx-auto max-w-[1800px]">
       <TradingDNAHeader />
       {error ? <div className="pe-card pe-card-pad text-center text-[#FF8A8A]"><p>{error}</p><button onClick={load} className="btn-ghost mt-4 inline-flex items-center gap-2"><RefreshCw className="w-4 h-4"/>Réessayer</button></div>
       : !d ? <div className="grid gap-4 md:grid-cols-4">{Array.from({length:4}).map((_,i)=><div key={i} className="h-32 pe-card animate-pulse"/>)}</div>
