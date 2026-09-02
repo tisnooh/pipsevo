@@ -19,10 +19,14 @@ const OPTIONAL_WIDGETS = [
   { id: "equity", label: "P&L cumulatif", description: "Évolution cumulée sur la période sélectionnée." },
   { id: "daily", label: "P&L journalier", description: "Résultat des sept dernières séances." },
   { id: "accounts", label: "Santé des comptes", description: "Aperçu des comptes suivis et de leur santé." },
+  { id: "tradeTime", label: "Performance par heure", description: "Résultat de chaque trade selon son heure d’entrée." },
+  { id: "tradeDuration", label: "Performance par durée", description: "Résultat selon le temps passé en position." },
 ];
 
 const REQUIRED_WIDGETS = [
   "Drawdown disponible",
+  "Série actuelle",
+  "Calendrier des trades",
   "Répartition discipline",
   "Atlas",
   "Trades récents",

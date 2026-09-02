@@ -13,7 +13,7 @@ export const DEFAULT_DASHBOARD_TEMPLATES = [
     name: "Performance",
     accent: "blue",
     builtIn: true,
-    widgets: ["summary", "equity", "daily"],
+    widgets: ["summary", "equity", "daily", "tradeTime", "tradeDuration"],
   },
   {
     id: "focus",

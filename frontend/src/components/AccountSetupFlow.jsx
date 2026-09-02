@@ -124,7 +124,7 @@ function FlowHeader({ eyebrow, title, copy, onBack }) {
 }
 
 function ChoiceCard({ icon: Icon, badge, title, copy, detail, onClick }) {
-  return <button type="button" onClick={onClick} className="group relative min-h-52 rounded-2xl border border-white/[0.08] bg-[#0B0E18] p-5 text-left transition hover:-translate-y-0.5 hover:border-[#7C4DFF]/45 hover:bg-[#7C4DFF]/[0.045]">
+  return <button type="button" onClick={onClick} className="group relative min-h-52 rounded-xl border border-[#6571CF]/20 bg-[#0D1120] p-5 text-left transition hover:-translate-y-0.5 hover:border-[#8075ED]/45 hover:bg-[#8075ED]/[0.045]">
     {badge && <span className="absolute right-4 top-4 rounded-full border border-[#00E676]/20 bg-[#00E676]/[0.07] px-2 py-1 text-[9px] font-medium text-[#67E9AD]">{badge}</span>}
     <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-[#7C4DFF]/20 to-[#4F8CFF]/12 text-[#B69CFF]"><Icon className="h-5 w-5"/></span>
     <span className="mt-5 block text-sm font-semibold">{title}</span><span className="mt-2 block text-xs leading-relaxed text-[#7E8798]">{copy}</span><span className="mt-4 flex items-center gap-2 text-[10px] text-[#8D79C8]"><Sparkles className="h-3 w-3"/>{detail}</span>
@@ -132,5 +132,5 @@ function ChoiceCard({ icon: Icon, badge, title, copy, detail, onClick }) {
 }
 
 function SetupField({ label, children, className = "" }) {
-  return <label className={`block text-xs text-[#9CA3AF] ${className}`}>{label}{React.cloneElement(children, { className: `${children.props.className || ""} mt-2 w-full rounded-xl border border-white/10 bg-[#0D1020] px-4 py-3 text-white outline-none transition focus:border-[#7C4DFF] focus:ring-4 focus:ring-[#7C4DFF]/10` })}</label>;
+  return <label className={`block text-xs text-[#9CA3AF] ${className}`}>{label}{React.cloneElement(children, { className: `${children.props.className || ""} mt-2 w-full rounded-xl border border-[#6571CF]/20 bg-[#0C1122] px-4 py-3 text-white outline-none transition focus:border-[#8075ED] focus:ring-4 focus:ring-[#8075ED]/10` })}</label>;
 }

@@ -96,7 +96,7 @@ export default function AppShell() {
 
   const closeMobile = () => setMobileOpen(false);
   return (
-    <div className="min-h-screen bg-[#050505] text-white w-full overflow-x-hidden">
+    <div className="pe-app-shell min-h-screen w-full overflow-x-hidden text-white">
       {/* Backdrop — mobile uniquement, sous la sidebar mais au-dessus du contenu */}
       {mobileOpen && (
         <div
@@ -114,7 +114,7 @@ export default function AppShell() {
 
       {/* SIDEBAR — fixed sur mobile ET desktop, largeur/translation gérées par breakpoint */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-[100dvh] w-[min(280px,85vw)] border-r border-white/5 bg-[#050505] flex flex-col
+        className={`pe-app-sidebar fixed top-0 left-0 z-50 h-[100dvh] w-[min(280px,85vw)] border-r flex flex-col
         transition-[width,transform] duration-300 ease-out
         ${sidebarCollapsed ? "md:w-[72px]" : "md:w-[232px]"}
         ${mobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
@@ -248,14 +248,14 @@ export default function AppShell() {
           onNavigate={(to)=>nav(to)}
           onLogout={async()=>{ await logout(); window.location.href = "/"; }}
         />
-        <main className="pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
+        <main className="pe-app-content pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
           <Outlet />
         </main>
       </div>
 
       <nav
         aria-label="Navigation principale mobile"
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-[#07080C]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+        className="pe-app-mobile-nav fixed inset-x-0 bottom-0 z-30 border-t pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
       >
         <div className="grid h-16 grid-cols-5">
           {mobileLinks.map(({ to, label, icon: Icon }) => (
@@ -301,7 +301,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
     return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close); };
   }, []);
   return (
-    <header className="sticky top-0 z-30 flex h-[60px] w-full min-w-0 items-center gap-1.5 border-b border-white/5 bg-[#050505]/80 px-3 py-0 backdrop-blur-xl sm:gap-2 sm:px-4 md:h-[68px] md:gap-3 md:px-5">
+    <header className="pe-app-topbar sticky top-0 z-30 flex h-[60px] w-full min-w-0 items-center gap-1.5 border-b px-3 py-0 backdrop-blur-xl sm:gap-2 sm:px-4 md:h-[68px] md:gap-3 md:px-5">
       {/* Hamburger — mobile uniquement */}
       <button
         onClick={onMenuClick}
@@ -323,7 +323,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
         <input readOnly
           placeholder="Rechercher…"
           data-testid="top-search"
-          className="w-full bg-[#0D1020] border border-white/5 rounded-xl pl-10 pr-12 py-2 text-sm placeholder:text-[#6B7280] focus:border-[#7C4DFF]/40"
+          className="w-full rounded-xl border border-[#6571CF]/20 bg-[#0C1122] py-2 pl-10 pr-12 text-sm placeholder:text-[#687288] focus:border-[#8075ED]/50"
         />
         <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/10 bg-black/10 px-1.5 py-0.5 font-mono text-[9px] leading-none text-[#6B7280]">⌘K</kbd>
       </button>
@@ -346,7 +346,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
       </button>{notificationsOpen && <div id="app-notifications-menu" className="fixed left-3 right-3 top-[68px] z-50 w-auto card-elev p-4 md:absolute md:left-auto md:right-0 md:top-11 md:w-72"><div className="text-sm font-semibold">Notifications</div>{notifications.length?<div className="mt-3 space-y-2">{notifications.map(n=><button key={n.to+n.text} onClick={()=>{onNavigate(n.to);onNotifications()}} className="w-full rounded-xl border border-white/[0.06] p-3 text-left text-xs text-[#B5BBC9] hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70">{n.text}</button>)}</div>:<div className="text-xs text-[#9CA3AF] mt-3">Tout est à jour. Aucune alerte active.</div>}</div>}</div>
 
       <div ref={profileRef} className="relative shrink-0">
-      <button onClick={()=>setProfileOpen(v=>!v)} aria-expanded={profileOpen} aria-controls="app-profile-menu" aria-label="Ouvrir le menu du profil" className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#0D1020] px-1.5 py-1 transition hover:border-[#7C4DFF]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:gap-2 md:px-2 md:py-1.5">
+      <button onClick={()=>setProfileOpen(v=>!v)} aria-expanded={profileOpen} aria-controls="app-profile-menu" aria-label="Ouvrir le menu du profil" className="flex items-center gap-1.5 rounded-xl border border-[#6571CF]/20 bg-[#0C1122] px-1.5 py-1 transition hover:border-[#8075ED]/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:gap-2 md:px-2 md:py-1.5">
         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] text-[10px] font-bold md:h-7 md:w-7 md:text-xs">
           {(user?.name || user?.email || "U")[0].toUpperCase()}
         </div>

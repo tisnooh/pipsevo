@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { dashboard, trades, accounts as accAPI } from "@/lib/api";
 import { Link } from "react-router-dom";
-import { Plus, Sparkles, Calendar, BarChart3, RefreshCw, ShieldCheck, WalletCards } from "lucide-react";
-import { AreaChart, Area, BarChart, Bar, CartesianGrid, ReferenceLine, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
+import { Plus, Sparkles, Calendar, BarChart3, RefreshCw, ShieldCheck, WalletCards, ChevronLeft, ChevronRight, Flame } from "lucide-react";
+import { AreaChart, Area, BarChart, Bar, CartesianGrid, ReferenceLine, ResponsiveContainer, ScatterChart, Scatter, Cell, XAxis, YAxis, Tooltip } from "recharts";
 import { useAuth } from "@/context/AuthContext";
 import useAppSettings from "@/hooks/useAppSettings";
 import CommercialBanner from "@/components/CommercialBanner";
 import { DashboardTemplateManager } from "@/components/dashboard/DashboardTemplateManager";
 import { DEFAULT_DASHBOARD_TEMPLATES, readDashboardTemplateState } from "@/lib/dashboardTemplates";
+import { buildMonthCells, groupTradesByDate } from "@/lib/tradeCalendar";
 
 const EMPTY_KPIS = { funded_capital: 0, total_profit: 0, remaining_drawdown: 0, estimated_payout: 0, discipline_score: 0, trader_score: 0, total_payouts: 0, active_accounts: 0, total_trades: 0 };
 const EMPTY_METRICS = { winrate: 0, profit_factor: 0, avg_win: 0, avg_loss: 0, plan_respect_rate: 0 };
@@ -22,6 +23,7 @@ export default function Dashboard() {
   const [period, setPeriod] = useState("30");
   const [accountFilter, setAccountFilter] = useState("");
   const [assetFilter, setAssetFilter] = useState("");
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [templateState, setTemplateState] = useState(readDashboardTemplateState);
@@ -62,12 +64,15 @@ export default function Dashboard() {
   const scopedGrossProfit = scopedWins.reduce((sum, t) => sum + Number(t.pnl || 0), 0);
   const scopedGrossLoss = Math.abs(scopedLosses.reduce((sum, t) => sum + Number(t.pnl || 0), 0));
   const scopedProfitFactor = scopedGrossLoss ? scopedGrossProfit / scopedGrossLoss : 0;
-  const dailyTotals = Object.values(scopedTrades.reduce((days, trade) => {
+  const totalsByDay = scopedTrades.reduce((days, trade) => {
     const date = trade.date || "—";
     days[date] = (days[date] || 0) + Number(trade.pnl || 0);
     return days;
-  }, {}));
+  }, {});
+  const dailyTotals = Object.values(totalsByDay);
   const dayWinRate = dailyTotals.length ? dailyTotals.filter((pnl) => pnl > 0).length / dailyTotals.length * 100 : 0;
+  const tradeStreak = calculateStreak([...closedScopedTrades].sort((a, b) => String(b.date).localeCompare(String(a.date))).map((trade) => Number(trade.pnl || 0)));
+  const dayStreak = calculateStreak(Object.entries(totalsByDay).sort(([a], [b]) => String(b).localeCompare(String(a))).map(([, pnl]) => pnl));
   const drawdownLimit = accList.reduce((sum, account) => sum + Number(account.max_drawdown || 0), 0);
   const drawdownRate = drawdownLimit ? Number(k.remaining_drawdown || 0) / drawdownLimit * 100 : Number(k.remaining_drawdown || 0) > 0 ? 100 : 0;
   const planRateLabel = m.plan_respect_rate === null || m.plan_respect_rate === undefined ? "Non mesuré" : `${m.plan_respect_rate}%`;
@@ -84,6 +89,13 @@ export default function Dashboard() {
     days[date].pnl += Number(trade.pnl || 0);
     return days;
   }, {})).sort((a, b) => String(a.date).localeCompare(String(b.date))).slice(-7);
+  const calendarCells = useMemo(() => buildMonthCells(calendarMonth, groupTradesByDate(scopedTrades)), [calendarMonth, scopedTrades]);
+  const calendarLabel = useMemo(() => {
+    const [year, month] = calendarMonth.split("-").map(Number);
+    return new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
+  }, [calendarMonth]);
+  const tradeTimeData = scopedTrades.map((trade) => ({ hour: tradeHour(trade), pnl: Number(trade.pnl || 0), instrument: trade.instrument })).filter((point) => point.hour !== null);
+  const tradeDurationData = scopedTrades.map((trade) => ({ minutes: tradeDurationMinutes(trade), pnl: Number(trade.pnl || 0), instrument: trade.instrument })).filter((point) => point.minutes !== null);
   const templates = useMemo(() => [...DEFAULT_DASHBOARD_TEMPLATES, ...templateState.custom], [templateState.custom]);
   const activeTemplate = templates.find((template) => template.id === templateState.activeId) || DEFAULT_DASHBOARD_TEMPLATES[0];
   const visible = (widget) => activeTemplate.widgets.includes(widget);
@@ -118,12 +130,13 @@ export default function Dashboard() {
       {error && <div className="rounded-2xl border border-[#FF5252]/25 bg-[#FF5252]/10 p-4 text-sm text-[#FF8A8A] flex flex-col sm:flex-row sm:items-center justify-between gap-3"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 rounded-lg border border-[#FF5252]/20 px-3 py-2 text-xs hover:bg-[#FF5252]/10"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
       {loading && <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{Array.from({length:5}).map((_,i)=><div key={i} className="h-28 animate-pulse rounded-xl bg-white/[0.035]"/>)}</div>}
 
-      {!loading && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      {!loading && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         {visible("summary") && <Kpi label="P&L net" value={money(periodProfit,{signDisplay:"always"})} detail={`${scopedTrades.length} trades sur la période`} tone={periodProfit < 0 ? "negative" : "positive"} testid="kpi-profit" accent={accent} />}
         {visible("summary") && <GaugeKpi label="Win rate" value={scopedWinrate} display={`${scopedWinrate.toFixed(1)}%`} detail={`${scopedWins.length} gains · ${scopedLosses.length} pertes`} accent={accent} id="win-rate" />}
         {visible("summary") && <RingKpi label="Profit factor" value={Math.min(100, scopedProfitFactor / 3 * 100)} display={scopedProfitFactor.toFixed(2)} detail="Objectif solide : 1,50+" accent={accent} id="profit-factor" />}
         {visible("summary") && <GaugeKpi label="Jours gagnants" value={dayWinRate} display={`${dayWinRate.toFixed(0)}%`} detail={`${dailyTotals.filter((pnl) => pnl > 0).length} jours positifs`} accent={accent} id="day-win-rate" />}
         <GaugeKpi label="Drawdown disponible" value={drawdownRate} display={money(k.remaining_drawdown)} detail={`${k.active_accounts} compte${k.active_accounts>1?"s":""} actif${k.active_accounts>1?"s":""}`} accent={activeTemplate.accent === "blue" ? "#6D7CFF" : "#4F8DFF"} id="drawdown" testid="kpi-dd" amount />
+        <StreakKpi dayStreak={dayStreak} tradeStreak={tradeStreak} accent={accent} />
       </div>}
 
       {(visible("equity") || visible("daily")) && <div className="grid gap-3 xl:grid-cols-3">
@@ -147,6 +160,41 @@ export default function Dashboard() {
           <PanelHeader title="P&L journalier" detail="7 dernières séances" />
           <div className="h-[270px] px-3 pb-3 pt-4 sm:px-5"><ResponsiveContainer width="100%" height="100%"><BarChart data={dailyData} margin={{top:8,right:4,left:0,bottom:0}}><CartesianGrid vertical={false} stroke="rgba(255,255,255,.065)" strokeDasharray="3 4"/><XAxis dataKey="date" tick={{fill:"#707681",fontSize:9}} tickLine={false} axisLine={false}/><YAxis width={54} tick={{fill:"#707681",fontSize:10}} tickLine={false} axisLine={false} tickFormatter={v=>money(v,{maximumFractionDigits:0})}/><ReferenceLine y={0} stroke="rgba(255,255,255,.2)"/><Tooltip contentStyle={{background:"#0B1020",border:"1px solid rgba(112,119,218,.3)",borderRadius:8,fontSize:12}} formatter={value=>[money(value,{signDisplay:"always"}),"P&L"]}/><Bar dataKey="pnl" fill={accent} radius={[3,3,0,0]} maxBarSize={42}/></BarChart></ResponsiveContainer></div>
         </section>}
+      </div>}
+
+      <TradeCalendarPanel
+        cells={calendarCells}
+        label={calendarLabel}
+        accent={accent}
+        money={money}
+        onPrevious={() => setCalendarMonth(shiftMonth(calendarMonth, -1))}
+        onNext={() => setCalendarMonth(shiftMonth(calendarMonth, 1))}
+        onToday={() => setCalendarMonth(new Date().toISOString().slice(0, 7))}
+      />
+
+      {(visible("tradeTime") || visible("tradeDuration")) && <div className="grid gap-3 xl:grid-cols-2">
+        {visible("tradeTime") && <PerformanceScatter
+          title="Performance par heure"
+          detail={`${tradeTimeData.length} trades horodatés`}
+          data={tradeTimeData}
+          xKey="hour"
+          xDomain={[0, 23]}
+          xFormatter={(value) => `${String(Math.round(value)).padStart(2, "0")}h`}
+          empty="Ajoute une heure d’entrée à tes trades pour activer cette analyse."
+          accent={accent}
+          money={money}
+        />}
+        {visible("tradeDuration") && <PerformanceScatter
+          title="Performance par durée"
+          detail={`${tradeDurationData.length} trades mesurés`}
+          data={tradeDurationData}
+          xKey="minutes"
+          xDomain={[0, "auto"]}
+          xFormatter={formatDuration}
+          empty="Renseigne la durée des trades pour afficher cette analyse."
+          accent={accent}
+          money={money}
+        />}
       </div>}
 
       <div className="grid lg:grid-cols-3 gap-4">
@@ -256,6 +304,78 @@ function Kpi({ label, value, detail, tone = "neutral", testid, accent }) {
   </div>;
 }
 
+function StreakKpi({ dayStreak, tradeStreak, accent }) {
+  return <div className="min-h-[124px] rounded-xl border border-[#6571CF]/20 bg-[#0D1120] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.025)]" data-testid="kpi-current-streak">
+    <div className="flex items-center gap-1.5 text-[11px] text-[#8B93A7]"><Flame className="h-3.5 w-3.5" style={{ color: accent }} />Série actuelle</div>
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <StreakValue label="Jours" streak={dayStreak} accent={accent} />
+      <StreakValue label="Trades" streak={tradeStreak} accent={accent} />
+    </div>
+  </div>;
+}
+
+function StreakValue({ label, streak, accent }) {
+  const state = streak.count ? (streak.positive ? "gagnants" : "perdants") : "en attente";
+  return <div className="rounded-lg border border-[#6571CF]/15 bg-[#090E1C] px-2 py-2 text-center">
+    <div className="text-[8px] uppercase tracking-[.14em] text-[#667188]">{label}</div>
+    <div className="mx-auto mt-1.5 grid h-8 w-8 place-items-center rounded-full border-2 font-mono text-sm font-semibold text-white" style={{ borderColor: streak.count ? accent : "#263048", boxShadow: streak.count ? `0 0 16px ${accent}33` : "none" }}>{streak.count}</div>
+    <div className={`mt-1 text-[8px] ${streak.count && !streak.positive ? "text-[#F07882]" : "text-[#78839A]"}`}>{state}</div>
+  </div>;
+}
+
+function TradeCalendarPanel({ cells, label, accent, money, onPrevious, onNext, onToday }) {
+  const monthCells = cells.filter((cell) => cell.inMonth);
+  const monthPnl = monthCells.reduce((sum, cell) => sum + cell.pnl, 0);
+  const activeDays = monthCells.filter((cell) => cell.trades.length).length;
+  return <section className="overflow-hidden rounded-xl border border-[#6571CF]/20 bg-[#0D1120] shadow-[inset_0_1px_0_rgba(255,255,255,.025)]" data-testid="dashboard-trade-calendar">
+    <div className="flex flex-col gap-3 border-b border-[#6571CF]/15 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={onPrevious} className="grid h-8 w-8 place-items-center rounded-lg border border-[#6571CF]/15 text-[#8690A5] transition hover:border-[#7881E8]/35 hover:text-white" aria-label="Mois précédent"><ChevronLeft className="h-4 w-4" /></button>
+        <div className="min-w-[150px] text-center"><h2 className="text-sm font-semibold capitalize text-[#E7E9F1]">{label}</h2><p className="mt-0.5 text-[9px] text-[#687288]">Calendrier des trades</p></div>
+        <button type="button" onClick={onNext} className="grid h-8 w-8 place-items-center rounded-lg border border-[#6571CF]/15 text-[#8690A5] transition hover:border-[#7881E8]/35 hover:text-white" aria-label="Mois suivant"><ChevronRight className="h-4 w-4" /></button>
+        <button type="button" onClick={onToday} className="ml-1 rounded-lg border border-[#6571CF]/15 px-3 py-2 text-[10px] text-[#98A1B5] transition hover:border-[#7881E8]/35 hover:text-white">Ce mois</button>
+      </div>
+      <div className="flex items-center gap-2 text-[10px]"><span className="rounded-lg border border-[#6571CF]/15 bg-[#090E1C] px-2.5 py-1.5 text-[#8B95A9]">{activeDays} jour{activeDays > 1 ? "s" : ""} tradé{activeDays > 1 ? "s" : ""}</span><span className={`rounded-lg border px-2.5 py-1.5 font-mono ${monthPnl < 0 ? "border-[#F05F75]/20 bg-[#F05F75]/[0.07] text-[#F27A8B]" : "border-[#5B88FF]/20 bg-[#5B88FF]/[0.07] text-[#8CABFF]"}`}>{money(monthPnl, { signDisplay: "always" })}</span></div>
+    </div>
+    <div className="p-2 sm:p-4">
+      <div className="grid grid-cols-7 gap-1 text-center text-[8px] font-medium uppercase tracking-[.12em] text-[#5F6A80] sm:gap-2 sm:text-[9px]">{["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => <div key={day} className="py-1.5">{day}</div>)}</div>
+      <div className="grid grid-cols-7 gap-1 sm:gap-2">
+        {cells.map((cell) => {
+          const hasTrades = cell.trades.length > 0;
+          const positive = cell.pnl >= 0;
+          return <Link
+            key={cell.key}
+            to={`/app/journal?date=${cell.key}`}
+            className={`relative min-h-[58px] rounded-lg border p-1.5 transition sm:min-h-[92px] sm:p-2.5 ${!cell.inMonth ? "border-transparent bg-transparent opacity-25" : hasTrades ? positive ? "border-[#4F8DFF]/30 bg-[#4F8DFF]/[0.08] hover:border-[#4F8DFF]/55" : "border-[#D95C82]/30 bg-[#D95C82]/[0.08] hover:border-[#D95C82]/55" : "border-[#6571CF]/12 bg-[#090E1C] hover:border-[#727DDE]/28"}`}
+            aria-label={`${cell.key}, ${cell.trades.length} trades, ${money(cell.pnl)}`}
+          >
+            <div className="text-right font-mono text-[9px] text-[#7F899E] sm:text-[10px]">{cell.day}</div>
+            {hasTrades && <div className="mt-1 text-center sm:mt-3"><div className={`truncate font-mono text-[8px] font-semibold sm:text-xs ${positive ? "text-[#85A9FF]" : "text-[#F17A91]"}`}>{money(cell.pnl, { signDisplay: "always", maximumFractionDigits: 0 })}</div><div className="mt-1 hidden text-[8px] text-[#69758B] sm:block">{cell.trades.length} trade{cell.trades.length > 1 ? "s" : ""}</div><span className="mx-auto mt-1 block h-1 w-1 rounded-full sm:hidden" style={{ background: positive ? accent : "#D95C82" }} /></div>}
+          </Link>;
+        })}
+      </div>
+    </div>
+  </section>;
+}
+
+function PerformanceScatter({ title, detail, data, xKey, xDomain, xFormatter, empty, accent, money }) {
+  return <section className="overflow-hidden rounded-xl border border-[#6571CF]/20 bg-[#0D1120] shadow-[inset_0_1px_0_rgba(255,255,255,.025)]">
+    <PanelHeader title={title} detail={detail} />
+    {data.length ? <div className="h-[270px] px-2 pb-3 pt-4 sm:px-5">
+      <ResponsiveContainer width="100%" height="100%">
+        <ScatterChart margin={{ top: 8, right: 14, bottom: 6, left: 0 }}>
+          <CartesianGrid stroke="rgba(255,255,255,.065)" strokeDasharray="3 4" />
+          <XAxis type="number" dataKey={xKey} domain={xDomain} tick={{ fill: "#707B90", fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={xFormatter} />
+          <YAxis type="number" dataKey="pnl" width={54} tick={{ fill: "#707B90", fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={(value) => money(value, { maximumFractionDigits: 0 })} />
+          <ReferenceLine y={0} stroke="rgba(255,255,255,.2)" />
+          <Tooltip cursor={{ stroke: "rgba(128,103,244,.25)", strokeDasharray: "3 3" }} contentStyle={{ background: "#0B1020", border: "1px solid rgba(112,119,218,.3)", borderRadius: 8, fontSize: 12 }} formatter={(value, name) => [name === "pnl" ? money(value, { signDisplay: "always" }) : xFormatter(value), name === "pnl" ? "P&L" : title]} />
+          <Scatter data={data} fill={accent}>{data.map((point, index) => <Cell key={`${point.instrument || "trade"}-${index}`} fill={point.pnl < 0 ? "#D95C82" : accent} />)}</Scatter>
+        </ScatterChart>
+      </ResponsiveContainer>
+    </div> : <div className="grid h-[270px] place-items-center px-8 text-center"><div><BarChart3 className="mx-auto h-6 w-6 text-[#556079]"/><p className="mt-3 max-w-xs text-xs leading-5 text-[#747E93]">{empty}</p></div></div>}
+  </section>;
+}
+
 function GaugeKpi({ label, value, display, detail, accent, id, testid, amount = false }) {
   const safeValue = clamp(value);
   const gradientId = `dashboard-gauge-${id}`;
@@ -319,6 +439,63 @@ function PanelHeader({ title, detail }) {
     <h2 className="text-sm font-semibold text-[#E7E7E8]">{title}</h2>
     <span className="text-[10px] text-[#6F7580]">{detail}</span>
   </div>;
+}
+
+function calculateStreak(values) {
+  const measurable = values.filter((value) => Number(value) !== 0 && Number.isFinite(Number(value)));
+  if (!measurable.length) return { count: 0, positive: true };
+  const positive = Number(measurable[0]) > 0;
+  let count = 0;
+  for (const value of measurable) {
+    if ((Number(value) > 0) !== positive) break;
+    count += 1;
+  }
+  return { count, positive };
+}
+
+function tradeHour(trade) {
+  const raw = trade.entry_time || trade.open_time || trade.opened_at;
+  if (typeof raw === "string") {
+    const plainTime = raw.match(/^(\d{1,2}):\d{2}/);
+    if (plainTime) return Math.min(23, Number(plainTime[1]));
+    const date = new Date(raw);
+    if (!Number.isNaN(date.getTime())) return date.getHours();
+  }
+  const session = String(trade.session || "").toLowerCase();
+  if (session.includes("asia")) return 3;
+  if (session.includes("london") || session.includes("londres")) return 9;
+  if (session.includes("new york") || session === "ny") return 15;
+  return null;
+}
+
+function tradeDurationMinutes(trade) {
+  const direct = Number(trade.duration_minutes);
+  if (Number.isFinite(direct) && direct >= 0) return direct;
+  const label = String(trade.duration || "").toLowerCase();
+  const hours = label.match(/([\d.,]+)\s*h/);
+  const minutes = label.match(/([\d.,]+)\s*(?:m|min)/);
+  if (hours || minutes) return Math.round((hours ? Number(hours[1].replace(",", ".")) * 60 : 0) + (minutes ? Number(minutes[1].replace(",", ".")) : 0));
+  if (trade.entry_time && trade.exit_time) {
+    const opened = new Date(trade.entry_time);
+    const closed = new Date(trade.exit_time);
+    const difference = (closed.getTime() - opened.getTime()) / 60000;
+    if (Number.isFinite(difference) && difference >= 0) return Math.round(difference);
+  }
+  return null;
+}
+
+function shiftMonth(monthKey, amount) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const date = new Date(year, month - 1 + amount, 1, 12);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatDuration(value) {
+  const minutes = Math.max(0, Math.round(Number(value || 0)));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}h${String(rest).padStart(2, "0")}` : `${hours}h`;
 }
 
 function clamp(value) {

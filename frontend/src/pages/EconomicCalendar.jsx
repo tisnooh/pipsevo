@@ -197,7 +197,7 @@ export default function EconomicCalendar() {
         </div>
       </div>
 
-      <section className="overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#0B0E16]">
+      <section className="pe-card overflow-hidden">
         <div className="border-b border-white/[0.07] px-4 py-3 sm:px-5">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[10px] text-[#7A8290]">
             <span className={`inline-flex items-center gap-1.5 font-semibold ${syncError ? "text-[#FFB84D]" : "text-[#35D6A0]"}`}>{syncError ? <WifiOff className="h-3.5 w-3.5" /> : <Wifi className="h-3.5 w-3.5" />}{syncError ? "Dernières données disponibles" : "Synchronisation active"}</span>

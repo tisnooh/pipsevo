@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Star, Edit2, Trash2, Camera, Check, Plus, Upload, BarChart3, Target, TrendingUp, ArrowUpRight, ArrowDownRight, Ruler } from "lucide-react"
+import { Star, Edit2, Trash2, Camera, Check, Plus, Upload, BarChart3, Target, TrendingUp, ArrowUpRight, ArrowDownRight, Ruler, CalendarDays, X } from "lucide-react"
 import { AreaChart, Area, ResponsiveContainer } from "recharts"
 import { trades as tradesAPI, accounts as accAPI } from "@/lib/api"
 import { toast } from "sonner"
@@ -34,6 +34,7 @@ export function JournalPage() {
   const [checklistChecks, setChecklistChecks] = useState({})
   const [accountFilter, setAccountFilter] = useState("")
   const [days, setDays] = useState("30")
+  const [dateFilter, setDateFilter] = useState(() => new URLSearchParams(window.location.search).get("date") || "")
   const [form, setForm] = useState(()=>createEmptyTradeForm(null))
   const userRules = normalizeTradingRules(user?.rules)
   const activeChecklist = userRules.pre_trade_checklist.filter(item=>item.enabled !== false)
@@ -57,6 +58,12 @@ export function JournalPage() {
       window.history.replaceState({}, "", "/app/journal")
     }
   }, [])
+
+  useEffect(() => {
+    if (!dateFilter || !tradeList.length) return
+    setDays("3650")
+    setSelectedTrade(tradeList.find((trade) => String(trade.date || "").slice(0, 10) === dateFilter) || null)
+  }, [dateFilter, tradeList])
 
   const saveTrade = async (payload) => {
     setSaving(true)
@@ -130,8 +137,9 @@ export function JournalPage() {
   const normalized = tradeList.map(normalize)
 
   const byAccountAndDate = normalized.filter(t => {
-    const recentEnough = !t.date || (Date.now() - new Date(t.date).getTime()) <= Number(days) * 86400000
-    return (!accountFilter || t.account_id === accountFilter) && recentEnough
+    const exactDate = !dateFilter || String(t.date || "").slice(0, 10) === dateFilter
+    const recentEnough = dateFilter || !t.date || (Date.now() - new Date(t.date).getTime()) <= Number(days) * 86400000
+    return (!accountFilter || t.account_id === accountFilter) && exactDate && recentEnough
   })
   const filtered = activeFilter === "Tous les trades" || activeFilter === "Tous"
     ? byAccountAndDate
@@ -171,6 +179,7 @@ export function JournalPage() {
         <div className="pe-page-header mb-6">
           <div><div className="pe-eyebrow">Historique de trading</div><h1 className="pe-page-title mt-2">Journal</h1><p className="pe-page-copy mt-1">Analyse tes décisions, ton contexte et la qualité de ton exécution.</p></div>
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+            {dateFilter && <button type="button" onClick={()=>{setDateFilter("");window.history.replaceState({},"","/app/journal")}} className="pe-control inline-flex items-center gap-2 border-[#7165DD]/35 bg-[#7165DD]/10 text-[#C7C0FF]"><CalendarDays className="h-4 w-4"/>{new Intl.DateTimeFormat("fr-FR",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(`${dateFilter}T12:00:00`))}<X className="h-3.5 w-3.5"/></button>}
             <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className="pe-control min-w-[150px] flex-1 sm:flex-none"><option value="">Tous les comptes</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
             <select value={days} onChange={e=>setDays(e.target.value)} className="pe-control min-w-[150px] flex-1 sm:flex-none"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option><option value="3650">Toute la période</option></select>
             <CsvExportButton rows={filtered} type="trades" filename="pipsevo-trades-filtres" className="btn-ghost inline-flex h-11 items-center justify-center px-4"/>
@@ -230,7 +239,7 @@ export function JournalPage() {
           <div className="pe-table-shell">
             {/* Header */}
             <div
-              className="grid min-w-[780px] border-b border-[#1E2430] bg-[#0A0C14] px-4 py-3.5 text-pe-label uppercase tracking-[0.08em] text-[#9CA3AF]"
+            className="grid min-w-[780px] border-b border-[#6571CF]/15 bg-[#090E1C] px-4 py-3.5 text-pe-label uppercase tracking-[0.08em] text-[#98A1B5]"
               style={{ gridTemplateColumns: "2rem 2fr 1fr 1.5fr 1fr 0.8fr 1fr 1.5fr 1fr 2rem" }}
             >
               <span></span>
@@ -253,7 +262,7 @@ export function JournalPage() {
                 transition={{ delay: i * 0.04 }}
                 onClick={() => setSelectedTrade(tradeList.find(t => t.id === trade.id))}
                 className={`grid min-w-[780px] cursor-pointer items-center border-b border-[#1E2430]/50 px-4 py-3.5 text-[13px] transition-all last:border-0 ${
-                  selectedTrade?.id === trade.id ? "bg-[#111322]" : "hover:bg-[#111322]/50"
+                  selectedTrade?.id === trade.id ? "bg-[#15182A]" : "hover:bg-[#15182A]/50"
                 }`}
                 style={{ gridTemplateColumns: "2rem 2fr 1fr 1.5fr 1fr 0.8fr 1fr 1.5fr 1fr 2rem" }}
               >
@@ -267,7 +276,7 @@ export function JournalPage() {
                 <span className="truncate text-xs text-[#9CA3AF]">{trade.account}</span>
                 <div className="flex gap-1 flex-wrap">
                   {trade.tags.map((tag) => (
-                    <span key={tag} className="pe-badge bg-[#111322] text-[#9CA3AF]">{tag}</span>
+                    <span key={tag} className="pe-badge bg-[#15182A] text-[#98A1B5]">{tag}</span>
                   ))}
                 </div>
                 <button
@@ -290,7 +299,7 @@ export function JournalPage() {
       {selectedTrade && (() => {
         const t = normalize(selectedTrade)
         return (
-          <div className="fixed inset-0 z-40 bg-[#0A0C14] lg:static lg:z-auto lg:w-80 lg:border-l lg:border-[#1E2430] overflow-y-auto scrollbar-thin flex-shrink-0">
+          <div className="fixed inset-0 z-40 bg-[#090E1C] lg:static lg:z-auto lg:w-80 lg:border-l lg:border-[#6571CF]/15 overflow-y-auto scrollbar-thin flex-shrink-0">
             <div className="p-4">
               <button onClick={() => setSelectedTrade(null)} className="lg:hidden mb-4 text-xs text-[#9CA3AF] hover:text-white flex items-center gap-1.5">← Retour à la liste</button>
               {/* Header */}
