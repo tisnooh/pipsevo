@@ -47,6 +47,21 @@ def test_default_integration_plans_match_current_subscription_catalog(monkeypatc
     assert config.allowed_plans == ("free", "beta", "essential", "pro")
 
 
+def test_legacy_metaapi_flags_enable_mt4_and_mt5_without_duplicate_render_flags(monkeypatch):
+    monkeypatch.setenv("MT5_AUTO_SYNC_ENABLED", "true")
+    monkeypatch.setenv("MT5_PROVIDER", "metaapi")
+    monkeypatch.setenv("METAAPI_TOKEN", "provider-token")
+    monkeypatch.setenv("INTEGRATION_ENABLED_PROVIDERS", "metaapi")
+    monkeypatch.delenv("MT4_SYNC_ENABLED", raising=False)
+    monkeypatch.delenv("MT5_SYNC_ENABLED", raising=False)
+
+    config = IntegrationConfig.from_env()
+
+    assert "metaapi" in config.enabled_providers
+    assert "mt4" in config.enabled_platforms
+    assert "mt5" in config.enabled_platforms
+
+
 def test_metaapi_password_uses_direct_connection_without_configuration_link(monkeypatch):
     requests = []
 
@@ -75,6 +90,7 @@ def test_metaapi_password_uses_direct_connection_without_configuration_link(monk
     assert len(requests) == 1
     assert len(requests[0][2]["headers"]["transaction-id"]) == 32
     assert requests[0][2]["json"]["type"] == "cloud-g2"
+    assert requests[0][2]["provider_authentication"] is True
 
 
 def test_metaapi_server_search_uses_platform_version_and_flattens_brokers(monkeypatch):
@@ -96,6 +112,7 @@ def test_metaapi_server_search_uses_platform_version_and_flattens_brokers(monkey
     assert requests[0][0] == "GET"
     assert requests[0][1].endswith("/known-mt-servers/5/search")
     assert requests[0][2]["params"] == {"query": "FTMO"}
+    assert requests[0][2]["provider_authentication"] is True
 
 
 def test_normalized_provider_trade_does_not_invent_plan_compliance():

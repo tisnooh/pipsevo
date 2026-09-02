@@ -33,9 +33,17 @@ class MetaApiConnector(TradingConnector):
     def headers(self) -> dict[str, str]:
         return {"auth-token": self.token, "Content-Type": "application/json"}
 
+    async def _request(self, method: str, url: str, **kwargs):
+        return await request_json(
+            method,
+            url,
+            provider_authentication=True,
+            **kwargs,
+        )
+
     async def search_servers(self, platform: str, query: str) -> list[dict[str, str]]:
         version = 4 if platform == "mt4" else 5
-        result = await request_json(
+        result = await self._request(
             "GET",
             f"{self.provisioning_url}/known-mt-servers/{version}/search",
             headers=self.headers,
@@ -63,7 +71,7 @@ class MetaApiConnector(TradingConnector):
         if request.password:
             body["password"] = request.password.get_secret_value()
         headers = {**self.headers, "transaction-id": secrets.token_hex(16)}
-        created = await request_json(
+        created = await self._request(
             "POST",
             f"{self.provisioning_url}/users/current/accounts",
             headers=headers,
@@ -95,7 +103,7 @@ class MetaApiConnector(TradingConnector):
                 "name": request.name,
             }
 
-        link = await request_json(
+        link = await self._request(
             "PUT",
             f"{self.provisioning_url}/users/current/accounts/{account_id}/configuration-link",
             headers=self.headers,
@@ -114,7 +122,7 @@ class MetaApiConnector(TradingConnector):
         }
 
     async def deploy(self, provider_account_id: str) -> None:
-        await request_json(
+        await self._request(
             "POST",
             f"{self.provisioning_url}/users/current/accounts/{provider_account_id}/deploy",
             headers=self.headers,
@@ -126,7 +134,7 @@ class MetaApiConnector(TradingConnector):
         provider_id = access.get("provider_account_id")
         if not provider_id:
             return []
-        row = await request_json(
+        row = await self._request(
             "GET",
             f"{self.provisioning_url}/users/current/accounts/{provider_id}",
             headers=self.headers,
@@ -140,7 +148,7 @@ class MetaApiConnector(TradingConnector):
             return []
         region = row.get("region") or "new-york"
         client_url = f"https://mt-client-api-v1.{region}.{self.domain}"
-        information = await request_json(
+        information = await self._request(
             "GET",
             f"{client_url}/users/current/accounts/{provider_id}/account-information",
             headers=self.headers,
@@ -193,7 +201,7 @@ class MetaApiConnector(TradingConnector):
         start_value = self._api_time(start)
         end_value = self._api_time(end)
         while offset < 100_000:
-            deals = await request_json(
+            deals = await self._request(
                 "GET",
                 f"{client_url}/users/current/accounts/{provider_id}/history-deals/time/{start_value}/{end_value}",
                 headers=self.headers,
@@ -204,7 +212,7 @@ class MetaApiConnector(TradingConnector):
             if len(page) < page_limit:
                 break
             offset += page_limit
-        information = await request_json(
+        information = await self._request(
             "GET",
             f"{client_url}/users/current/accounts/{provider_id}/account-information",
             headers=self.headers,

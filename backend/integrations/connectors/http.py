@@ -14,6 +14,7 @@ async def request_json(
     *,
     timeout: int = 30,
     expected: tuple[int, ...] = (200,),
+    provider_authentication: bool = False,
     **kwargs: Any,
 ) -> Any:
     try:
@@ -28,7 +29,11 @@ async def request_json(
         ) from exc
     if response.status_code not in expected:
         if response.status_code in (401, 403):
-            code, status = "invalid_credentials", 401
+            code, status = (
+                ("provider_not_configured", 503)
+                if provider_authentication
+                else ("invalid_credentials", 401)
+            )
         elif response.status_code == 429:
             code, status = "rate_limit", 429
         elif response.status_code >= 500:
@@ -37,7 +42,9 @@ async def request_json(
             code, status = "provider_request_rejected", 400
         raise IntegrationError(
             code,
-            "L’autorisation a été refusée par la plateforme. Vérifie les accès puis réessaie."
+            "La connexion automatique est temporairement indisponible côté serveur."
+            if code == "provider_not_configured"
+            else "L’autorisation a été refusée par la plateforme. Vérifie les accès puis réessaie."
             if code == "invalid_credentials"
             else (
                 "La synchronisation est temporairement ralentie. PipsEvo réessaiera automatiquement."

@@ -43,7 +43,9 @@ api.interceptors.request.use(async (cfg) => {
   return cfg;
 });
 api.interceptors.response.use((value) => value, async (error) => {
-  if (error.response?.status === 401) {
+  const detail = error.response?.data?.detail;
+  const isBusinessError = detail && typeof detail === "object" && Boolean(detail.code);
+  if (error.response?.status === 401 && !isBusinessError) {
     await supabase.auth.signOut({ scope: "local" });
     localStorage.removeItem("pipsevo_token");
     window.dispatchEvent(new Event("pipsevo:session-expired"));

@@ -36,6 +36,10 @@ class IntegrationConfig:
             if item.strip()
         )
         provider = os.environ.get("MT5_PROVIDER", "").strip().lower() or None
+        legacy_metaapi_enabled = (
+            _enabled(os.environ.get("MT5_AUTO_SYNC_ENABLED"))
+            and provider == "metaapi"
+        )
         frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3100").rstrip("/")
         api_url = os.environ.get("PUBLIC_API_URL", "http://localhost:8000/api").rstrip("/")
         provider_settings = {
@@ -74,8 +78,13 @@ class IntegrationConfig:
         }
         platform_flags = {
             "ctrader": _enabled(os.environ.get("CTRADER_SYNC_ENABLED")),
-            "mt4": _enabled(os.environ.get("MT4_SYNC_ENABLED")),
-            "mt5": _enabled(os.environ.get("MT5_SYNC_ENABLED")),
+            # Backward compatibility: the first MetaApi rollout used the
+            # MT5_AUTO_SYNC_ENABLED + MT5_PROVIDER pair. Treat that valid
+            # configuration as enabling both MetaTrader versions supported by
+            # the same read-only connector, without requiring another Render
+            # environment migration.
+            "mt4": _enabled(os.environ.get("MT4_SYNC_ENABLED")) or legacy_metaapi_enabled,
+            "mt5": _enabled(os.environ.get("MT5_SYNC_ENABLED")) or legacy_metaapi_enabled,
             "tradelocker": _enabled(
                 os.environ.get("TRADELOCKER_SYNC_ENABLED")
                 or os.environ.get("TRADELOCKER_ENABLED")
