@@ -174,7 +174,7 @@ export default function AppShell() {
           <div className="card-flat px-3 py-2.5 text-center">
             <div className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.18em] text-[#9CA3AF]">Discipline du jour</div>
             <div className="mt-2">
-              <svg viewBox="0 0 80 46" className="mx-auto h-8 w-24 max-w-full" aria-label={`Score de discipline : ${discipline} sur 100`}>
+              <svg viewBox="0 0 80 44" className="mx-auto h-8 w-24 max-w-full" aria-label={`Score de discipline : ${discipline} sur 100`}>
                 <defs>
                   <linearGradient id="gauge-a" x1="0" y1="0" x2="1" y2="0">
                     <stop offset="0%" stopColor="#7C4DFF" />
@@ -192,7 +192,7 @@ export default function AppShell() {
                   strokeDashoffset={95 - (discipline / 100) * 95}
                 />
               </svg>
-              <div className="mt-1 font-mono text-base font-bold leading-none">
+              <div className="-mt-0.5 font-mono text-base font-bold leading-none">
                 {discipline}
                 <span className="ml-1 text-[8px] text-[#9CA3AF]">/100</span>
               </div>

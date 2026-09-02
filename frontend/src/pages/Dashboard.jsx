@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { dashboard, trades, accounts as accAPI } from "@/lib/api";
 import { Link } from "react-router-dom";
-import { Plus, Sparkles, Calendar, BarChart3, RefreshCw } from "lucide-react";
+import { Plus, Sparkles, Calendar, BarChart3, RefreshCw, ShieldCheck, WalletCards } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, CartesianGrid, ReferenceLine, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { useAuth } from "@/context/AuthContext";
 import useAppSettings from "@/hooks/useAppSettings";
 import CommercialBanner from "@/components/CommercialBanner";
+import { DashboardTemplateManager } from "@/components/dashboard/DashboardTemplateManager";
+import { DEFAULT_DASHBOARD_TEMPLATES, readDashboardTemplateState } from "@/lib/dashboardTemplates";
 
 const EMPTY_KPIS = { funded_capital: 0, total_profit: 0, remaining_drawdown: 0, estimated_payout: 0, discipline_score: 0, trader_score: 0, total_payouts: 0, active_accounts: 0, total_trades: 0 };
 const EMPTY_METRICS = { winrate: 0, profit_factor: 0, avg_win: 0, avg_loss: 0, plan_respect_rate: 0 };
@@ -22,6 +24,7 @@ export default function Dashboard() {
   const [assetFilter, setAssetFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [templateState, setTemplateState] = useState(readDashboardTemplateState);
 
   const load = async () => {
     setLoading(true); setError("");
@@ -59,6 +62,14 @@ export default function Dashboard() {
   const scopedGrossProfit = scopedWins.reduce((sum, t) => sum + Number(t.pnl || 0), 0);
   const scopedGrossLoss = Math.abs(scopedLosses.reduce((sum, t) => sum + Number(t.pnl || 0), 0));
   const scopedProfitFactor = scopedGrossLoss ? scopedGrossProfit / scopedGrossLoss : 0;
+  const dailyTotals = Object.values(scopedTrades.reduce((days, trade) => {
+    const date = trade.date || "—";
+    days[date] = (days[date] || 0) + Number(trade.pnl || 0);
+    return days;
+  }, {}));
+  const dayWinRate = dailyTotals.length ? dailyTotals.filter((pnl) => pnl > 0).length / dailyTotals.length * 100 : 0;
+  const drawdownLimit = accList.reduce((sum, account) => sum + Number(account.max_drawdown || 0), 0);
+  const drawdownRate = drawdownLimit ? Number(k.remaining_drawdown || 0) / drawdownLimit * 100 : Number(k.remaining_drawdown || 0) > 0 ? 100 : 0;
   const planRateLabel = m.plan_respect_rate === null || m.plan_respect_rate === undefined ? "Non mesuré" : `${m.plan_respect_rate}%`;
   const insight = !k.total_trades
     ? "Ajoute tes premiers trades pour obtenir un insight personnalisé."
@@ -73,8 +84,13 @@ export default function Dashboard() {
     days[date].pnl += Number(trade.pnl || 0);
     return days;
   }, {})).sort((a, b) => String(a.date).localeCompare(String(b.date))).slice(-7);
-  const panel = "rounded-xl border border-white/[0.085] bg-[#141414]";
-  const control = "h-9 rounded-lg border border-white/[0.1] bg-[#191919] px-3 text-xs text-[#C9CDD5] outline-none transition hover:border-white/[0.18] focus:border-[#7C67D9]";
+  const templates = useMemo(() => [...DEFAULT_DASHBOARD_TEMPLATES, ...templateState.custom], [templateState.custom]);
+  const activeTemplate = templates.find((template) => template.id === templateState.activeId) || DEFAULT_DASHBOARD_TEMPLATES[0];
+  const visible = (widget) => activeTemplate.widgets.includes(widget);
+  const accent = activeTemplate.accent === "blue" ? "#4F8DFF" : "#8067F4";
+  const accentSoft = activeTemplate.accent === "blue" ? "rgba(79,141,255,.18)" : "rgba(128,103,244,.18)";
+  const panel = "rounded-xl border border-[#6571CF]/20 bg-[#0D1120] shadow-[inset_0_1px_0_rgba(255,255,255,.025)]";
+  const control = "h-9 rounded-lg border border-[#6971C9]/20 bg-[#0C1122] px-3 text-xs text-[#C9CDD5] outline-none transition hover:border-[#7780E0]/35 focus:border-[#8075ED]";
 
   return (
     <div className="pe-page max-w-[1800px] mx-auto space-y-4">
@@ -86,6 +102,7 @@ export default function Dashboard() {
           <p className="mt-1 text-xs text-[#777D88]">Performance, risque et discipline sur une seule vue.</p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+          <DashboardTemplateManager state={templateState} onChange={setTemplateState} />
           <label className={`${control} flex items-center gap-2`}><Calendar className="h-3.5 w-3.5 text-[#777D88]"/><select value={period} onChange={e=>setPeriod(e.target.value)} className="min-w-0 bg-transparent"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select></label>
           <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className={control}><option value="">Tous les comptes</option>{accList.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
           <select value={assetFilter} onChange={e=>setAssetFilter(e.target.value)} className={control}><option value="">Tous les actifs</option>{[...new Set(tradeList.map(t=>t.instrument))].filter(Boolean).map(x=><option key={x}>{x}</option>)}</select>
@@ -101,36 +118,36 @@ export default function Dashboard() {
       {error && <div className="rounded-2xl border border-[#FF5252]/25 bg-[#FF5252]/10 p-4 text-sm text-[#FF8A8A] flex flex-col sm:flex-row sm:items-center justify-between gap-3"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 rounded-lg border border-[#FF5252]/20 px-3 py-2 text-xs hover:bg-[#FF5252]/10"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
       {loading && <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{Array.from({length:5}).map((_,i)=><div key={i} className="h-28 animate-pulse rounded-xl bg-white/[0.035]"/>)}</div>}
 
-      {!loading && <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Kpi label="P&L net" value={money(periodProfit,{signDisplay:"always"})} detail={`${scopedTrades.length} trades`} tone={periodProfit < 0 ? "negative" : "positive"} testid="kpi-profit" />
-        <Kpi label="Win rate" value={`${scopedWinrate.toFixed(1)}%`} detail="Trades clôturés" />
-        <Kpi label="Profit factor" value={scopedProfitFactor.toFixed(2)} detail="Gains / pertes" />
-        <Kpi label="Discipline" value={`${k.discipline_score}/100`} detail={`${planRateLabel} · plan`} tone="accent" testid="kpi-discipline" />
-        <Kpi label="Drawdown disponible" value={money(k.remaining_drawdown)} detail={`${k.active_accounts} compte${k.active_accounts>1?"s":""} actif${k.active_accounts>1?"s":""}`} testid="kpi-dd" />
+      {!loading && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {visible("summary") && <Kpi label="P&L net" value={money(periodProfit,{signDisplay:"always"})} detail={`${scopedTrades.length} trades sur la période`} tone={periodProfit < 0 ? "negative" : "positive"} testid="kpi-profit" accent={accent} />}
+        {visible("summary") && <GaugeKpi label="Win rate" value={scopedWinrate} display={`${scopedWinrate.toFixed(1)}%`} detail={`${scopedWins.length} gains · ${scopedLosses.length} pertes`} accent={accent} id="win-rate" />}
+        {visible("summary") && <RingKpi label="Profit factor" value={Math.min(100, scopedProfitFactor / 3 * 100)} display={scopedProfitFactor.toFixed(2)} detail="Objectif solide : 1,50+" accent={accent} id="profit-factor" />}
+        {visible("summary") && <GaugeKpi label="Jours gagnants" value={dayWinRate} display={`${dayWinRate.toFixed(0)}%`} detail={`${dailyTotals.filter((pnl) => pnl > 0).length} jours positifs`} accent={accent} id="day-win-rate" />}
+        <GaugeKpi label="Drawdown disponible" value={drawdownRate} display={money(k.remaining_drawdown)} detail={`${k.active_accounts} compte${k.active_accounts>1?"s":""} actif${k.active_accounts>1?"s":""}`} accent={activeTemplate.accent === "blue" ? "#6D7CFF" : "#4F8DFF"} id="drawdown" testid="kpi-dd" amount />
       </div>}
 
-      <div className="grid gap-3 xl:grid-cols-3">
-        <section className={`${panel} overflow-hidden xl:col-span-2`}>
+      {(visible("equity") || visible("daily")) && <div className="grid gap-3 xl:grid-cols-3">
+        {visible("equity") && <section className={`${panel} overflow-hidden ${visible("daily") ? "xl:col-span-2" : "xl:col-span-3"}`}>
           <PanelHeader title="P&L cumulatif" detail={`${period} derniers jours`} />
           <div className="h-[270px] px-3 pb-3 pt-4 sm:px-5">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={equityData} margin={{top:8,right:8,left:0,bottom:0}}>
-                <defs><linearGradient id="eqfill-d" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7964D6" stopOpacity="0.24"/><stop offset="100%" stopColor="#7964D6" stopOpacity="0"/></linearGradient></defs>
+                <defs><linearGradient id="eqfill-d" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={accent} stopOpacity="0.28"/><stop offset="100%" stopColor={accent} stopOpacity="0"/></linearGradient></defs>
                 <CartesianGrid vertical={false} stroke="rgba(255,255,255,.065)" strokeDasharray="3 4"/>
                 <XAxis dataKey="date" tick={{fill:"#707681",fontSize:10}} tickLine={false} axisLine={false} />
                 <YAxis width={58} tick={{fill:"#707681",fontSize:10}} tickLine={false} axisLine={false} tickFormatter={(v)=>money(v,{maximumFractionDigits:0})} />
-                <Tooltip contentStyle={{ background: "#1A1A1A", border: "1px solid #343434", borderRadius: 8, fontSize: 12 }} />
-                <Area type="monotone" dataKey="equity" stroke="#8B79DD" strokeWidth={1.8} fill="url(#eqfill-d)" />
+                <Tooltip contentStyle={{ background: "#0B1020", border: "1px solid rgba(112,119,218,.3)", borderRadius: 8, fontSize: 12 }} />
+                <Area type="monotone" dataKey="equity" stroke={accent} strokeWidth={2} fill="url(#eqfill-d)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        </section>
+        </section>}
 
-        <section className={`${panel} overflow-hidden`}>
+        {visible("daily") && <section className={`${panel} overflow-hidden ${visible("equity") ? "" : "xl:col-span-3"}`}>
           <PanelHeader title="P&L journalier" detail="7 dernières séances" />
-          <div className="h-[270px] px-3 pb-3 pt-4 sm:px-5"><ResponsiveContainer width="100%" height="100%"><BarChart data={dailyData} margin={{top:8,right:4,left:0,bottom:0}}><CartesianGrid vertical={false} stroke="rgba(255,255,255,.065)" strokeDasharray="3 4"/><XAxis dataKey="date" tick={{fill:"#707681",fontSize:9}} tickLine={false} axisLine={false}/><YAxis width={54} tick={{fill:"#707681",fontSize:10}} tickLine={false} axisLine={false} tickFormatter={v=>money(v,{maximumFractionDigits:0})}/><ReferenceLine y={0} stroke="rgba(255,255,255,.2)"/><Tooltip contentStyle={{background:"#1A1A1A",border:"1px solid #343434",borderRadius:8,fontSize:12}} formatter={value=>[money(value,{signDisplay:"always"}),"P&L"]}/><Bar dataKey="pnl" fill="#7964D6" radius={[3,3,0,0]} maxBarSize={42}/></BarChart></ResponsiveContainer></div>
-        </section>
-      </div>
+          <div className="h-[270px] px-3 pb-3 pt-4 sm:px-5"><ResponsiveContainer width="100%" height="100%"><BarChart data={dailyData} margin={{top:8,right:4,left:0,bottom:0}}><CartesianGrid vertical={false} stroke="rgba(255,255,255,.065)" strokeDasharray="3 4"/><XAxis dataKey="date" tick={{fill:"#707681",fontSize:9}} tickLine={false} axisLine={false}/><YAxis width={54} tick={{fill:"#707681",fontSize:10}} tickLine={false} axisLine={false} tickFormatter={v=>money(v,{maximumFractionDigits:0})}/><ReferenceLine y={0} stroke="rgba(255,255,255,.2)"/><Tooltip contentStyle={{background:"#0B1020",border:"1px solid rgba(112,119,218,.3)",borderRadius:8,fontSize:12}} formatter={value=>[money(value,{signDisplay:"always"}),"P&L"]}/><Bar dataKey="pnl" fill={accent} radius={[3,3,0,0]} maxBarSize={42}/></BarChart></ResponsiveContainer></div>
+        </section>}
+      </div>}
 
       <div className="grid lg:grid-cols-3 gap-4">
         <div className={`${panel} overflow-hidden lg:col-span-2`}>
@@ -147,7 +164,7 @@ export default function Dashboard() {
               const hasPnl = typeof t.pnl === "number"; const positive = hasPnl && t.pnl >= 0;
               const directionLong = String(t.direction).toLowerCase() === "long";
               const accountName = t.account || accList.find(a=>a.id===t.account_id)?.firm || "Compte";
-              return <div key={t.id} className="rounded-xl border border-white/[0.07] bg-[#181818] p-4 transition active:border-[#7C67D9]/40">
+              return <div key={t.id} className="rounded-xl border border-[#6571CF]/15 bg-[#0A0F1E] p-4 transition active:border-[#7C67D9]/40">
                 <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3 min-w-0"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#15182A] text-xs font-bold text-[#B58BFF]">{String(t.instrument || "?").slice(0,2)}</span><div className="min-w-0"><div className="font-semibold truncate">{t.instrument}</div><div className="text-[11px] text-[#6B7280] mt-0.5">{t.date} · {accountName}</div></div></div><div className="text-right"><div className="font-numeric font-semibold" style={{color:!hasPnl?"#9CA3AF":positive?"#00E676":"#FF5252"}}>{hasPnl?money(t.pnl,{minimumFractionDigits:2,maximumFractionDigits:2,signDisplay:"always"}):"—"}</div><div className="text-[10px] text-[#6B7280] mt-0.5">{typeof t.r==="number"?`${t.r.toFixed(2)}R`:"—"}</div></div></div>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.05]"><span className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${directionLong ? "bg-[#00E676]/10 text-[#00E676]" : "bg-[#FF5252]/10 text-[#FF7272]"}`}>{directionLong ? "Achat · Long" : "Vente · Short"}</span><span className="text-[11px] text-[#7E8798]">{t.duration || t.session || "—"}</span></div>
               </div>;
@@ -155,7 +172,7 @@ export default function Dashboard() {
             {!filtered.length && <div className="rounded-2xl border border-dashed border-white/10 py-10 text-center"><BarChart3 className="w-5 h-5 text-[#6B7280] mx-auto"/><p className="text-sm text-[#9CA3AF] mt-2">Aucun trade pour ces filtres.</p></div>}
           </div>
 
-          <div className="m-5 mt-4 hidden overflow-x-auto rounded-lg border border-white/[0.07] bg-[#111] md:block">
+          <div className="m-5 mt-4 hidden overflow-x-auto rounded-lg border border-[#6571CF]/15 bg-[#090D19] md:block">
             <table className="pe-table min-w-[820px]">
               <thead><tr><th className="text-left">Date</th><th className="text-left">Actif</th><th className="text-left">Direction</th><th className="text-right">Résultat</th><th className="text-right">R Multiple</th><th className="text-left">Durée</th><th className="text-left">Compte</th><th className="text-left">Tags</th></tr></thead>
               <tbody>
@@ -181,26 +198,28 @@ export default function Dashboard() {
         </div>
 
         <div className="space-y-4">
-          <div className={`${panel} p-5`}>
-            <div className="flex items-start justify-between gap-3">
-              <div><div className="text-sm font-semibold">Répartition discipline</div><div className="mt-1 text-[10px] text-[#686E79]">Respect du plan sur les trades renseignés</div></div>
+          <div className={`${panel} overflow-hidden`} data-testid="kpi-discipline">
+            <div className="flex items-start justify-between gap-3 px-5 pt-5">
+              <div><div className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4" style={{ color: accent }} />Répartition discipline</div><div className="mt-1 text-[10px] text-[#6F7890]">Respect du plan sur les trades renseignés</div></div>
               <Link to="/app/discipline" className="text-[10px] text-[#9B8DE1] transition hover:text-white" data-testid="dash-discipline-link">Détails →</Link>
             </div>
-            <div className="mt-5 flex items-end justify-between gap-4">
-              <div className="font-numeric text-3xl font-semibold tracking-[-.03em] text-[#F0F0F1]">{k.discipline_score}<span className="ml-1 text-sm font-normal text-[#6F7580]">/100</span></div>
-              <div className="text-right"><div className="font-numeric text-sm font-semibold text-[#A492F0]">{planRateLabel}</div><div className="mt-1 text-[9px] uppercase tracking-[.12em] text-[#626873]">Plan respecté</div></div>
+            <div className="grid grid-cols-[116px_1fr] items-center gap-3 px-4 pb-4 pt-3">
+              <MiniGauge value={k.discipline_score} display={`${k.discipline_score}`} accent={accent} suffix="/100" id="discipline" />
+              <div className="space-y-3">
+                <DisciplineRow label="Plan respecté" value={planRateLabel} progress={Number(m.plan_respect_rate || 0)} accent={accent} />
+                <DisciplineRow label="Trades suivis" value={k.total_trades || recent.length} progress={Math.min(100, (k.total_trades || recent.length) * 10)} accent={accent} />
+              </div>
             </div>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/[0.065]"><div className="h-full rounded-full bg-[#7B68D4] transition-[width] duration-500" style={{width:`${Math.max(0,Math.min(100,Number(k.discipline_score||0)))}%`}}/></div>
-            <div className="mt-3 flex items-center justify-between text-[10px] text-[#6F7580]"><span>{k.total_trades || recent.length} trades suivis</span><span>{k.discipline_score >= 80 ? "Solide" : k.discipline_score >= 60 ? "À consolider" : k.discipline_score ? "À améliorer" : "En attente"}</span></div>
+            <div className="flex items-center justify-between border-t border-[#6571CF]/15 bg-[#090E1C] px-5 py-3 text-[10px] text-[#747D92]"><span>État actuel</span><span style={{ color: accent }}>{k.discipline_score >= 80 ? "Solide" : k.discipline_score >= 60 ? "À consolider" : k.discipline_score ? "À améliorer" : "En attente"}</span></div>
           </div>
-          <div className={`${panel} p-5`}>
-            <div className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4 text-[#8F7DDE]"/>Atlas · aperçu</div>
+          <div className={`${panel} p-5`} style={{ backgroundImage: `linear-gradient(135deg, ${accentSoft}, transparent 55%)` }}>
+            <div className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4" style={{ color: accent }}/>Atlas · aperçu</div>
             <p className="text-xs text-[#B5BBC9] mt-3 leading-relaxed">{insight}</p>
             <Link to="/app/coach" className="mt-4 block rounded-lg border border-white/[0.09] py-2 text-center text-xs text-[#AAA1D8] transition hover:border-white/[0.16] hover:text-white" data-testid="dash-insight-link">Ouvrir l’analyse →</Link>
           </div>
-          <div className={`${panel} overflow-hidden p-5`}>
+          {visible("accounts") && <div className={`${panel} overflow-hidden p-5`}>
             <div className="flex items-center justify-between mb-3">
-              <div><div className="text-sm font-semibold">Comptes</div><div className="text-[10px] text-[#6B7280] mt-1">Santé et performance</div></div>
+              <div><div className="flex items-center gap-2 text-sm font-semibold"><WalletCards className="h-4 w-4" style={{ color: accent }} />Comptes</div><div className="text-[10px] text-[#6B7280] mt-1">Santé et performance</div></div>
               <Link to="/app/accounts" className="text-xs text-[#B58BFF]">Voir tout</Link>
             </div>
             <div className="space-y-2">
@@ -208,37 +227,100 @@ export default function Dashboard() {
               const pnl = Number(a.balance || 0) - Number(a.initial_balance || 0);
               const health = Math.max(0, Math.min(100, Number(a.health_score ?? (pnl >= 0 ? 82 : 48))));
               return (
-                <div key={a.id} className="rounded-lg border border-white/[0.065] bg-[#191919] p-3 transition hover:border-white/[0.12]">
+                <div key={a.id} className="rounded-lg border border-[#6571CF]/15 bg-[#090E1C] p-3 transition hover:border-[#7881E8]/30">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 min-w-0"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#15182A] text-[10px] font-bold text-[#B58BFF]">{String(a.firm || a.name || "C").slice(0,2).toUpperCase()}</span><div className="min-w-0"><div className="text-xs font-medium truncate">{a.name || a.firm}</div><div className="text-[9px] text-[#6B7280] truncate mt-0.5">{a.firm || "Compte de trading"}</div></div></div>
                     <div className="text-right shrink-0"><div className="text-xs font-numeric font-semibold" style={{ color: pnl >= 0 ? "#00E676" : "#FF5252" }}>{money(pnl,{signDisplay:"always"})}</div><div className="text-[9px] text-[#6B7280] mt-0.5">P&amp;L</div></div>
                   </div>
-                  <div className="mt-3 flex items-center gap-2"><div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-[#7B68D4]" style={{width:`${health}%`}}/></div><span className="w-7 text-right text-[9px] font-mono text-[#8B93A3]">{health}%</span></div>
+                  <div className="mt-3 flex items-center gap-2"><div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full" style={{width:`${health}%`, background: accent}}/></div><span className="w-7 text-right text-[9px] font-mono text-[#8B93A3]">{health}%</span></div>
                 </div>
               );
             })}
             {!accList.length && <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-xs text-[#7E8798]">Aucun compte ajouté.</div>}
             </div>
             <Link to="/app/accounts" className="block text-center mt-4 text-xs text-[#B58BFF]">Gérer mes comptes →</Link>
-          </div>
+          </div>}
         </div>
       </div>
     </div>
   );
 }
 
-function Kpi({ label, value, detail, tone = "neutral", testid }) {
+function Kpi({ label, value, detail, tone = "neutral", testid, accent }) {
   const colors = { positive: "text-[#46C99A]", negative: "text-[#F26A70]", accent: "text-[#A492F0]", neutral: "text-[#F2F2F3]" };
-  return <div className="rounded-xl border border-white/[0.085] bg-[#141414] p-4" data-testid={testid}>
-    <div className="text-[11px] text-[#858A94]">{label}</div>
-    <div className={`mt-2 font-numeric text-xl font-semibold tracking-[-.02em] sm:text-2xl ${colors[tone]}`}>{value}</div>
-    <div className="mt-2 text-[10px] text-[#646A75]">{detail}</div>
+  return <div className="relative min-h-[124px] overflow-hidden rounded-xl border border-[#6571CF]/20 bg-[#0D1120] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.025)]" data-testid={testid}>
+    <span className="absolute -right-7 -top-10 h-24 w-24 rounded-full blur-2xl" style={{ background: accent, opacity: .12 }} />
+    <div className="relative text-[11px] text-[#8B93A7]">{label}</div>
+    <div className={`relative mt-3 font-numeric text-xl font-semibold tracking-[-.02em] sm:text-2xl ${colors[tone]}`}>{value}</div>
+    <div className="relative mt-3 text-[10px] text-[#687288]">{detail}</div>
+  </div>;
+}
+
+function GaugeKpi({ label, value, display, detail, accent, id, testid, amount = false }) {
+  const safeValue = clamp(value);
+  const gradientId = `dashboard-gauge-${id}`;
+  return <div className="min-h-[124px] rounded-xl border border-[#6571CF]/20 bg-[#0D1120] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.025)]" data-testid={testid}>
+    <div className="text-[11px] text-[#8B93A7]">{label}</div>
+    <div className="mt-2 grid grid-cols-[minmax(0,1fr)_88px] items-end gap-2">
+      <div className="min-w-0 pb-1">
+        <div className={`font-numeric font-semibold tracking-[-.025em] text-[#F3F5FA] ${amount ? "text-base sm:text-lg" : "text-xl sm:text-2xl"}`}>{display}</div>
+        <div className="mt-2 text-[9px] leading-4 text-[#687288]">{detail}</div>
+      </div>
+      <svg viewBox="0 0 120 66" className="h-[54px] w-[88px]" role="img" aria-label={`${label} : ${display}`}>
+        <defs><linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#536BFF"/><stop offset="100%" stopColor={accent}/></linearGradient></defs>
+        <path d="M10 56 A50 50 0 0 1 110 56" pathLength="100" fill="none" stroke="#1D263A" strokeWidth="10" strokeLinecap="round" />
+        <path d="M10 56 A50 50 0 0 1 110 56" pathLength="100" fill="none" stroke={`url(#${gradientId})`} strokeWidth="10" strokeLinecap="round" strokeDasharray="100" strokeDashoffset={100 - safeValue} />
+        <circle cx="10" cy="56" r="2" fill="#536BFF" />
+        <circle cx="110" cy="56" r="2" fill={accent} opacity={safeValue > 98 ? 1 : .18} />
+      </svg>
+    </div>
+  </div>;
+}
+
+function RingKpi({ label, value, display, detail, accent, id }) {
+  const safeValue = clamp(value);
+  const gradientId = `dashboard-ring-${id}`;
+  return <div className="min-h-[124px] rounded-xl border border-[#6571CF]/20 bg-[#0D1120] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.025)]">
+    <div className="text-[11px] text-[#8B93A7]">{label}</div>
+    <div className="mt-2 grid grid-cols-[minmax(0,1fr)_60px] items-center gap-3">
+      <div className="min-w-0"><div className="font-numeric text-xl font-semibold tracking-[-.025em] text-[#F3F5FA] sm:text-2xl">{display}</div><div className="mt-2 text-[9px] leading-4 text-[#687288]">{detail}</div></div>
+      <svg viewBox="0 0 52 52" className="h-[58px] w-[58px] -rotate-90" role="img" aria-label={`${label} : ${display}`}>
+        <defs><linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#4F8DFF"/><stop offset="100%" stopColor={accent}/></linearGradient></defs>
+        <circle cx="26" cy="26" r="20" pathLength="100" fill="none" stroke="#1D263A" strokeWidth="7" />
+        <circle cx="26" cy="26" r="20" pathLength="100" fill="none" stroke={`url(#${gradientId})`} strokeWidth="7" strokeLinecap="round" strokeDasharray="100" strokeDashoffset={100 - safeValue} />
+      </svg>
+    </div>
+  </div>;
+}
+
+function MiniGauge({ value, display, suffix, accent, id }) {
+  const safeValue = clamp(value);
+  const gradientId = `dashboard-mini-${id}`;
+  return <div className="text-center">
+    <svg viewBox="0 0 120 72" className="mx-auto h-[70px] w-[112px]" role="img" aria-label={`Score de discipline : ${display}${suffix}`}>
+      <defs><linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#4F8DFF"/><stop offset="100%" stopColor={accent}/></linearGradient></defs>
+      <path d="M10 60 A50 50 0 0 1 110 60" pathLength="100" fill="none" stroke="#1D263A" strokeWidth="9" strokeLinecap="round" />
+      <path d="M10 60 A50 50 0 0 1 110 60" pathLength="100" fill="none" stroke={`url(#${gradientId})`} strokeWidth="9" strokeLinecap="round" strokeDasharray="100" strokeDashoffset={100 - safeValue} />
+      <text x="60" y="58" textAnchor="middle" fill="#F3F5FA" fontSize="24" fontWeight="700">{display}</text>
+      <text x="83" y="58" fill="#7F899E" fontSize="8">{suffix}</text>
+    </svg>
+  </div>;
+}
+
+function DisciplineRow({ label, value, progress, accent }) {
+  return <div>
+    <div className="flex items-center justify-between gap-2 text-[10px]"><span className="text-[#747D91]">{label}</span><span className="font-mono text-[#CBD0DC]">{value}</span></div>
+    <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#1C2538]"><div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${clamp(progress)}%`, background: accent }} /></div>
   </div>;
 }
 
 function PanelHeader({ title, detail }) {
-  return <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3.5 sm:px-5">
+  return <div className="flex items-center justify-between border-b border-[#6571CF]/15 px-4 py-3.5 sm:px-5">
     <h2 className="text-sm font-semibold text-[#E7E7E8]">{title}</h2>
     <span className="text-[10px] text-[#6F7580]">{detail}</span>
   </div>;
+}
+
+function clamp(value) {
+  return Math.max(0, Math.min(100, Number(value || 0)));
 }
