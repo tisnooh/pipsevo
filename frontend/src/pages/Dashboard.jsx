@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { dashboard, trades, accounts as accAPI } from "@/lib/api";
 import { Link } from "react-router-dom";
-import { Plus, TrendingUp, Shield, ArrowDownRight, Sparkles, Calendar, BarChart3, RefreshCw } from "lucide-react";
-import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
+import { Plus, Sparkles, Calendar, BarChart3, RefreshCw } from "lucide-react";
+import { AreaChart, Area, BarChart, Bar, CartesianGrid, ReferenceLine, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { useAuth } from "@/context/AuthContext";
 import useAppSettings from "@/hooks/useAppSettings";
 import CommercialBanner from "@/components/CommercialBanner";
-import { DashboardKpiCard } from "@/components/dashboard/DashboardVisuals";
 
 const EMPTY_KPIS = { funded_capital: 0, total_profit: 0, remaining_drawdown: 0, estimated_payout: 0, discipline_score: 0, trader_score: 0, total_payouts: 0, active_accounts: 0, total_trades: 0 };
 const EMPTY_METRICS = { winrate: 0, profit_factor: 0, avg_win: 0, avg_loss: 0, plan_respect_rate: 0 };
@@ -38,19 +37,28 @@ export default function Dashboard() {
   const m = d?.metrics || EMPTY_METRICS;
   const cutoff = Date.now() - Number(period) * 86400000;
   const inPeriod = (item) => !item?.date || new Date(item.date).getTime() >= cutoff;
-  const equityData = (d?.equity_curve || []).filter(inPeriod);
   const tradeList = recent.filter(inPeriod);
   const accList = accs;
-
-  const filtered = tradeList.filter(t =>
+  const scopedTrades = tradeList.filter(t =>
     (!accountFilter || t.account_id === accountFilter) &&
-    (!assetFilter || t.instrument === assetFilter) &&
+    (!assetFilter || t.instrument === assetFilter)
+  );
+  let runningEquity = 0;
+  const equityData = [...scopedTrades]
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    .map(t => ({ date: t.date, equity: Math.round((runningEquity += Number(t.pnl || 0)) * 100) / 100 }));
+  const filtered = scopedTrades.filter(t =>
     (tab === "Tous" || (tab === "Gagnants" ? t.pnl > 0 : t.pnl < 0))
   ).slice(0, 5);
   const isEmptyAccount = !loading && !accList.length && !recent.length;
-  const payoutGoal = Number(accList[0]?.profit_target || Math.max(k.estimated_payout, 1000));
-  const payoutProgress = Math.min(100, Math.round((Number(k.total_payouts || 0) / payoutGoal) * 100));
-  const periodProfit = tradeList.reduce((sum,t)=>sum+Number(t.pnl||0),0);
+  const periodProfit = scopedTrades.reduce((sum,t)=>sum+Number(t.pnl||0),0);
+  const closedScopedTrades = scopedTrades.filter(t => Number.isFinite(Number(t.pnl)) && !["open", "cancelled", "canceled"].includes(t.result_status));
+  const scopedWins = closedScopedTrades.filter(t => Number(t.pnl) > 0);
+  const scopedLosses = closedScopedTrades.filter(t => Number(t.pnl) < 0);
+  const scopedWinrate = closedScopedTrades.length ? scopedWins.length / closedScopedTrades.length * 100 : 0;
+  const scopedGrossProfit = scopedWins.reduce((sum, t) => sum + Number(t.pnl || 0), 0);
+  const scopedGrossLoss = Math.abs(scopedLosses.reduce((sum, t) => sum + Number(t.pnl || 0), 0));
+  const scopedProfitFactor = scopedGrossLoss ? scopedGrossProfit / scopedGrossLoss : 0;
   const planRateLabel = m.plan_respect_rate === null || m.plan_respect_rate === undefined ? "Non mesuré" : `${m.plan_respect_rate}%`;
   const insight = !k.total_trades
     ? "Ajoute tes premiers trades pour obtenir un insight personnalisé."
@@ -59,96 +67,87 @@ export default function Dashboard() {
       : m.plan_respect_rate < 80
         ? `Ton plan est respecté sur ${m.plan_respect_rate}% des trades renseignés. Priorité : réduire les prises hors plan.`
         : `Ton plan est respecté sur ${m.plan_respect_rate}% des trades renseignés. Continue à documenter chaque décision.`;
+  const dailyData = Object.values(scopedTrades.reduce((days, trade) => {
+    const date = trade.date || "—";
+    days[date] ||= { date, pnl: 0 };
+    days[date].pnl += Number(trade.pnl || 0);
+    return days;
+  }, {})).sort((a, b) => String(a.date).localeCompare(String(b.date))).slice(-7);
+  const panel = "rounded-xl border border-white/[0.085] bg-[#141414]";
+  const control = "h-9 rounded-lg border border-white/[0.1] bg-[#191919] px-3 text-xs text-[#C9CDD5] outline-none transition hover:border-white/[0.18] focus:border-[#7C67D9]";
 
   return (
-    <div className="pe-page pe-page-stack max-w-[1800px] mx-auto">
+    <div className="pe-page max-w-[1800px] mx-auto space-y-4">
       <CommercialBanner placement="dashboard" />
-      <div className="relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-gradient-to-br from-[#111426] via-[#0B0E1A] to-[#090B13] p-5 sm:p-7 shadow-[0_20px_70px_rgba(0,0,0,.32)]">
-        <div className="absolute -top-32 right-[8%] w-80 h-80 rounded-full bg-[#7C4DFF] blur-3xl opacity-15"/><div className="absolute -bottom-36 left-[25%] w-72 h-72 rounded-full bg-[#4F8CFF] blur-3xl opacity-10"/>
-        <div className="relative">
-          <div><div className="pe-eyebrow"><span className="w-1.5 h-1.5 rounded-full bg-[#00E676] shadow-[0_0_10px_#00E676]"/>Centre de pilotage</div><h1 className="pe-page-title mt-3 sm:!text-4xl">Bonjour {user?.name?.split(" ")[0] || "Trader"}<span className="text-[#B58BFF]">.</span></h1><p className="pe-page-copy mt-2">Garde le contrôle de ton risque, de ta discipline et de tes prochains objectifs.</p></div>
+      <header className="flex flex-col gap-4 border-b border-white/[0.08] pb-4 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <div className="text-[11px] font-medium uppercase tracking-[.16em] text-[#8071D8]">Aperçu · {user?.name?.split(" ")[0] || "Trader"}</div>
+          <h1 className="mt-1 text-2xl font-semibold tracking-[-.025em] text-[#F2F2F3] sm:text-3xl">Dashboard</h1>
+          <p className="mt-1 text-xs text-[#777D88]">Performance, risque et discipline sur une seule vue.</p>
         </div>
-        <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 pt-5 border-t border-white/[0.06]">
-          {isEmptyAccount ? <div className="text-[11px] text-[#B58BFF] inline-flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[#B58BFF]"/>Ton espace est prêt : ajoute un compte puis journalise ton premier trade.</div> : <div className="text-[11px] text-[#00E676] inline-flex items-center gap-2"><Shield className="w-3.5 h-3.5"/>Données réelles synchronisées avec ton journal.</div>}
-          <div className="flex items-center gap-2 flex-wrap">
-          <label className="card-flat px-3 py-2 text-sm flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-[#9CA3AF]"/><select value={period} onChange={e=>setPeriod(e.target.value)} className="bg-transparent"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select></label>
-          <Link to="/app/markets" className="card-flat px-3 py-2 text-sm inline-flex items-center gap-2 hover:border-[#7C4DFF]/40"><BarChart3 className="w-4 h-4 text-[#B58BFF]"/> Marchés</Link>
-          <Link to="/app/accounts?new=1" className="btn-primary inline-flex items-center gap-2 text-sm py-2.5" data-testid="dash-add-account"><Plus className="w-4 h-4"/> Ajouter un compte</Link>
-          </div>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+          <label className={`${control} flex items-center gap-2`}><Calendar className="h-3.5 w-3.5 text-[#777D88]"/><select value={period} onChange={e=>setPeriod(e.target.value)} className="min-w-0 bg-transparent"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select></label>
+          <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className={control}><option value="">Tous les comptes</option>{accList.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
+          <select value={assetFilter} onChange={e=>setAssetFilter(e.target.value)} className={control}><option value="">Tous les actifs</option>{[...new Set(tradeList.map(t=>t.instrument))].filter(Boolean).map(x=><option key={x}>{x}</option>)}</select>
+          <Link to="/app/accounts?new=1" className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#6F56D9] px-3 text-xs font-semibold text-white transition hover:bg-[#7D64E4]" data-testid="dash-add-account"><Plus className="h-3.5 w-3.5"/>Ajouter un compte</Link>
         </div>
+      </header>
+
+      <div className="flex items-center gap-2 px-1 text-[11px] text-[#737985]">
+        <span className={`h-1.5 w-1.5 rounded-full ${isEmptyAccount ? "bg-[#8071D8]" : "bg-[#3CB58B]"}`}/>
+        {isEmptyAccount ? "Ajoute un compte pour commencer l’analyse." : "Données synchronisées avec ton journal."}
       </div>
 
       {error && <div className="rounded-2xl border border-[#FF5252]/25 bg-[#FF5252]/10 p-4 text-sm text-[#FF8A8A] flex flex-col sm:flex-row sm:items-center justify-between gap-3"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 rounded-lg border border-[#FF5252]/20 px-3 py-2 text-xs hover:bg-[#FF5252]/10"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
-      {loading && <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{Array.from({length:4}).map((_,i)=><div key={i} className="h-40 rounded-2xl bg-white/[0.035] animate-pulse"/>)}</div>}
+      {loading && <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{Array.from({length:5}).map((_,i)=><div key={i} className="h-28 animate-pulse rounded-xl bg-white/[0.035]"/>)}</div>}
 
-      {!loading && <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-        <DashboardKpiCard label="Profit net" value={money(periodProfit,{signDisplay:"always"})} sub={`Sur les ${period} derniers jours`} sparkColor={periodProfit < 0 ? "red" : "green"} icon={TrendingUp} testid="kpi-profit" flat={periodProfit === 0} />
-        <DashboardKpiCard label="Score de discipline" value={<><span>{k.discipline_score}</span><span className="text-[#9CA3AF] text-base"> /100</span></>} sub={`${planRateLabel} · plan respecté`} sparkColor="purple" icon={BarChart3} testid="kpi-discipline" flat={Number(k.discipline_score) === 0} />
-        <DashboardKpiCard label="Comptes actifs" value={k.active_accounts} sub={`${k.active_accounts} compte${k.active_accounts>1?"s":""} suivi${k.active_accounts>1?"s":""}`} sparkColor="blue" icon={Shield} testid="kpi-accounts" flat={Number(k.active_accounts) === 0} />
-        <DashboardKpiCard label="Drawdown restant" value={money(k.remaining_drawdown)} sub="Marge de risque disponible" sparkColor="red" icon={ArrowDownRight} testid="kpi-dd" />
+      {!loading && <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <Kpi label="P&L net" value={money(periodProfit,{signDisplay:"always"})} detail={`${scopedTrades.length} trades`} tone={periodProfit < 0 ? "negative" : "positive"} testid="kpi-profit" />
+        <Kpi label="Win rate" value={`${scopedWinrate.toFixed(1)}%`} detail="Trades clôturés" />
+        <Kpi label="Profit factor" value={scopedProfitFactor.toFixed(2)} detail="Gains / pertes" />
+        <Kpi label="Discipline" value={`${k.discipline_score}/100`} detail={`${planRateLabel} · plan`} tone="accent" testid="kpi-discipline" />
+        <Kpi label="Drawdown disponible" value={money(k.remaining_drawdown)} detail={`${k.active_accounts} compte${k.active_accounts>1?"s":""} actif${k.active_accounts>1?"s":""}`} testid="kpi-dd" />
       </div>}
 
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="card-elev p-5 lg:col-span-2">
-          <div className="flex justify-between items-center">
-            <div className="text-sm font-semibold">Courbe d'équité</div>
-            <select value={period} onChange={e=>setPeriod(e.target.value)} className="text-xs bg-[#0D1020] text-[#9CA3AF] px-2.5 py-1 rounded-lg border border-white/5"><option value="7">7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option></select>
-          </div>
-          <div className="mt-4 h-64">
+      <div className="grid gap-3 xl:grid-cols-3">
+        <section className={`${panel} overflow-hidden xl:col-span-2`}>
+          <PanelHeader title="P&L cumulatif" detail={`${period} derniers jours`} />
+          <div className="h-[270px] px-3 pb-3 pt-4 sm:px-5">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={equityData}>
-                <defs><linearGradient id="eqfill-d" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7C4DFF" stopOpacity="0.55"/><stop offset="100%" stopColor="#7C4DFF" stopOpacity="0"/></linearGradient></defs>
-                <XAxis dataKey="date" stroke="#6B7280" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#6B7280" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v)=>money(v,{maximumFractionDigits:0})} />
-                <Tooltip contentStyle={{ background: "#0F1117", border: "1px solid #1E2430", borderRadius: 12, fontSize: 12 }} />
-                <Area type="monotone" dataKey="equity" stroke="#B58BFF" strokeWidth={2.4} fill="url(#eqfill-d)" />
+              <AreaChart data={equityData} margin={{top:8,right:8,left:0,bottom:0}}>
+                <defs><linearGradient id="eqfill-d" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7964D6" stopOpacity="0.24"/><stop offset="100%" stopColor="#7964D6" stopOpacity="0"/></linearGradient></defs>
+                <CartesianGrid vertical={false} stroke="rgba(255,255,255,.065)" strokeDasharray="3 4"/>
+                <XAxis dataKey="date" tick={{fill:"#707681",fontSize:10}} tickLine={false} axisLine={false} />
+                <YAxis width={58} tick={{fill:"#707681",fontSize:10}} tickLine={false} axisLine={false} tickFormatter={(v)=>money(v,{maximumFractionDigits:0})} />
+                <Tooltip contentStyle={{ background: "#1A1A1A", border: "1px solid #343434", borderRadius: 8, fontSize: 12 }} />
+                <Area type="monotone" dataKey="equity" stroke="#8B79DD" strokeWidth={1.8} fill="url(#eqfill-d)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </section>
 
-        <div className="grid grid-cols-1 gap-4">
-          <div className="card-elev p-5">
-            <div className="text-sm font-semibold mb-3">Progression des payouts</div>
-            <div className="text-xs text-[#9CA3AF]">{accList[0] ? `${accList[0].firm} · ${accList[0].name}` : "Aucun compte configuré"}</div>
-            <div className="flex items-baseline gap-2 mt-2">
-              <div className="text-2xl font-bold font-numeric">{money(k.total_payouts)}</div>
-              <div className="text-xs text-[#9CA3AF]">/ {money(payoutGoal)}</div>
-              <div className="ml-auto text-xs font-mono">{payoutProgress}%</div>
-            </div>
-            <div className="h-2 rounded-full bg-white/5 mt-2 overflow-hidden"><div className="h-full bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF] rounded-full" style={{ width: `${payoutProgress}%` }} /></div>
-            <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
-              <div><div className="text-xs text-[#9CA3AF]">Prochain payout estimé</div><div className="text-xl font-bold font-numeric mt-1">{money(k.estimated_payout)}</div></div>
-              <Link to="/app/payouts" className="text-xs text-[#B58BFF] flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/5 hover:border-[#7C4DFF]/40"><Calendar className="w-3 h-3"/>Simuler</Link>
-            </div>
-          </div>
-          <div className="card-elev p-5">
-            <div className="text-sm font-semibold mb-3">Répartition discipline</div>
-            <div className="flex items-center justify-center"><BigGauge value={k.discipline_score} /></div>
-            <Link to="/app/discipline" className="block text-center mt-2 text-xs text-[#B58BFF]" data-testid="dash-discipline-link">Détails →</Link>
-          </div>
-        </div>
+        <section className={`${panel} overflow-hidden`}>
+          <PanelHeader title="P&L journalier" detail="7 dernières séances" />
+          <div className="h-[270px] px-3 pb-3 pt-4 sm:px-5"><ResponsiveContainer width="100%" height="100%"><BarChart data={dailyData} margin={{top:8,right:4,left:0,bottom:0}}><CartesianGrid vertical={false} stroke="rgba(255,255,255,.065)" strokeDasharray="3 4"/><XAxis dataKey="date" tick={{fill:"#707681",fontSize:9}} tickLine={false} axisLine={false}/><YAxis width={54} tick={{fill:"#707681",fontSize:10}} tickLine={false} axisLine={false} tickFormatter={v=>money(v,{maximumFractionDigits:0})}/><ReferenceLine y={0} stroke="rgba(255,255,255,.2)"/><Tooltip contentStyle={{background:"#1A1A1A",border:"1px solid #343434",borderRadius:8,fontSize:12}} formatter={value=>[money(value,{signDisplay:"always"}),"P&L"]}/><Bar dataKey="pnl" fill="#7964D6" radius={[3,3,0,0]} maxBarSize={42}/></BarChart></ResponsiveContainer></div>
+        </section>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
-        <div className="card-elev overflow-hidden lg:col-span-2">
-          <div className="p-4 sm:p-5 border-b border-white/[0.06] bg-gradient-to-r from-white/[0.025] to-transparent">
+        <div className={`${panel} overflow-hidden lg:col-span-2`}>
+          <div className="border-b border-white/[0.07] p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2.5"><div className="text-sm font-semibold">Trades récents</div><span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] font-mono text-[#9CA3AF]">{filtered.length} affichés</span></div>
-              <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
-                <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className="min-w-0 text-xs bg-[#0D1020] text-[#B5BBC9] px-2.5 py-2 rounded-xl border border-white/[0.08] outline-none focus:border-[#7C4DFF]/60"><option value="">Tous les comptes</option>{accList.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
-                <select value={assetFilter} onChange={e=>setAssetFilter(e.target.value)} className="min-w-0 text-xs bg-[#0D1020] text-[#B5BBC9] px-2.5 py-2 rounded-xl border border-white/[0.08] outline-none focus:border-[#7C4DFF]/60"><option value="">Tous les actifs</option>{[...new Set(tradeList.map(t=>t.instrument))].filter(Boolean).map(x=><option key={x}>{x}</option>)}</select>
-              </div>
+              <Link to="/app/journal" className="text-xs text-[#9B8DE1] transition hover:text-white">Ouvrir le journal →</Link>
             </div>
           </div>
-          <div className="px-4 sm:px-5 pt-4"><div className="inline-flex gap-1 rounded-xl border border-white/[0.06] bg-[#090B13] p-1 text-xs">{["Tous","Gagnants","Perdants"].map(t => <button key={t} onClick={()=>setTab(t)} data-testid={`tab-${t}`} className={`rounded-lg px-3 py-1.5 transition ${tab===t ? "bg-[#7C4DFF]/20 text-white shadow-[inset_0_0_0_1px_rgba(124,77,255,.35)]" : "text-[#7E8798] hover:text-white"}`}>{t}</button>)}</div></div>
+          <div className="border-b border-white/[0.06] px-4 sm:px-5"><div className="flex gap-5 text-xs">{["Tous","Gagnants","Perdants"].map(t => <button key={t} onClick={()=>setTab(t)} data-testid={`tab-${t}`} className={`border-b-2 py-3 transition ${tab===t ? "border-[#7B68D4] text-white" : "border-transparent text-[#777D88] hover:text-white"}`}>{t}</button>)}</div></div>
 
           <div className="md:hidden p-4 space-y-2">
             {filtered.map(t => {
               const hasPnl = typeof t.pnl === "number"; const positive = hasPnl && t.pnl >= 0;
               const directionLong = String(t.direction).toLowerCase() === "long";
               const accountName = t.account || accList.find(a=>a.id===t.account_id)?.firm || "Compte";
-              return <div key={t.id} className="rounded-2xl border border-white/[0.07] bg-[#0B0E17] p-4 transition active:border-[#7C4DFF]/40">
+              return <div key={t.id} className="rounded-xl border border-white/[0.07] bg-[#181818] p-4 transition active:border-[#7C67D9]/40">
                 <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3 min-w-0"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#15182A] text-xs font-bold text-[#B58BFF]">{String(t.instrument || "?").slice(0,2)}</span><div className="min-w-0"><div className="font-semibold truncate">{t.instrument}</div><div className="text-[11px] text-[#6B7280] mt-0.5">{t.date} · {accountName}</div></div></div><div className="text-right"><div className="font-numeric font-semibold" style={{color:!hasPnl?"#9CA3AF":positive?"#00E676":"#FF5252"}}>{hasPnl?money(t.pnl,{minimumFractionDigits:2,maximumFractionDigits:2,signDisplay:"always"}):"—"}</div><div className="text-[10px] text-[#6B7280] mt-0.5">{typeof t.r==="number"?`${t.r.toFixed(2)}R`:"—"}</div></div></div>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.05]"><span className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${directionLong ? "bg-[#00E676]/10 text-[#00E676]" : "bg-[#FF5252]/10 text-[#FF7272]"}`}>{directionLong ? "Achat · Long" : "Vente · Short"}</span><span className="text-[11px] text-[#7E8798]">{t.duration || t.session || "—"}</span></div>
               </div>;
@@ -156,7 +155,7 @@ export default function Dashboard() {
             {!filtered.length && <div className="rounded-2xl border border-dashed border-white/10 py-10 text-center"><BarChart3 className="w-5 h-5 text-[#6B7280] mx-auto"/><p className="text-sm text-[#9CA3AF] mt-2">Aucun trade pour ces filtres.</p></div>}
           </div>
 
-          <div className="hidden md:block m-5 mt-4 overflow-x-auto rounded-2xl border border-white/[0.07] bg-[#090B13]">
+          <div className="m-5 mt-4 hidden overflow-x-auto rounded-lg border border-white/[0.07] bg-[#111] md:block">
             <table className="pe-table min-w-[820px]">
               <thead><tr><th className="text-left">Date</th><th className="text-left">Actif</th><th className="text-left">Direction</th><th className="text-right">Résultat</th><th className="text-right">R Multiple</th><th className="text-left">Durée</th><th className="text-left">Compte</th><th className="text-left">Tags</th></tr></thead>
               <tbody>
@@ -178,16 +177,28 @@ export default function Dashboard() {
               </tbody>
             </table>
           </div>
-          <div className="px-5 pb-5"><Link to="/app/journal" className="block rounded-xl border border-white/[0.07] py-2.5 text-center text-xs text-[#B58BFF] transition hover:bg-[#7C4DFF]/10 hover:text-white">Voir tous les trades →</Link></div>
+          <div className="px-5 pb-5"><Link to="/app/journal" className="block rounded-lg border border-white/[0.08] py-2.5 text-center text-xs text-[#AAA1D8] transition hover:border-white/[0.16] hover:text-white">Voir tous les trades →</Link></div>
         </div>
 
         <div className="space-y-4">
-          <div className="card-elev p-5 glow-purple">
-            <div className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="w-4 h-4 text-[#B58BFF]"/> AI Coach Insight</div>
-            <p className="text-xs text-[#B5BBC9] mt-3 leading-relaxed">{insight}</p>
-            <Link to="/app/coach" className="block text-center mt-4 text-xs btn-primary py-2" data-testid="dash-insight-link">Voir l'insight →</Link>
+          <div className={`${panel} p-5`}>
+            <div className="flex items-start justify-between gap-3">
+              <div><div className="text-sm font-semibold">Répartition discipline</div><div className="mt-1 text-[10px] text-[#686E79]">Respect du plan sur les trades renseignés</div></div>
+              <Link to="/app/discipline" className="text-[10px] text-[#9B8DE1] transition hover:text-white" data-testid="dash-discipline-link">Détails →</Link>
+            </div>
+            <div className="mt-5 flex items-end justify-between gap-4">
+              <div className="font-numeric text-3xl font-semibold tracking-[-.03em] text-[#F0F0F1]">{k.discipline_score}<span className="ml-1 text-sm font-normal text-[#6F7580]">/100</span></div>
+              <div className="text-right"><div className="font-numeric text-sm font-semibold text-[#A492F0]">{planRateLabel}</div><div className="mt-1 text-[9px] uppercase tracking-[.12em] text-[#626873]">Plan respecté</div></div>
+            </div>
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/[0.065]"><div className="h-full rounded-full bg-[#7B68D4] transition-[width] duration-500" style={{width:`${Math.max(0,Math.min(100,Number(k.discipline_score||0)))}%`}}/></div>
+            <div className="mt-3 flex items-center justify-between text-[10px] text-[#6F7580]"><span>{k.total_trades || recent.length} trades suivis</span><span>{k.discipline_score >= 80 ? "Solide" : k.discipline_score >= 60 ? "À consolider" : k.discipline_score ? "À améliorer" : "En attente"}</span></div>
           </div>
-          <div className="card-elev p-5 overflow-hidden">
+          <div className={`${panel} p-5`}>
+            <div className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4 text-[#8F7DDE]"/>Atlas · aperçu</div>
+            <p className="text-xs text-[#B5BBC9] mt-3 leading-relaxed">{insight}</p>
+            <Link to="/app/coach" className="mt-4 block rounded-lg border border-white/[0.09] py-2 text-center text-xs text-[#AAA1D8] transition hover:border-white/[0.16] hover:text-white" data-testid="dash-insight-link">Ouvrir l’analyse →</Link>
+          </div>
+          <div className={`${panel} overflow-hidden p-5`}>
             <div className="flex items-center justify-between mb-3">
               <div><div className="text-sm font-semibold">Comptes</div><div className="text-[10px] text-[#6B7280] mt-1">Santé et performance</div></div>
               <Link to="/app/accounts" className="text-xs text-[#B58BFF]">Voir tout</Link>
@@ -197,12 +208,12 @@ export default function Dashboard() {
               const pnl = Number(a.balance || 0) - Number(a.initial_balance || 0);
               const health = Math.max(0, Math.min(100, Number(a.health_score ?? (pnl >= 0 ? 82 : 48))));
               return (
-                <div key={a.id} className="rounded-xl border border-white/[0.065] bg-[#0A0D16] p-3 transition hover:border-white/[0.12]">
+                <div key={a.id} className="rounded-lg border border-white/[0.065] bg-[#191919] p-3 transition hover:border-white/[0.12]">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 min-w-0"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#15182A] text-[10px] font-bold text-[#B58BFF]">{String(a.firm || a.name || "C").slice(0,2).toUpperCase()}</span><div className="min-w-0"><div className="text-xs font-medium truncate">{a.name || a.firm}</div><div className="text-[9px] text-[#6B7280] truncate mt-0.5">{a.firm || "Compte de trading"}</div></div></div>
                     <div className="text-right shrink-0"><div className="text-xs font-numeric font-semibold" style={{ color: pnl >= 0 ? "#00E676" : "#FF5252" }}>{money(pnl,{signDisplay:"always"})}</div><div className="text-[9px] text-[#6B7280] mt-0.5">P&amp;L</div></div>
                   </div>
-                  <div className="mt-3 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.05]"><div className="h-full rounded-full bg-gradient-to-r from-[#4F8CFF] to-[#7C4DFF]" style={{width:`${health}%`}}/></div><span className="w-7 text-right text-[9px] font-mono text-[#8B93A3]">{health}%</span></div>
+                  <div className="mt-3 flex items-center gap-2"><div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-[#7B68D4]" style={{width:`${health}%`}}/></div><span className="w-7 text-right text-[9px] font-mono text-[#8B93A3]">{health}%</span></div>
                 </div>
               );
             })}
@@ -216,19 +227,18 @@ export default function Dashboard() {
   );
 }
 
-function BigGauge({ value }) {
-  const pct = value / 100;
-  return (
-    <div className="relative w-44 h-28">
-      <svg viewBox="0 0 200 110" className="w-full h-full">
-        <defs><linearGradient id="bg-grad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#00E676"/><stop offset="100%" stopColor="#7C4DFF"/></linearGradient></defs>
-        <path d="M20 95 A75 75 0 0 1 180 95" stroke="#1E2430" strokeWidth="12" fill="none" strokeLinecap="round" />
-        <path d="M20 95 A75 75 0 0 1 180 95" stroke="url(#bg-grad)" strokeWidth="12" fill="none" strokeLinecap="round" strokeDasharray="236" strokeDashoffset={236 - 236*pct} />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-end pb-2">
-        <div className="text-3xl font-bold font-numeric">{value}<span className="text-sm text-[#9CA3AF]">/100</span></div>
-        <div className="text-[10px] text-[#9CA3AF] mt-0.5">{value>=80?"Excellent":value>=60?"À consolider":value?"À améliorer":"En attente"}</div>
-      </div>
-    </div>
-  );
+function Kpi({ label, value, detail, tone = "neutral", testid }) {
+  const colors = { positive: "text-[#46C99A]", negative: "text-[#F26A70]", accent: "text-[#A492F0]", neutral: "text-[#F2F2F3]" };
+  return <div className="rounded-xl border border-white/[0.085] bg-[#141414] p-4" data-testid={testid}>
+    <div className="text-[11px] text-[#858A94]">{label}</div>
+    <div className={`mt-2 font-numeric text-xl font-semibold tracking-[-.02em] sm:text-2xl ${colors[tone]}`}>{value}</div>
+    <div className="mt-2 text-[10px] text-[#646A75]">{detail}</div>
+  </div>;
+}
+
+function PanelHeader({ title, detail }) {
+  return <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3.5 sm:px-5">
+    <h2 className="text-sm font-semibold text-[#E7E7E8]">{title}</h2>
+    <span className="text-[10px] text-[#6F7580]">{detail}</span>
+  </div>;
 }
