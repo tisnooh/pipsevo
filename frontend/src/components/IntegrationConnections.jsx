@@ -121,12 +121,19 @@ export default function IntegrationConnections({ compact = false, returnPath = "
     setActionId(formProvider);
     try {
       if (formProvider === "metaapi") {
-        const payload = { ...metaForm, password: metaForm.password || null };
+        const payload = { ...metaForm };
         const { data } = await integrationConnections.startMetaApi(payload);
         setMetaForm(EMPTY_META);
-        setConfiguration(data);
-        window.open(data.configuration_link, "_blank", "noopener,noreferrer");
-        toast.success("Lien MetaApi ouvert dans un nouvel onglet");
+        if (data.next_step === "configure_provider_then_finalize" && data.configuration_link) {
+          setConfiguration(data);
+          window.open(data.configuration_link, "_blank", "noopener,noreferrer");
+          toast.success("Lien MetaApi ouvert dans un nouvel onglet");
+        } else {
+          setFormProvider(null);
+          await load();
+          toast.success("Compte transmis à MetaApi. Connexion et import en cours.");
+          void pollMetaApi(data.connection);
+        }
       } else if (formProvider === "tradelocker") {
         const { data } = await integrationConnections.connectTradeLocker(tlForm);
         setTlForm(EMPTY_TL);
@@ -163,6 +170,29 @@ export default function IntegrationConnections({ compact = false, returnPath = "
     } catch (error) {
       toast.error(publicError(error, "La configuration MetaApi n’est pas encore terminée"));
     } finally { setActionId(null); }
+  };
+
+  const pollMetaApi = async (connection, attempts = 8) => {
+    if (!connection?.id) return;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      await new Promise(resolve => window.setTimeout(resolve, 5000));
+      try {
+        const { data } = await integrationConnections.finalizeMetaApi(connection.id);
+        await load();
+        toast.success("Compte MetaTrader connecté et synchronisation lancée.");
+        connectionReadyRef.current?.({ provider: "metaapi", connection: data.connection });
+        return;
+      } catch (error) {
+        const detail = error?.response?.data?.detail;
+        const code = typeof detail === "object" ? detail?.code : null;
+        if (code !== "provider_configuration_pending") {
+          toast.error(publicError(error, "La connexion MetaTrader a échoué"));
+          return;
+        }
+      }
+    }
+    toast.info("MetaApi termine encore la connexion. Elle apparaîtra automatiquement dès qu’elle sera prête.");
+    await load();
   };
 
   const openSelection = (connectionId, accounts) => {
@@ -262,8 +292,8 @@ function ProviderForm({ provider, metaForm, setMetaForm, tlForm, setTlForm, busy
   const setForm = meta ? setMetaForm : setTlForm;
   const field = (key, value) => setForm(current => ({ ...current, [key]: value }));
   return <form onSubmit={onSubmit} className="space-y-4">
-    {meta ? <><div className="grid gap-3 sm:grid-cols-2"><Field label="Plateforme"><select value={form.platform} onChange={e => field("platform", e.target.value)} className="field"><option value="mt5">MetaTrader 5</option><option value="mt4">MetaTrader 4</option></select></Field><Field label="Nom dans PipsEvo"><input required maxLength={100} value={form.name} onChange={e => field("name", e.target.value)} className="field"/></Field></div><Field label="Numéro de compte"><input required inputMode="numeric" value={form.login} onChange={e => field("login", e.target.value)} className="field"/></Field><Field label="Serveur exact"><input required value={form.server} onChange={e => field("server", e.target.value)} className="field"/></Field><Field label="Mot de passe investisseur (facultatif)"><input type="password" autoComplete="new-password" value={form.password} onChange={e => field("password", e.target.value)} className="field"/></Field></> : <><Field label="Environnement"><select value={form.environment} onChange={e => field("environment", e.target.value)} className="field"><option value="demo">Démo</option><option value="live">Réel</option></select></Field><Field label="Email TradeLocker"><input type="email" autoComplete="username" required value={form.email} onChange={e => field("email", e.target.value)} className="field"/></Field><Field label="Serveur"><input required value={form.server} onChange={e => field("server", e.target.value)} className="field"/></Field><Field label="Mot de passe"><input type="password" autoComplete="current-password" required value={form.password} onChange={e => field("password", e.target.value)} className="field"/></Field></>}
-    <DialogFooter><button disabled={busy} className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin"/> : <Server className="h-4 w-4"/>}{meta ? "Créer le lien sécurisé" : "Autoriser TradeLocker"}</button></DialogFooter>
+    {meta ? <><div className="grid gap-3 sm:grid-cols-2"><Field label="Plateforme"><select value={form.platform} onChange={e => field("platform", e.target.value)} className="field"><option value="mt5">MetaTrader 5</option><option value="mt4">MetaTrader 4</option></select></Field><Field label="Nom dans PipsEvo"><input required maxLength={100} value={form.name} onChange={e => field("name", e.target.value)} className="field"/></Field></div><Field label="Numéro de compte"><input required inputMode="numeric" value={form.login} onChange={e => field("login", e.target.value)} className="field"/></Field><Field label="Serveur exact"><input required value={form.server} onChange={e => field("server", e.target.value)} className="field"/></Field><Field label="Mot de passe investisseur"><input required type="password" autoComplete="new-password" value={form.password} onChange={e => field("password", e.target.value)} className="field"/></Field><p className="text-[11px] leading-relaxed text-[#737C8D]">Utilise de préférence le mot de passe investisseur : PipsEvo importe les données en lecture seule et ne conserve pas ce mot de passe.</p></> : <><Field label="Environnement"><select value={form.environment} onChange={e => field("environment", e.target.value)} className="field"><option value="demo">Démo</option><option value="live">Réel</option></select></Field><Field label="Email TradeLocker"><input type="email" autoComplete="username" required value={form.email} onChange={e => field("email", e.target.value)} className="field"/></Field><Field label="Serveur"><input required value={form.server} onChange={e => field("server", e.target.value)} className="field"/></Field><Field label="Mot de passe"><input type="password" autoComplete="current-password" required value={form.password} onChange={e => field("password", e.target.value)} className="field"/></Field></>}
+    <DialogFooter><button disabled={busy} className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin"/> : <Server className="h-4 w-4"/>}{meta ? "Connecter MetaTrader" : "Autoriser TradeLocker"}</button></DialogFooter>
   </form>;
 }
 function Field({ label, children }) { return <label className="block text-xs text-[#9CA3AF]">{label}{React.cloneElement(children, { className: `${children.props.className || ""} mt-2 w-full rounded-xl border border-white/10 bg-[#0D1020] px-4 py-3 text-white outline-none focus:border-[#7C4DFF]` })}</label>; }

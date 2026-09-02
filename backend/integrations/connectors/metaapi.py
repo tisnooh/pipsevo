@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from decimal import Decimal
+import secrets
 
 from ..errors import IntegrationError
 from ..models import (
@@ -35,7 +36,7 @@ class MetaApiConnector(TradingConnector):
     async def create_configuration_link(self, request: MetaApiLinkRequest) -> dict:
         body = {
             "name": request.name,
-            "type": "cloud",
+            "type": "cloud-g2",
             "login": request.login,
             "server": request.server,
             "platform": request.platform,
@@ -45,16 +46,39 @@ class MetaApiConnector(TradingConnector):
         # after this request; it is never returned to the service or persisted.
         if request.password:
             body["password"] = request.password.get_secret_value()
+        headers = {**self.headers, "transaction-id": secrets.token_hex(16)}
         created = await request_json(
             "POST",
             f"{self.provisioning_url}/users/current/accounts",
-            headers=self.headers,
+            headers=headers,
             json=body,
-            expected=(200, 201),
+            expected=(200, 201, 202),
         )
         account_id = str(created.get("id") or created.get("_id") or "")
         if not account_id:
+            if created.get("message"):
+                raise IntegrationError(
+                    "provider_processing",
+                    "MetaApi vérifie le serveur de trading. Réessaie la connexion dans une minute.",
+                    409,
+                )
             raise IntegrationError("provider_invalid_response", "MetaApi n’a pas créé le compte.", 502)
+
+        # When the password was supplied, MetaApi already has everything it
+        # needs to start the terminal. A configuration link would ask the user
+        # to enter the same credentials a second time.
+        if request.password:
+            return {
+                "provider_account_id": account_id,
+                "configuration_link": None,
+                "mode": "direct",
+                "state": created.get("state"),
+                "platform": request.platform,
+                "login": request.login,
+                "server": request.server,
+                "name": request.name,
+            }
+
         link = await request_json(
             "PUT",
             f"{self.provisioning_url}/users/current/accounts/{account_id}/configuration-link",
@@ -65,6 +89,8 @@ class MetaApiConnector(TradingConnector):
         return {
             "provider_account_id": account_id,
             "configuration_link": link.get("configurationLink") or link.get("url"),
+            "mode": "configuration_link",
+            "state": created.get("state"),
             "platform": request.platform,
             "login": request.login,
             "server": request.server,

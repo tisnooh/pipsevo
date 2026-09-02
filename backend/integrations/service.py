@@ -272,6 +272,7 @@ class IntegrationService:
         await self._ensure_attempt_allowed(user_id)
         try:
             link = await provider.create_configuration_link(request)
+            direct = link.get("mode") == "direct"
             connection = await self.repository.create_connection(
                 {
                     "user_id": user_id,
@@ -282,7 +283,7 @@ class IntegrationService:
                     "server_name": request.server,
                     "account_number_masked": mask_account_number(request.login),
                     "display_name": request.name,
-                    "auth_type": "provider_link",
+                    "auth_type": "credentials_exchange" if direct else "provider_link",
                     "permission_scope": "read",
                     "provider_metadata": {"platform": request.platform},
                     "connection_status": "pending",
@@ -297,13 +298,20 @@ class IntegrationService:
             )
             await self.repository.record_attempt(user_id, True, platform=request.platform)
             await self.repository.audit(
-                user_id, "metaapi_configuration_link_created", "success", connection["id"]
+                user_id,
+                "metaapi_connection_started" if direct else "metaapi_configuration_link_created",
+                "success",
+                connection["id"],
             )
             # request.password is never copied into link, connection, audit, or encrypted storage.
+            if direct and str(link.get("state") or "").upper() != "DEPLOYED":
+                await provider.deploy(link["provider_account_id"])
             return {
                 "connection": connection,
                 "configuration_link": link["configuration_link"],
-                "next_step": "configure_provider_then_finalize",
+                "next_step": (
+                    "wait_for_connection" if direct else "configure_provider_then_finalize"
+                ),
             }
         except Exception as exc:
             safe = self._safe_error(exc)

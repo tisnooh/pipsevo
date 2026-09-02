@@ -1,10 +1,12 @@
 import asyncio
+from pydantic import SecretStr
 from datetime import datetime, timezone
 from decimal import Decimal
 
 from integrations.config import IntegrationConfig
 from integrations.connectors.ctrader import CTraderConnector
 from integrations.connectors.metaapi import MetaApiConnector
+from integrations.models import MetaApiLinkRequest
 from integrations.models import ProviderTradeRecord
 from integrations.normalization import json_safe_trade, normalize_trade
 from integrations.repository import SupabaseIntegrationRepository
@@ -43,6 +45,36 @@ def test_default_integration_plans_match_current_subscription_catalog(monkeypatc
     config = IntegrationConfig.from_env()
 
     assert config.allowed_plans == ("free", "beta", "essential", "pro")
+
+
+def test_metaapi_password_uses_direct_connection_without_configuration_link(monkeypatch):
+    requests = []
+
+    async def fake_request(method, url, **kwargs):
+        requests.append((method, url, kwargs))
+        return {"id": "meta-account", "state": "DEPLOYED"}
+
+    monkeypatch.setattr(
+        "integrations.connectors.metaapi.request_json", fake_request
+    )
+    connector = MetaApiConnector("token")
+    result = asyncio.run(
+        connector.create_configuration_link(
+            MetaApiLinkRequest(
+                platform="mt5",
+                name="Compte principal",
+                login="12345678",
+                server="Broker-Demo",
+                password=SecretStr("investor-password"),
+            )
+        )
+    )
+
+    assert result["mode"] == "direct"
+    assert result["configuration_link"] is None
+    assert len(requests) == 1
+    assert len(requests[0][2]["headers"]["transaction-id"]) == 32
+    assert requests[0][2]["json"]["type"] == "cloud-g2"
 
 
 def test_normalized_provider_trade_does_not_invent_plan_compliance():
