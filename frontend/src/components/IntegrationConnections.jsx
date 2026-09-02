@@ -23,7 +23,7 @@ const EMPTY_META = {
 };
 const EMPTY_TL = { email: "", password: "", server: "", environment: "demo" };
 const statusCopy = {
-  connected: ["Connectée", "text-[#00E676]"],
+  connected: ["Connectée", "text-[#46C99A]"],
   disconnected: ["Déconnectée", "text-[#8B93A3]"],
   expired: ["Autorisation expirée", "text-[#FFB855]"],
   error: ["Action requise", "text-[#FF667D]"],
@@ -261,7 +261,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#7C4DFF]/12 text-[#A98BFF]"><Database className="h-5 w-5"/></span>
           <div><h2 className="font-semibold">Centre de connexions</h2><p className="mt-1 max-w-2xl text-xs leading-relaxed text-[#7E8798]">Autorise une plateforme, choisis précisément les comptes à suivre, puis laisse PipsEvo importer uniquement les données de lecture.</p></div>
         </div>
-        <span className="inline-flex w-fit items-center gap-2 rounded-full border border-[#00E676]/15 bg-[#00E676]/[0.04] px-3 py-1 text-[10px] text-[#61E7AE]"><LockKeyhole className="h-3 w-3"/>Jetons chiffrés côté serveur</span>
+        <span className="inline-flex w-fit items-center gap-2 rounded-full border border-[#46C99A]/15 bg-[#46C99A]/[0.04] px-3 py-1 text-[10px] text-[#61E7AE]"><LockKeyhole className="h-3 w-3"/>Jetons chiffrés côté serveur</span>
       </div>}
       <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-3">
         {PROVIDERS.map(provider => {
@@ -269,7 +269,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
           const available = Boolean(capability?.available);
           const busy = actionId === provider.id;
           return <article key={provider.id} className="flex min-h-44 flex-col rounded-xl border border-[#6571CF]/20 bg-[#0D1120] p-4 transition-colors hover:border-[#7881E8]/35">
-            <div className="flex items-start justify-between gap-3"><span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-[#7C4DFF]/20 to-[#4F8CFF]/15 font-semibold text-[#C8B9FF]">{provider.mark}</span><span className={`rounded-full border px-2.5 py-1 text-[9px] ${available ? "border-[#00E676]/15 text-[#00E676]" : "border-white/[0.08] text-[#737C8D]"}`}>{available ? "Disponible" : provider.id === "ninjatrader" ? "Bientôt disponible" : "Indisponible"}</span></div>
+            <div className="flex items-start justify-between gap-3"><span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-[#7C4DFF]/20 to-[#4F8CFF]/15 font-semibold text-[#C8B9FF]">{provider.mark}</span><span className={`rounded-full border px-2.5 py-1 text-[9px] ${available ? "border-[#46C99A]/15 text-[#46C99A]" : "border-white/[0.08] text-[#737C8D]"}`}>{available ? "Disponible" : provider.id === "ninjatrader" ? "Bientôt disponible" : "Indisponible"}</span></div>
             <h3 className="mt-4 text-sm font-semibold">{provider.name}</h3><p className="mt-1 flex-1 text-xs leading-relaxed text-[#7E8798]">{provider.copy}</p>
             <button onClick={() => launchProvider(provider)} disabled={!available || busy} className="mt-4 inline-flex items-center gap-2 text-xs font-medium text-[#B69CFF] disabled:cursor-not-allowed disabled:text-[#555D6C]">{busy ? <Loader2 className="h-4 w-4 animate-spin"/> : available ? <Link2 className="h-4 w-4"/> : <Clock3 className="h-4 w-4"/>}{available ? "Connecter" : "Non activé"}<ChevronRight className="ml-auto h-4 w-4"/></button>
           </article>;
@@ -292,7 +292,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
     <Dialog open={Boolean(selectConnection)} onOpenChange={open => { if (!open) setSelectConnection(null); }}>
       <DialogContent className="max-h-[92vh] overflow-y-auto border-[#6571CF]/25 bg-[#090E1C] text-white sm:max-w-xl">
         <DialogHeader><DialogTitle>Choisir les comptes à synchroniser</DialogTitle><DialogDescription className="text-[#8B93A3]">Seuls les comptes cochés seront importés automatiquement.</DialogDescription></DialogHeader>
-        <div className="space-y-2">{(selectConnection?.integration_accounts || []).map(account => { const checked = selectedIds.includes(account.external_account_id); return <label key={account.external_account_id} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 ${checked ? "border-[#8075ED]/45 bg-[#8075ED]/[0.08]" : "border-[#6571CF]/20 bg-[#0C1122]"}`}><input type="checkbox" checked={checked} onChange={() => setSelectedIds(current => checked ? current.filter(id => id !== account.external_account_id) : [...current, account.external_account_id])} className="h-4 w-4 accent-[#7C4DFF]"/><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{account.account_name || account.display_name || `Compte ${account.external_account_id.slice(-4)}`}</span><span className="mt-0.5 block text-[10px] text-[#737C8D]">{[account.broker_name, account.server_name, account.account_number_masked, account.currency].filter(Boolean).join(" · ")}</span></span>{checked && <CheckCircle2 className="h-4 w-4 text-[#00E676]"/>}</label>; })}</div>
+        <div className="space-y-2">{(selectConnection?.integration_accounts || []).map(account => { const checked = selectedIds.includes(account.external_account_id); return <label key={account.external_account_id} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 ${checked ? "border-[#8075ED]/45 bg-[#8075ED]/[0.08]" : "border-[#6571CF]/20 bg-[#0C1122]"}`}><input type="checkbox" checked={checked} onChange={() => setSelectedIds(current => checked ? current.filter(id => id !== account.external_account_id) : [...current, account.external_account_id])} className="h-4 w-4 accent-[#7C4DFF]"/><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{account.account_name || account.display_name || `Compte ${account.external_account_id.slice(-4)}`}</span><span className="mt-0.5 block text-[10px] text-[#737C8D]">{[account.broker_name, account.server_name, account.account_number_masked, account.currency].filter(Boolean).join(" · ")}</span></span>{checked && <CheckCircle2 className="h-4 w-4 text-[#46C99A]"/>}</label>; })}</div>
         <DialogFooter><button onClick={() => setSelectConnection(null)} className="btn-ghost">Plus tard</button><button onClick={saveSelection} disabled={!selectedIds.length || actionId === selectConnection?.id} className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-50">{actionId === selectConnection?.id && <Loader2 className="h-4 w-4 animate-spin"/>}Importer les comptes</button></DialogFooter>
       </DialogContent>
     </Dialog>

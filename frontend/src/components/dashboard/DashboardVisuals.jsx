@@ -2,7 +2,7 @@ import React, { useId } from "react";
 import { motion } from "framer-motion";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-const colors = { green: "#00E676", purple: "#B58BFF", blue: "#4F8CFF", red: "#FF5252" };
+const colors = { green: "#46C99A", purple: "#B58BFF", blue: "#4F8CFF", red: "#F26A70" };
 
 const sparkData = (seed, down) => {
   const points = [];

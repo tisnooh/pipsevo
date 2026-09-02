@@ -75,11 +75,11 @@ export default function Payouts() {
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row"><CsvExportButton rows={payoutExportRows} type="payouts" filename="pipsevo-payouts" className="btn-ghost w-full py-2.5 text-sm sm:w-auto"/><button onClick={()=>accs.length ? setOpen(true) : toast.error("Ajoute d’abord un compte")} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 w-full sm:w-auto" data-testid="add-payout-btn"><Plus className="w-4 h-4"/> Enregistrer un payout</button></div>
       </div>
-      {error && <div className="rounded-2xl border border-[#FF5252]/25 bg-[#FF5252]/10 p-4 text-sm text-[#FF8A8A] flex justify-between gap-3"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 text-xs"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
+      {error && <div className="rounded-2xl border border-[#F26A70]/25 bg-[#F26A70]/10 p-4 text-sm text-[#FF8A8A] flex justify-between gap-3"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 text-xs"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
       {loading && <div className="grid sm:grid-cols-3 gap-4">{Array.from({length:3}).map((_,i)=><div key={i} className="h-28 pe-card animate-pulse"/>)}</div>}
 
       {!loading && <div className="grid sm:grid-cols-3 gap-4">
-        <Stat label="Total retiré" value={money(kpi?.total_payouts||0)} color="#00E676" icon={Banknote} />
+        <Stat label="Total retiré" value={money(kpi?.total_payouts||0)} color="#46C99A" icon={Banknote} />
         <Stat label="Prochain payout estimé" value={money(kpi?.estimated_payout||0)} color="#B58BFF" icon={TrendingUp} />
         <Stat label="Payouts enregistrés" value={list.length} color="#4F8CFF" icon={Calendar} />
       </div>}
@@ -90,7 +90,7 @@ export default function Payouts() {
           <div><div className="pe-section-title">Retrait prudent par compte</div><p className="pe-page-copy mt-1">Estimation basée sur ton solde et ton drawdown configuré. Elle ne remplace pas les conditions d’éligibilité de la prop firm.</p></div>
           {accs.length ? <>
             <div className="grid gap-3 sm:grid-cols-2"><label className="text-xs text-[#9CA3AF]">Compte<select value={safeAccountId} onChange={event=>setSafeAccountId(event.target.value)} className="pe-control mt-1 w-full"><option value="">Choisir un compte</option>{accs.map(account=><option key={account.id} value={account.id}>{account.firm} — {account.name}</option>)}</select></label><Fld label="Marge de sécurité (%)" type="number" value={safetyBuffer} onChange={setSafetyBuffer} testid="safe-buffer" /></div>
-            {safeWithdrawal && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><SimOut label="Retrait prudent" value={money(safeWithdrawal.safeAmount)} color="#00E676"/><SimOut label="Solde projeté" value={money(safeWithdrawal.projectedBalance)} color="#B58BFF"/><SimOut label="Plancher protégé" value={money(safeWithdrawal.protectedFloor)} color="#FFB855"/><SimOut label="Marge drawdown" value={money(safeWithdrawal.remainingDrawdown)} color="#4F8CFF"/></div>}
+            {safeWithdrawal && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><SimOut label="Retrait prudent" value={money(safeWithdrawal.safeAmount)} color="#46C99A"/><SimOut label="Solde projeté" value={money(safeWithdrawal.projectedBalance)} color="#B58BFF"/><SimOut label="Plancher protégé" value={money(safeWithdrawal.protectedFloor)} color="#FFB855"/><SimOut label="Marge drawdown" value={money(safeWithdrawal.remainingDrawdown)} color="#4F8CFF"/></div>}
           </> : <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-[#7E8798]">Ajoute un compte pour calculer une estimation.</div>}
           <div className="border-t border-white/[0.07] pt-5"><div className="text-sm font-semibold mb-4">Projection d’objectif</div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -99,9 +99,9 @@ export default function Payouts() {
             <Fld label={`Objectif (${settings.currency})`} value={sim.target} onChange={(v)=>setSim({...sim,target:v})} testid="sim-target" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
-            <SimOut label="Estimé" value={money(estimated)} color="#00E676" />
+            <SimOut label="Estimé" value={money(estimated)} color="#46C99A" />
             <SimOut label="Date estimée" value={date(new Date(Date.now()+Number(sim.days)*86400000))} color="#B58BFF" />
-            <SimOut label="Écart objectif" value={money(gap,{signDisplay:"always"})} color={gap>=0?"#00E676":"#FF5252"} />
+            <SimOut label="Écart objectif" value={money(gap,{signDisplay:"always"})} color={gap>=0?"#46C99A":"#F26A70"} />
           </div>
           </div>
         </div>
@@ -112,8 +112,8 @@ export default function Payouts() {
             <div className="space-y-1">
               {list.map(p => (
                 <div key={p.id} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0" data-testid={`payout-${p.id}`}>
-                  <div className="flex items-center gap-3"><Banknote className="w-4 h-4 text-[#00E676]"/><div><div className="text-sm">{date(p.date)}</div><div className="text-xs text-[#9CA3AF]">{p.note || "—"}</div></div></div>
-                  <div className="flex items-center gap-3"><div className="text-lg font-bold font-numeric text-[#00E676]">{money(p.amount,{signDisplay:"always"})}</div><button disabled={deleting===p.id} onClick={()=>remove(p)} aria-label="Supprimer le payout" className="text-[#6B7280] hover:text-[#FF5252] disabled:opacity-40"><Trash2 className="w-4 h-4"/></button></div>
+                  <div className="flex items-center gap-3"><Banknote className="w-4 h-4 text-[#46C99A]"/><div><div className="text-sm">{date(p.date)}</div><div className="text-xs text-[#9CA3AF]">{p.note || "—"}</div></div></div>
+                  <div className="flex items-center gap-3"><div className="text-lg font-bold font-numeric text-[#46C99A]">{money(p.amount,{signDisplay:"always"})}</div><button disabled={deleting===p.id} onClick={()=>remove(p)} aria-label="Supprimer le payout" className="text-[#6B7280] hover:text-[#F26A70] disabled:opacity-40"><Trash2 className="w-4 h-4"/></button></div>
                 </div>
               ))}
             </div>

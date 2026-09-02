@@ -115,7 +115,7 @@ export default function AccountSetupFlow({ onComplete, onCancel, welcome = false
       <ChoiceCard icon={PenLine} title="Configuration manuelle" copy="Crée le compte avec son capital, ses limites et ses objectifs, puis ajoute les trades à ton rythme." detail="Aucun identifiant de plateforme requis" onClick={() => setStep("manual")}/>
       <button type="button" onClick={() => navigate("/app/journal?import=1")} className="group flex items-center gap-4 rounded-2xl border border-dashed border-[#4F8CFF]/20 bg-[#4F8CFF]/[0.025] p-4 text-left transition hover:border-[#4F8CFF]/45 sm:col-span-2"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#4F8CFF]/10 text-[#8FB4FF]"><FileUp className="h-5 w-5"/></span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">Importer un fichier</span><span className="mt-1 block text-xs leading-relaxed text-[#7E8798]">Utilise un export CSV ou un rapport HTML MetaTrader si la synchronisation n’est pas disponible.</span></span><ArrowRight className="h-4 w-4 text-[#61708B] transition group-hover:translate-x-1 group-hover:text-white"/></button>
     </div>
-    <div className="mt-5 flex items-center gap-2 text-[10px] text-[#667083]"><ShieldCheck className="h-3.5 w-3.5 text-[#00E676]"/>Les connexions automatiques utilisent un accès de lecture et des secrets chiffrés côté serveur.</div>
+    <div className="mt-5 flex items-center gap-2 text-[10px] text-[#667083]"><ShieldCheck className="h-3.5 w-3.5 text-[#46C99A]"/>Les connexions automatiques utilisent un accès de lecture et des secrets chiffrés côté serveur.</div>
   </div>;
 }
 
@@ -125,7 +125,7 @@ function FlowHeader({ eyebrow, title, copy, onBack }) {
 
 function ChoiceCard({ icon: Icon, badge, title, copy, detail, onClick }) {
   return <button type="button" onClick={onClick} className="group relative min-h-52 rounded-xl border border-[#6571CF]/20 bg-[#0D1120] p-5 text-left transition hover:-translate-y-0.5 hover:border-[#8075ED]/45 hover:bg-[#8075ED]/[0.045]">
-    {badge && <span className="absolute right-4 top-4 rounded-full border border-[#00E676]/20 bg-[#00E676]/[0.07] px-2 py-1 text-[9px] font-medium text-[#67E9AD]">{badge}</span>}
+    {badge && <span className="absolute right-4 top-4 rounded-full border border-[#46C99A]/20 bg-[#46C99A]/[0.07] px-2 py-1 text-[9px] font-medium text-[#67E9AD]">{badge}</span>}
     <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-[#7C4DFF]/20 to-[#4F8CFF]/12 text-[#B69CFF]"><Icon className="h-5 w-5"/></span>
     <span className="mt-5 block text-sm font-semibold">{title}</span><span className="mt-2 block text-xs leading-relaxed text-[#7E8798]">{copy}</span><span className="mt-4 flex items-center gap-2 text-[10px] text-[#8D79C8]"><Sparkles className="h-3 w-3"/>{detail}</span>
   </button>;

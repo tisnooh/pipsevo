@@ -120,8 +120,8 @@ export function JournalPage() {
     asset: t.instrument || t.asset || "—",
     direction: t.direction === "long" ? "Achat (Long)" : t.direction === "short" ? "Vente (Short)" : t.direction,
     win: (t.pnl ?? 0) > 0,
-    toneClass: typeof t.pnl !== "number" || t.pnl === 0 ? "text-[#9CA3AF]" : t.pnl > 0 ? "text-[#00E676]" : "text-[#FF5252]",
-    chartColor: typeof t.pnl !== "number" || t.pnl === 0 ? "#7C4DFF" : t.pnl > 0 ? "#00E676" : "#FF5252",
+    toneClass: typeof t.pnl !== "number" || t.pnl === 0 ? "text-[#9CA3AF]" : t.pnl > 0 ? "text-[#46C99A]" : "text-[#F26A70]",
+    chartColor: typeof t.pnl !== "number" || t.pnl === 0 ? "#7C4DFF" : t.pnl > 0 ? "#46C99A" : "#F26A70",
     statusLabel: ({winner:"Gagnant",loser:"Perdant",breakeven:"Break-even",partial:"Partiellement clôturé",open:"Position ouverte",cancelled:"Annulé"})[t.result_status] || (t.pnl > 0 ? "Gagnant" : t.pnl < 0 ? "Perdant" : "Break-even"),
     result: typeof t.pnl === "number" ? `${t.pnl >= 0 ? "+" : ""}$${Math.abs(t.pnl).toFixed(2)}` : t.result_status === "open" ? "Ouverte" : "—",
     rLabel: typeof t.r === "number" ? `${t.r >= 0 ? "+" : ""}${t.r.toFixed(2)}R` : "—",
@@ -158,10 +158,10 @@ export function JournalPage() {
 
   const kpis = [
     { label: "Trades", value: filtered.length.toString(), sub: "", Icon: BarChart3, color: "#4F8CFF" },
-    { label: "Win Rate", value: `${winRate}%`, sub: "", Icon: Target, color: "#00E676" },
-    { label: "Profit net", value: money(totalPnl,{signDisplay:"always"}), sub: "", Icon: TrendingUp, color: totalPnl >= 0 ? "#00E676" : "#FF5252" },
-    { label: "Gain moyen", value: money(avgWin,{signDisplay:"always"}), sub: "", Icon: ArrowUpRight, color: "#00E676" },
-    { label: "Perte moyenne", value: money(avgLoss), sub: "", Icon: ArrowDownRight, color: "#FF5252" },
+    { label: "Win Rate", value: `${winRate}%`, sub: "", Icon: Target, color: "#46C99A" },
+    { label: "Profit net", value: money(totalPnl,{signDisplay:"always"}), sub: "", Icon: TrendingUp, color: totalPnl >= 0 ? "#46C99A" : "#F26A70" },
+    { label: "Gain moyen", value: money(avgWin,{signDisplay:"always"}), sub: "", Icon: ArrowUpRight, color: "#46C99A" },
+    { label: "Perte moyenne", value: money(avgLoss), sub: "", Icon: ArrowDownRight, color: "#F26A70" },
     { label: "R Multiple moyen", value: `${avgR.toFixed(2)}R`, sub: "", Icon: Ruler, color: "#7C4DFF" },
   ]
 
@@ -281,7 +281,7 @@ export function JournalPage() {
                 </div>
                 <button
                   onClick={(e) => { e.stopPropagation(); deleteTrade(trade.id) }}
-                  className="text-[#6B7280] hover:text-[#FF5252] transition-colors"
+                  className="text-[#6B7280] hover:text-[#F26A70] transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -312,7 +312,7 @@ export function JournalPage() {
                 </div>
                 <div className="flex items-center gap-1">
                   <button className="p-1 text-[#9CA3AF] hover:text-white" aria-label="Modifier ce trade" onClick={() => openEditTrade(selectedTrade)}><Edit2 className="w-3.5 h-3.5"/></button>
-                  <button className="p-1 text-[#9CA3AF] hover:text-[#FF5252]" aria-label="Supprimer ce trade" onClick={() => deleteTrade(selectedTrade.id)}>
+                  <button className="p-1 text-[#9CA3AF] hover:text-[#F26A70]" aria-label="Supprimer ce trade" onClick={() => deleteTrade(selectedTrade.id)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -377,7 +377,7 @@ export function JournalPage() {
                     </div>
                   )}
 
-                  {selectedTrade.checklist_results?.length > 0 && <div className="mb-4 rounded-xl border border-white/[0.06] bg-[#0F1117] p-3"><div className="mb-2 flex items-center justify-between gap-2"><span className="text-[10px] font-medium text-[#9CA3AF]">Check-list du trade</span><span className="text-[9px] text-[#B58BFF]">{selectedTrade.checklist_results.filter(item=>item.checked).length}/{selectedTrade.checklist_results.length} respectées</span></div><div className="space-y-1.5">{selectedTrade.checklist_results.map(item=><div key={item.id} className="flex items-center gap-2"><span className={`grid h-4 w-4 shrink-0 place-items-center rounded ${item.checked ? "bg-[#00E676] text-[#06130C]" : "bg-[#FF5252]/10 text-[#FF6B76]"}`}>{item.checked ? <Check className="h-2.5 w-2.5"/> : "×"}</span><span className={`text-[10px] ${item.checked ? "text-[#B5BBC9]" : "text-[#7E8798]"}`}>{item.label}</span></div>)}</div></div>}
+                  {selectedTrade.checklist_results?.length > 0 && <div className="mb-4 rounded-xl border border-white/[0.06] bg-[#0F1117] p-3"><div className="mb-2 flex items-center justify-between gap-2"><span className="text-[10px] font-medium text-[#9CA3AF]">Check-list du trade</span><span className="text-[9px] text-[#B58BFF]">{selectedTrade.checklist_results.filter(item=>item.checked).length}/{selectedTrade.checklist_results.length} respectées</span></div><div className="space-y-1.5">{selectedTrade.checklist_results.map(item=><div key={item.id} className="flex items-center gap-2"><span className={`grid h-4 w-4 shrink-0 place-items-center rounded ${item.checked ? "bg-[#46C99A] text-[#06130C]" : "bg-[#F26A70]/10 text-[#F26A70]"}`}>{item.checked ? <Check className="h-2.5 w-2.5"/> : "×"}</span><span className={`text-[10px] ${item.checked ? "text-[#B5BBC9]" : "text-[#7E8798]"}`}>{item.label}</span></div>)}</div></div>}
 
                   {/* Mini chart */}
                   <div className="mb-4">
@@ -410,7 +410,7 @@ export function JournalPage() {
                   <p className="text-[10px] font-medium text-[#9CA3AF] mt-3 mb-2">Émotion</p>
                   <p className="text-[11px] text-white">{selectedTrade.emotion || "—"}</p>
                   <p className="text-[10px] font-medium text-[#9CA3AF] mt-3 mb-2">Plan respecté</p>
-                  <p className={`text-[11px] font-medium ${selectedTrade.plan_respected ? "text-[#00E676]" : "text-[#FF5252]"}`}>
+                  <p className={`text-[11px] font-medium ${selectedTrade.plan_respected ? "text-[#46C99A]" : "text-[#F26A70]"}`}>
                     {selectedTrade.plan_respected ? "✓ Oui" : "✗ Non"}
                   </p>
                 </div>

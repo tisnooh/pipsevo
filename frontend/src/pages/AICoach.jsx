@@ -34,9 +34,9 @@ export default function AICoach() {
   }, [hasCoachAccess]);
   const planRate = summary?.metrics?.plan_respect_rate;
   const insights = summary?.kpis?.total_trades ? [
-    { I: AlertTriangle, t: "Respect du plan", d: planRate === null || planRate === undefined ? "Pas encore mesuré" : `${planRate}% des trades renseignés respectent le plan`, c: planRate === null || planRate === undefined ? "#7E8798" : planRate>=80?"#00E676":"#FFB855" },
-    { I: Trophy, t: "Meilleur setup", d: summary.best_setup || "Pas encore déterminé", c: "#00E676" },
-    { I: Clock, t: "Setup à surveiller", d: summary.worst_setup || "Pas encore déterminé", c: "#FF5252" },
+    { I: AlertTriangle, t: "Respect du plan", d: planRate === null || planRate === undefined ? "Pas encore mesuré" : `${planRate}% des trades renseignés respectent le plan`, c: planRate === null || planRate === undefined ? "#7E8798" : planRate>=80?"#46C99A":"#FFB855" },
+    { I: Trophy, t: "Meilleur setup", d: summary.best_setup || "Pas encore déterminé", c: "#46C99A" },
+    { I: Clock, t: "Setup à surveiller", d: summary.worst_setup || "Pas encore déterminé", c: "#F26A70" },
     { I: Shield, t: "Score discipline", d: `${summary.kpis.discipline_score}/100`, c: "#FFB855" },
     { I: Target, t: "Trades analysés", d: `${summary.kpis.total_trades} trades réels`, c: "#B58BFF" },
   ] : [];
@@ -96,7 +96,7 @@ export default function AICoach() {
             <div className="pe-eyebrow mb-2">{r.tag} · {date(r.created_at,{withTime:true})}</div>
             <div className="font-semibold mb-3">{r.question}</div>
             <div className="text-sm text-[#B5BBC9] whitespace-pre-wrap leading-relaxed">{r.answer}</div>
-            {r.evidence?.length>0&&<details className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"><summary className="cursor-pointer text-xs font-semibold text-[#B58BFF]">Sources utilisées · {r.evidence.length} trade{r.evidence.length>1?"s":""}</summary><div className="mt-3 grid gap-2 sm:grid-cols-2">{r.evidence.map(source=><div key={`${source.alias}-${source.trade_id}`} className="rounded-lg border border-white/[0.06] bg-[#0A0D17] p-3 text-xs"><div className="flex items-center justify-between gap-3"><span className="font-mono font-bold text-[#B58BFF]">[{source.alias}]</span><span className={Number(source.pnl)>=0?"text-[#00E676]":"text-[#FF6B76]"}>{source.pnl===null||source.pnl===undefined?"P&L non renseigné":`${Number(source.pnl)>=0?"+":""}${Number(source.pnl).toFixed(2)}`}</span></div><div className="mt-1 font-semibold">{source.instrument||"Instrument non renseigné"} · {source.direction||"—"}</div><div className="mt-1 text-[#7E8798]">{source.date||"Date inconnue"}{source.setup?` · ${source.setup}`:""}{source.session?` · ${source.session}`:""}</div></div>)}</div></details>}
+            {r.evidence?.length>0&&<details className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"><summary className="cursor-pointer text-xs font-semibold text-[#B58BFF]">Sources utilisées · {r.evidence.length} trade{r.evidence.length>1?"s":""}</summary><div className="mt-3 grid gap-2 sm:grid-cols-2">{r.evidence.map(source=><div key={`${source.alias}-${source.trade_id}`} className="rounded-lg border border-white/[0.06] bg-[#0A0D17] p-3 text-xs"><div className="flex items-center justify-between gap-3"><span className="font-mono font-bold text-[#B58BFF]">[{source.alias}]</span><span className={Number(source.pnl)>=0?"text-[#46C99A]":"text-[#F26A70]"}>{source.pnl===null||source.pnl===undefined?"P&L non renseigné":`${Number(source.pnl)>=0?"+":""}${Number(source.pnl).toFixed(2)}`}</span></div><div className="mt-1 font-semibold">{source.instrument||"Instrument non renseigné"} · {source.direction||"—"}</div><div className="mt-1 text-[#7E8798]">{source.date||"Date inconnue"}{source.setup?` · ${source.setup}`:""}{source.session?` · ${source.session}`:""}</div></div>)}</div></details>}
           </div>
         ))}
       </div>}

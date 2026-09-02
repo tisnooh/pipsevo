@@ -34,7 +34,7 @@ const RuleToggle = ({ item, onToggle, onDelete, custom = false }) => (
   <div className="flex items-center gap-3 rounded-xl border border-[#6571CF]/20 bg-[#0D1120] p-3">
     <button type="button" role="checkbox" aria-checked={item.enabled} onClick={onToggle} className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg border transition ${item.enabled ? "border-[#7C4DFF] bg-[#7C4DFF] text-white" : "border-white/15 bg-white/[0.02] text-transparent"}`}><Check className="h-3.5 w-3.5"/></button>
     <span className={`min-w-0 flex-1 text-xs leading-relaxed ${item.enabled ? "text-[#D6DAE4]" : "text-[#687183] line-through"}`}>{item.label}</span>
-    {custom && <button type="button" onClick={onDelete} aria-label={`Supprimer ${item.label}`} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#687183] transition hover:bg-[#FF4D5A]/10 hover:text-[#FF6B76]"><Trash2 className="h-4 w-4"/></button>}
+    {custom && <button type="button" onClick={onDelete} aria-label={`Supprimer ${item.label}`} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#687183] transition hover:bg-[#FF4D5A]/10 hover:text-[#F26A70]"><Trash2 className="h-4 w-4"/></button>}
   </div>
 );
 
@@ -66,7 +66,7 @@ export default function TradingRulesEditor({ value, onChange }) {
     </section>
 
     <section className="rounded-2xl border border-white/[0.07] bg-white/[0.018] p-4 sm:p-5">
-      <div className="mb-4 flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#00E676]/10 text-[#00E676]"><ListChecks className="h-5 w-5"/></span><div><h3 className="text-sm font-semibold">Check-list avant trade</h3><p className="mt-1 text-xs text-[#687183]">Active uniquement les vérifications qui doivent faire partie de ton processus.</p></div></div>
+      <div className="mb-4 flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#46C99A]/10 text-[#46C99A]"><ListChecks className="h-5 w-5"/></span><div><h3 className="text-sm font-semibold">Check-list avant trade</h3><p className="mt-1 text-xs text-[#687183]">Active uniquement les vérifications qui doivent faire partie de ton processus.</p></div></div>
       <div className="grid gap-2 sm:grid-cols-2">{rules.pre_trade_checklist.map(item=><RuleToggle key={item.id} item={item} onToggle={()=>toggleChecklist(item.id)}/>)}</div>
     </section>
 

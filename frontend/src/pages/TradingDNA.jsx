@@ -17,7 +17,7 @@ export default function TradingDNA() {
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card icon={Dna} label="Trader Type" value={d.trader_type} color="#B58BFF" />
         <Card icon={Clock} label="Best Session" value={d.best_session || "—"} color="#4F8CFF" />
-        <Card icon={Crosshair} label="Best Setup" value={d.best_setup || "—"} color="#00E676" />
+        <Card icon={Crosshair} label="Best Setup" value={d.best_setup || "—"} color="#46C99A" />
         <Card icon={Heart} label="Best Emotion" value={d.best_emotion || "—"} color="#8C73FF" />
       </div>
       <div className="pe-card pe-card-pad text-center">

@@ -198,7 +198,7 @@ export default function AppShell() {
                 <span className="ml-1 text-[8px] text-[#9CA3AF]">/100</span>
               </div>
             </div>
-            <div className={`mt-1 text-[9px] leading-tight ${discipline>=80?"text-[#00E676]":discipline>=60?"text-[#FFB855]":"text-[#FF7272]"}`}>{discipline>=80?"Excellent":discipline>=60?"À consolider":discipline?"À améliorer":"En attente"}</div>
+            <div className={`mt-1 text-[9px] leading-tight ${discipline>=80?"text-[#46C99A]":discipline>=60?"text-[#FFB855]":"text-[#F26A70]"}`}>{discipline>=80?"Excellent":discipline>=60?"À consolider":discipline?"À améliorer":"En attente"}</div>
             <svg viewBox="0 0 80 18" className="mx-auto mt-1 h-3 w-24 max-w-full">
               <path d={discipline > 0 ? "M0,15 L10,12 L20,13 L30,9 L40,10 L50,6 L60,7 L70,3 L80,4" : "M0,13 L80,13"} stroke={discipline > 0 ? "#7C4DFF" : "#343A47"} strokeWidth="1.5" fill="none" />
             </svg>
@@ -223,7 +223,7 @@ export default function AppShell() {
         <div className="border-t border-white/5 px-3 py-3 text-xs text-[#9CA3AF] shrink-0">
           <button
             onClick={async () => { await logout(); window.location.href = "/"; }}
-            className={`flex items-center gap-2 hover:text-[#FF5252] ${sidebarCollapsed ? "md:w-full md:justify-center md:gap-0" : ""}`}
+            className={`flex items-center gap-2 hover:text-[#F26A70] ${sidebarCollapsed ? "md:w-full md:justify-center md:gap-0" : ""}`}
             title={sidebarCollapsed ? "Déconnexion" : undefined}
             data-testid="sidebar-logout"
           >
@@ -369,7 +369,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
         <button onClick={()=>{onNavigate("/faq");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><BookOpen className="w-4 h-4"/>FAQ et centre d'aide</button>
         <button onClick={()=>{onNavigate("/contact");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><Bell className="w-4 h-4"/>Contacter le support</button>
         <div className="mt-1 flex items-center justify-between border-t border-white/5 px-3 py-2.5"><span className="text-sm text-[#B5BBC9]">Langue</span><LanguageSwitcher/></div>
-        <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 border-t border-white/5 mt-1 rounded-lg text-sm text-[#FF7A7A] hover:bg-[#FF5252]/10"><LogOut className="w-4 h-4"/>Se déconnecter</button>
+        <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 border-t border-white/5 mt-1 rounded-lg text-sm text-[#FF7A7A] hover:bg-[#F26A70]/10"><LogOut className="w-4 h-4"/>Se déconnecter</button>
       </div>}
       </div>
     </header>
