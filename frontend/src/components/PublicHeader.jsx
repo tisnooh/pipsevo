@@ -32,19 +32,19 @@ const featureGroups = [
   { title: "Trading", items: [
     { label: "Journal", href: "/#journal", icon: BookOpen },
     { label: "Comptes", href: "/#accounts", icon: WalletCards },
-    { label: "Statistiques", href: "/#insights", icon: BarChart3 },
+    { label: "Statistiques", href: "/#product", icon: BarChart3 },
     { label: "Backtest", href: "/#tools", icon: FlaskConical },
   ] },
   { title: "Protection", items: [
     { label: "Discipline", href: "/#discipline", icon: Shield },
-    { label: "Gestion du risque", href: "/#discipline", icon: Gauge },
+    { label: "Gestion du risque", href: "/#risk-control", icon: Gauge },
     { label: "Payouts", href: "/#payouts", icon: WalletCards },
     { label: "Prop firms", href: "/platforms", icon: LayoutDashboard },
   ] },
   { title: "Intelligence", items: [
     { label: "Atlas IA", href: "/#atlas", icon: Brain },
     { label: "Analyse comportementale", href: "/#atlas", icon: BarChart3 },
-    { label: "Trading DNA", href: "/#insights", icon: Shield },
+    { label: "Rapports & Trading DNA", href: "/#tools", icon: Shield },
   ] },
 ];
 
@@ -56,9 +56,29 @@ const resourceItems = [
   { label: "Plateformes et imports", href: "/platforms", icon: LayoutDashboard },
 ];
 
-function CountryFlag({ language }) {
+const featureLabelEn = {
+  Comptes: "Accounts",
+  Statistiques: "Analytics",
+  Discipline: "Discipline",
+  "Gestion du risque": "Risk management",
+  "Prop firms": "Prop firms",
+  "Atlas IA": "Atlas AI",
+  "Analyse comportementale": "Behavioral analysis",
+  "Rapports & Trading DNA": "Reports & Trading DNA",
+};
+
+export function CountryFlag({ language }) {
   if (language === "fr") return <span aria-hidden="true" className="grid h-3.5 w-5 grid-cols-3 overflow-hidden rounded-[3px] ring-1 ring-white/10"><i className="bg-[#1B3D8F]" /><i className="bg-white" /><i className="bg-[#E53B4D]" /></span>;
-  return <span aria-hidden="true" className="relative h-3.5 w-5 overflow-hidden rounded-[3px] bg-[#1F3E78] ring-1 ring-white/10"><i className="absolute left-1/2 top-0 h-full w-1 -translate-x-1/2 bg-white" /><i className="absolute left-0 top-1/2 h-1 w-full -translate-y-1/2 bg-white" /><i className="absolute left-1/2 top-0 h-full w-0.5 -translate-x-1/2 bg-[#E43C4E]" /><i className="absolute left-0 top-1/2 h-0.5 w-full -translate-y-1/2 bg-[#E43C4E]" /></span>;
+  return <span aria-hidden="true" className="relative h-3.5 w-5 overflow-hidden rounded-[3px] bg-[#21468B] ring-1 ring-white/10">
+    <i className="absolute left-1/2 top-1/2 h-[3px] w-7 -translate-x-1/2 -translate-y-1/2 rotate-[35deg] bg-white" />
+    <i className="absolute left-1/2 top-1/2 h-[3px] w-7 -translate-x-1/2 -translate-y-1/2 -rotate-[35deg] bg-white" />
+    <i className="absolute left-1/2 top-1/2 h-[1px] w-7 -translate-x-1/2 -translate-y-1/2 rotate-[35deg] bg-[#CF142B]" />
+    <i className="absolute left-1/2 top-1/2 h-[1px] w-7 -translate-x-1/2 -translate-y-1/2 -rotate-[35deg] bg-[#CF142B]" />
+    <i className="absolute left-1/2 top-0 h-full w-[5px] -translate-x-1/2 bg-white" />
+    <i className="absolute left-0 top-1/2 h-[5px] w-full -translate-y-1/2 bg-white" />
+    <i className="absolute left-1/2 top-0 h-full w-[2px] -translate-x-1/2 bg-[#CF142B]" />
+    <i className="absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 bg-[#CF142B]" />
+  </span>;
 }
 
 function LanguageMenu({ language, setLanguage, t, onSelect }) {
@@ -315,7 +335,7 @@ export default function PublicHeader({ variant = "default" }) {
   return <>
     <a href="#main-content" className="fixed left-4 top-2 z-[80] -translate-y-16 rounded-lg bg-[#7C4DFF] px-3 py-2 text-sm font-semibold text-white transition focus:translate-y-0">{t("Aller au contenu", "Skip to content")}</a>
     {landing && <div className="fixed inset-x-0 top-0 z-[60] flex h-7 items-center justify-center gap-2 border-b border-white/[0.05] bg-[#050505]/95 px-4 text-center text-[10px] font-medium tracking-wide text-[#AEB4C1] backdrop-blur-xl md:h-8 md:text-xs">
-      <span className="h-1.5 w-1.5 rounded-full bg-[#17E6AF]" />
+      <span className="h-1.5 w-1.5 rounded-full bg-[#46C99A]" />
       <span>{t("Bêta publique — accès gratuit sans carte bancaire", "Public beta — free access, no credit card required")}</span>
       <Link to="/register" className="hidden text-[#C7B5FF] transition hover:text-white sm:inline">{t("Rejoindre la bêta →", "Join the beta →")}</Link>
     </div>}
@@ -332,12 +352,12 @@ export default function PublicHeader({ variant = "default" }) {
               <div className="grid grid-cols-3 gap-2">
                 {featureGroups.map(group => <div key={group.title} className="rounded-xl p-2">
                   <div className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[.18em] text-[#777F90]">{group.title}</div>
-                  <div className="space-y-1">{group.items.map(({ label, href, icon: Icon }) => <a role="menuitem" key={label} href={href} onClick={() => setOpenMenu(null)} className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm text-[#C9CDD6] transition hover:bg-white/[0.055] hover:text-white"><Icon className="h-4 w-4 text-[#8E72FF]" /><span>{t(label, label)}</span></a>)}</div>
+                  <div className="space-y-1">{group.items.map(({ label, href, icon: Icon }) => <a role="menuitem" key={label} href={href} onClick={() => setOpenMenu(null)} className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm text-[#C9CDD6] transition hover:bg-white/[0.055] hover:text-white"><Icon className="h-4 w-4 text-[#8E72FF]" /><span>{t(label, featureLabelEn[label] || label)}</span></a>)}</div>
                 </div>)}
               </div>
             </MegaMenu>
             <Link to="/platforms" className="py-3 transition hover:text-white">Prop Firms</Link>
-            <a href="#pricing" className="py-3 transition hover:text-white">{t("Tarifs", "Pricing")}</a>
+            <Link to="/pricing" className="py-3 transition hover:text-white">{t("Tarifs", "Pricing")}</Link>
             <MegaMenu id="resources-menu" label={t("Ressources", "Resources")} open={openMenu === "resources"} onToggle={() => setOpenMenu(value => value === "resources" ? null : "resources")} widthClass="w-[330px]">
               <div className="space-y-1">{resourceItems.map(({ label, href, icon: Icon }) => <Link role="menuitem" key={label} to={href} onClick={() => setOpenMenu(null)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-[#C9CDD6] transition hover:bg-white/[0.055] hover:text-white"><Icon className="h-4 w-4 text-[#8E72FF]" /><span>{t(label, label)}</span></Link>)}</div>
             </MegaMenu>

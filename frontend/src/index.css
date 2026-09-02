@@ -277,6 +277,25 @@ input[type="time"] {
   line-height: 1.6;
 }
 
+.pe-field-label {
+  display: block;
+  color: var(--pe-text-muted);
+  font-family: 'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+}
+
+.pe-metric-label {
+  color: var(--pe-text-muted);
+  font-family: 'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: 0;
+}
+
 .pe-marketing-title {
   max-width: 56rem;
   font-size: clamp(2.25rem, 6vw, 3.5rem);

@@ -25,7 +25,7 @@ export const normalizeTradingRules = (rules = {}) => ({
 const NumberField = ({ label, hint, value, onChange, min, max, step = 1, suffix }) => (
   <label className="block text-xs text-[#9CA3AF]">
     <span className="flex items-center justify-between gap-2"><span>{label}</span>{suffix && <span className="text-[10px] text-[#596172]">{suffix}</span>}</span>
-    <input type="number" min={min} max={max} step={step} value={value} onChange={e=>onChange(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-[#6571CF]/20 bg-[#0C1122] px-4 py-3 font-mono text-white outline-none transition focus:border-[#8075ED] focus:ring-2 focus:ring-[#8075ED]/10"/>
+    <input type="number" min={min} max={max} step={step} value={value} onChange={e=>onChange(Number(e.target.value))} className="font-numeric mt-2 w-full rounded-xl border border-[#6571CF]/20 bg-[#0C1122] px-4 py-3 text-white outline-none transition focus:border-[#8075ED] focus:ring-2 focus:ring-[#8075ED]/10"/>
     {hint && <span className="mt-1.5 block text-[10px] leading-relaxed text-[#596172]">{hint}</span>}
   </label>
 );

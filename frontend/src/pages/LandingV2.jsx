@@ -26,11 +26,11 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { Logo, LogoMark } from "@/components/Logo";
+import { LogoMark } from "@/components/Logo";
 import PublicHeader from "@/components/PublicHeader";
+import PublicFooter from "@/components/PublicFooter";
 import ProductDashboardPreview from "@/components/ProductDashboardPreview";
 import AmbientCandleField from "@/components/AmbientCandleField";
-import { openCookieSettings } from "@/components/CookieConsent";
 import { useI18n } from "@/context/I18nContext";
 import { FEATURE_FLAGS } from "@/config/billing";
 
@@ -193,7 +193,7 @@ function SystemCore({ t }) {
     </div>
     <div className="relative mt-4 text-[10px] font-semibold uppercase tracking-[.2em] text-[#A995FF]">PipsEvo Core</div>
     <p className="relative mt-2 max-w-[230px] text-[11px] leading-5 text-[#7E8796]">{t("Toutes tes données convergent vers une seule lecture.", "All your data converges into one clear view.")}</p>
-    <div className="relative mt-4 inline-flex items-center gap-2 text-[9px] uppercase tracking-[.14em] text-[#697282]"><span data-sync-dot className="h-1.5 w-1.5 rounded-full bg-[#17E6AF] shadow-[0_0_12px_rgba(23,230,175,.75)]" />{t("Flux synchronisé", "Synchronized flow")}</div>
+    <div className="relative mt-4 inline-flex items-center gap-2 text-[9px] uppercase tracking-[.14em] text-[#697282]"><span data-sync-dot className="h-1.5 w-1.5 rounded-full bg-[#46C99A] shadow-[0_0_12px_rgba(70,201,154,.65)]" />{t("Flux synchronisé", "Synchronized flow")}</div>
   </div>;
 }
 
@@ -287,8 +287,8 @@ function RiskControlSection({ t }) {
       description: t("encore disponibles pour la session", "still available for this session"),
       progress: 30,
       footer: t("30 % du budget quotidien utilisés", "30% of the daily budget used"),
-      accent: "#17E6AF",
-      badgeClass: "border-[#17E6AF]/30 bg-[#17E6AF]/[0.06] text-[#43DDB2]",
+      accent: "#46C99A",
+      badgeClass: "border-[#46C99A]/30 bg-[#46C99A]/[0.06] text-[#65D8AE]",
     },
     {
       title: t("Marge avant drawdown", "Buffer before drawdown"),
@@ -319,19 +319,19 @@ function RiskControlSection({ t }) {
       </div>
 
       <div data-risk-panel className="relative lg:col-span-7">
-        <div className="pointer-events-none absolute inset-x-[10%] bottom-[-6%] h-32 rounded-full bg-[#17E6AF]/[0.09] blur-[80px]" />
+        <div className="pointer-events-none absolute inset-x-[10%] bottom-[-6%] h-32 rounded-full bg-[#46C99A]/[0.09] blur-[80px]" />
         <div className="relative overflow-hidden rounded-[28px] border border-white/[0.09] bg-[#0A0B10] p-5 shadow-[0_35px_100px_rgba(0,0,0,.52)] sm:p-7 lg:p-8">
           <div className="flex flex-col gap-4 border-b border-white/[0.07] pb-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[#7657FF]/20 bg-[#11131A]"><LogoMark size="md" /></div>
               <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-base font-semibold text-[#F0F1F4] sm:text-lg">PipsEvo Challenge — 50 000 $</h3><span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[.12em] text-[#8E96A5]">{t("Étape active", "Active stage")}</span></div><p className="mt-1 text-[10px] text-[#656E7D]">{t("Scénario fictif de démonstration", "Fictional demo scenario")}</p></div>
             </div>
-            <div className="inline-flex items-center gap-2 self-start rounded-full border border-white/[0.07] bg-white/[0.025] px-3 py-2 text-[10px] text-[#7C8493] sm:self-auto"><span className="h-1.5 w-1.5 rounded-full bg-[#17E6AF] shadow-[0_0_10px_rgba(23,230,175,.7)]" />{t("Règles synchronisées", "Rules synchronized")}</div>
+            <div className="inline-flex items-center gap-2 self-start rounded-full border border-white/[0.07] bg-white/[0.025] px-3 py-2 text-[10px] text-[#7C8493] sm:self-auto"><span className="h-1.5 w-1.5 rounded-full bg-[#46C99A] shadow-[0_0_10px_rgba(70,201,154,.6)]" />{t("Règles synchronisées", "Rules synchronized")}</div>
           </div>
 
-          <div data-risk-status className="mt-6 flex items-start gap-4 rounded-[20px] border border-[#17E6AF]/20 bg-[#17E6AF]/[0.045] p-5 sm:p-6">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[#17E6AF]/25 bg-[#17E6AF]/10 text-[#31D9AA]"><ShieldCheck className="h-6 w-6" /></span>
-            <div><div className="text-xl font-semibold text-[#31D9AA] sm:text-2xl">{t("Session autorisée", "Session cleared")}</div><p className="mt-1.5 max-w-lg text-sm leading-6 text-[#929AA8]"><strong className="font-semibold text-[#D8DCE4]">2 100 $</strong> {t("de coussin global — environ 3 prises de risque à ton niveau habituel.", "of global buffer — about 3 positions at your usual risk level.")}</p></div>
+          <div data-risk-status className="mt-6 flex items-start gap-4 rounded-[20px] border border-[#46C99A]/20 bg-[#46C99A]/[0.045] p-5 sm:p-6">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[#46C99A]/25 bg-[#46C99A]/10 text-[#65D8AE]"><ShieldCheck className="h-6 w-6" /></span>
+            <div><div className="text-xl font-semibold text-[#46C99A] sm:text-2xl">{t("Session autorisée", "Session cleared")}</div><p className="mt-1.5 max-w-lg text-sm leading-6 text-[#929AA8]"><strong className="font-semibold text-[#D8DCE4]">2 100 $</strong> {t("de coussin global — environ 3 prises de risque à ton niveau habituel.", "of global buffer — about 3 positions at your usual risk level.")}</p></div>
           </div>
 
           <div className="mt-5 grid gap-4 xl:grid-cols-2">
@@ -371,7 +371,7 @@ function ProductFeature({ id, reverse, eyebrow, title, copy, bullets, section, a
 }
 
 export default function LandingV2() {
-  const { language, setLanguage, t } = useI18n();
+  const { t } = useI18n();
   const reduceMotion = useReducedMotion();
   const [activeProduct, setActiveProduct] = useState("overview");
   const [mobileComparison, setMobileComparison] = useState("manual");
@@ -628,7 +628,7 @@ export default function LandingV2() {
         </div>
         <div className="relative mx-auto grid w-full max-w-[1480px] items-center gap-12 lg:grid-cols-12 lg:gap-9 xl:gap-14">
           <Reveal className="text-center lg:col-span-5 lg:text-left">
-            <div className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.025] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.18em] text-[#AEB4C1] lg:mx-0"><span className="h-1.5 w-1.5 rounded-full bg-[#17E6AF]" />{t("L’OS des traders financés", "The OS for funded traders")}</div>
+            <div className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.025] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.18em] text-[#AEB4C1] lg:mx-0"><span className="h-1.5 w-1.5 rounded-full bg-[#46C99A]" />{t("L’OS des traders financés", "The OS for funded traders")}</div>
             <h1 className="mx-auto max-w-[720px] text-balance text-[43px] font-semibold leading-[1.02] tracking-[-0.045em] text-[#F3F4F6] sm:text-[58px] lg:mx-0 lg:text-[64px] xl:text-[72px]">
               {t("Protège tes comptes financés.", "Protect your funded accounts.")}<span className="mt-2 block bg-gradient-to-r from-[#9B72FF] to-[#4F8CFF] bg-clip-text text-transparent">{t("Transforme chaque trade en progrès.", "Turn every trade into progress.")}</span>
             </h1>
@@ -637,7 +637,7 @@ export default function LandingV2() {
               <Link to="/register" className="btn-primary inline-flex h-[52px] items-center justify-center gap-2 !rounded-xl !px-6 text-[15px]">{t("Commencer gratuitement", "Start for free")}<ArrowRight className="h-4 w-4" /></Link>
               <a href="#product" className="inline-flex h-[52px] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-6 text-[15px] font-semibold text-[#D8DBE2] transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white">{t("Voir le produit", "See the product")}</a>
             </div>
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-[#777F8F] lg:justify-start"><span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-[#17E6AF]" />{t("Bêta gratuite", "Free beta")}</span><span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-[#17E6AF]" />{t("Sans carte bancaire", "No credit card")}</span><span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-[#17E6AF]" />{t("Accès immédiat", "Instant access")}</span></div>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-[#777F8F] lg:justify-start"><span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-[#46C99A]" />{t("Bêta gratuite", "Free beta")}</span><span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-[#46C99A]" />{t("Sans carte bancaire", "No credit card")}</span><span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-[#46C99A]" />{t("Accès immédiat", "Instant access")}</span></div>
           </Reveal>
 
           <Reveal delay={0.08} className="relative lg:col-span-7">
@@ -691,7 +691,7 @@ export default function LandingV2() {
 
       <ProductFeature id="accounts" eyebrow={t("Comptes financés", "Funded accounts")} title={t("Garde chaque compte sous contrôle.", "Keep every account under control.")} copy={t("Solde, drawdown, objectifs et progression réunis dans une vue qui reste lisible, même avec plusieurs comptes.", "Balance, drawdown, goals, and progress in one view that stays readable, even with multiple accounts.")} bullets={[t("Vue consolidée de tes comptes", "Consolidated account view"), t("Marge de risque et objectifs visibles", "Visible risk margin and goals"), t("Filtres par compte et période", "Filters by account and period")]} section="overview" accent="#4F8CFF" />
       <ProductFeature id="journal" reverse eyebrow={t("Journal de trading", "Trading journal")} title={t("Le résultat dit combien. Ton journal explique pourquoi.", "The result says how much. Your journal explains why.")} copy={t("Chaque décision conserve son contexte : setup, session, émotion, notes, captures et respect du plan.", "Every decision keeps its context: setup, session, emotion, notes, screenshots, and plan compliance.")} bullets={[t("Saisie manuelle structurée", "Structured manual entry"), t("Import CSV sécurisé en bêta", "Secure CSV import in beta"), t("Tags, favoris et historique comparable", "Tags, favorites, and comparable history")]} section="journal" accent="#A472FF" />
-      <ProductFeature id="discipline" eyebrow={t("Discipline et risque", "Discipline and risk")} title={t("Ton problème n’est pas toujours la stratégie.", "Your problem is not always the strategy.")} copy={t("Repère l’overtrading, les écarts au plan et les règles qui fragilisent ton compte avant qu’ils ne deviennent une habitude.", "Spot overtrading, plan deviations, and rules that weaken your account before they become a habit.")} bullets={[t("Score construit depuis tes trades réels", "Score built from your real trades"), t("Check-list et limites personnalisées", "Custom checklist and limits"), t("Alertes comportementales lisibles", "Clear behavioral alerts")]} section="discipline" accent="#17E6AF" />
+      <ProductFeature id="discipline" eyebrow={t("Discipline et risque", "Discipline and risk")} title={t("Ton problème n’est pas toujours la stratégie.", "Your problem is not always the strategy.")} copy={t("Repère l’overtrading, les écarts au plan et les règles qui fragilisent ton compte avant qu’ils ne deviennent une habitude.", "Spot overtrading, plan deviations, and rules that weaken your account before they become a habit.")} bullets={[t("Score construit depuis tes trades réels", "Score built from your real trades"), t("Check-list et limites personnalisées", "Custom checklist and limits"), t("Alertes comportementales lisibles", "Clear behavioral alerts")]} section="discipline" accent="#46C99A" />
       <ProductFeature id="payouts" reverse eyebrow={t("Objectifs et retraits", "Goals and withdrawals")} title={t("Projette tes payouts sans oublier la marge de sécurité.", "Project payouts without forgetting your safety margin.")} copy={t("Enregistre tes retraits, estime ton prochain objectif et conserve une lecture prudente du drawdown de chaque compte.", "Record withdrawals, estimate your next goal, and keep a prudent view of each account’s drawdown.")} bullets={[t("Historique des payouts", "Payout history"), t("Projection d’objectif", "Goal projection"), t("Retrait prudent estimé par compte", "Estimated prudent withdrawal per account")]} section="payouts" accent="#4F8CFF" />
 
       <section id="prop-firms" className="scroll-mt-28 px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-32">
@@ -733,7 +733,7 @@ export default function LandingV2() {
                 <linearGradient id="system-flow" x1="0" y1="0" x2="1" y2="1">
                   <stop offset="0%" stopColor="#4F8CFF" stopOpacity=".14" />
                   <stop offset="52%" stopColor="#8C73FF" stopOpacity=".8" />
-                  <stop offset="100%" stopColor="#17E6AF" stopOpacity=".12" />
+                  <stop offset="100%" stopColor="#46C99A" stopOpacity=".12" />
                 </linearGradient>
                 <filter id="system-dot-glow" x="-250%" y="-250%" width="600%" height="600%">
                   <feGaussianBlur stdDeviation="3" result="blur" />
@@ -896,7 +896,7 @@ export default function LandingV2() {
       </section>
 
       <section id="beta" className="scroll-mt-28 px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-32">
-        <Reveal className="mx-auto max-w-[1120px] text-center"><div className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-[#17E6AF]/20 bg-[#17E6AF]/[0.05] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.18em] text-[#64E6BD]"><span className="h-1.5 w-1.5 rounded-full bg-[#17E6AF]" />{t("Bêta publique", "Public beta")}</div><h2 className="text-balance text-3xl font-semibold tracking-[-0.035em] text-[#F0F1F4] sm:text-4xl lg:text-5xl">{t("Un produit vivant, construit avec ses premiers utilisateurs.", "A living product, built with its first users.")}</h2><p className="mx-auto mt-5 max-w-2xl text-[15px] leading-7 text-[#8D95A4]">{t("Accède gratuitement aux fonctions disponibles, partage ton feedback et suis clairement ce qui est en bêta ou encore à venir.", "Access available features for free, share feedback, and clearly see what is in beta or still upcoming.")}</p><div className="mt-9 flex flex-wrap justify-center gap-x-7 gap-y-3 text-xs text-[#747C8B]"><span>{t("Accès gratuit", "Free access")}</span><span>•</span><span>{t("Sans carte bancaire", "No credit card")}</span><span>•</span><span>{t("Fonctions à venir clairement étiquetées", "Upcoming features clearly labeled")}</span></div></Reveal>
+        <Reveal className="mx-auto max-w-[1120px] text-center"><div className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-[#46C99A]/20 bg-[#46C99A]/[0.05] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.18em] text-[#65D8AE]"><span className="h-1.5 w-1.5 rounded-full bg-[#46C99A]" />{t("Bêta publique", "Public beta")}</div><h2 className="text-balance text-3xl font-semibold tracking-[-0.035em] text-[#F0F1F4] sm:text-4xl lg:text-5xl">{t("Un produit vivant, construit avec ses premiers utilisateurs.", "A living product, built with its first users.")}</h2><p className="mx-auto mt-5 max-w-2xl text-[15px] leading-7 text-[#8D95A4]">{t("Accède gratuitement aux fonctions disponibles, partage ton feedback et suis clairement ce qui est en bêta ou encore à venir.", "Access available features for free, share feedback, and clearly see what is in beta or still upcoming.")}</p><div className="mt-9 flex flex-wrap justify-center gap-x-7 gap-y-3 text-xs text-[#747C8B]"><span>{t("Accès gratuit", "Free access")}</span><span>•</span><span>{t("Sans carte bancaire", "No credit card")}</span><span>•</span><span>{t("Fonctions à venir clairement étiquetées", "Upcoming features clearly labeled")}</span></div></Reveal>
       </section>
 
       <section id="pricing" className="scroll-mt-28 px-5 py-16 sm:px-6 sm:py-20 lg:px-10 lg:py-28">
@@ -915,13 +915,6 @@ export default function LandingV2() {
       </section>
     </main>
 
-    <footer className="border-t border-white/[0.07] px-5 py-12 sm:px-6 lg:px-10 lg:py-16">
-      <div className="mx-auto grid max-w-[1280px] gap-10 lg:grid-cols-[1.4fr_repeat(3,1fr)]"><div><Logo size="md" /><p className="mt-4 max-w-xs text-sm leading-6 text-[#777F8E]">{t("Le système d’exploitation pour protéger, comprendre et faire progresser tes comptes financés.", "The operating system to protect, understand, and grow your funded accounts.")}</p><p className="mt-5 text-[11px] text-[#5F6673]">{t("PipsEvo ne fournit aucun signal ni conseil financier.", "PipsEvo provides no signals or financial advice.")}</p></div>{[
-        [t("Produit", "Product"), [[t("Fonctionnalités", "Features"), "/#product"], ["Prop Firms", "/platforms"], [t("Tarifs", "Pricing"), "/pricing"], [t("Bêta", "Beta"), "/#beta"], [t("Plateformes", "Platforms"), "/platforms"]]],
-        [t("Ressources", "Resources"), [["FAQ", "/faq"], [t("Centre d’aide", "Help center"), "/help"], ["Contact", "/contact"], [t("Guides", "Guides"), "/blog"]]],
-        [t("Légal", "Legal"), [[t("Confidentialité", "Privacy"), "/privacy"], [t("Conditions d’utilisation", "Terms of use"), "/terms"], [t("Sécurité", "Security"), "/security"]]],
-      ].map(([title, links]) => <div key={title}><h3 className="text-xs font-semibold uppercase tracking-[.16em] text-[#AEB4BF]">{title}</h3><div className="mt-5 space-y-3">{links.map(([label, href]) => <Link key={label} to={href} className="block text-sm text-[#747C8B] transition hover:text-white">{label}</Link>)}</div></div>)}</div>
-      <div className="mx-auto mt-12 flex max-w-[1280px] flex-col gap-5 border-t border-white/[0.07] pt-7 text-xs text-[#5E6572] sm:flex-row sm:items-center sm:justify-between"><span>© {new Date().getFullYear()} PipsEvo. {t("Tous droits réservés.", "All rights reserved.")}</span><div className="flex flex-wrap items-center gap-4"><button type="button" onClick={() => setLanguage("fr")} className={`transition hover:text-white ${language === "fr" ? "text-[#B6A4FF]" : ""}`}>🇫🇷 Français</button><button type="button" onClick={() => setLanguage("en")} className={`transition hover:text-white ${language === "en" ? "text-[#B6A4FF]" : ""}`}>🇬🇧 English</button><button type="button" onClick={openCookieSettings} className="transition hover:text-white">{t("Gérer les cookies", "Manage cookies")}</button></div></div>
-    </footer>
+    <PublicFooter />
   </div>;
 }

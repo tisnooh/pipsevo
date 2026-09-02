@@ -172,34 +172,34 @@ export default function AppShell() {
 
         {/* Discipline du jour */}
         <div className={`px-3 mt-2 shrink-0 ${sidebarCollapsed ? "md:hidden" : ""}`}>
-          <div className="card-flat px-3 py-2.5 text-center">
-            <div className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.18em] text-[#9CA3AF]">Discipline du jour</div>
-            <div className="mt-2">
-              <svg viewBox="0 0 80 44" className="mx-auto h-8 w-24 max-w-full" aria-label={`Score de discipline : ${discipline} sur 100`}>
+          <div className="card-flat px-3 py-3 text-center">
+            <div className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9CA3AF]">Discipline du jour</div>
+            <div className="relative mx-auto mt-1.5 h-[58px] w-[112px] max-w-full">
+              <svg viewBox="0 0 112 62" className="absolute inset-0 h-full w-full" aria-label={`Score de discipline : ${discipline} sur 100`}>
                 <defs>
                   <linearGradient id="gauge-a" x1="0" y1="0" x2="1" y2="0">
                     <stop offset="0%" stopColor="#7C4DFF" />
                     <stop offset="100%" stopColor="#B58BFF" />
                   </linearGradient>
                 </defs>
-                <path d="M10 40 A30 30 0 0 1 70 40" stroke="#1E2430" strokeWidth="6" fill="none" strokeLinecap="round" />
+                <path d="M14 54 A42 42 0 0 1 98 54" stroke="#1E2430" strokeWidth="7" fill="none" strokeLinecap="round" />
                 <path
-                  d="M10 40 A30 30 0 0 1 70 40"
+                  d="M14 54 A42 42 0 0 1 98 54"
                   stroke="url(#gauge-a)"
-                  strokeWidth="6"
+                  strokeWidth="7"
                   fill="none"
                   strokeLinecap="round"
-                  strokeDasharray="95"
-                  strokeDashoffset={95 - (discipline / 100) * 95}
+                  strokeDasharray="132"
+                  strokeDashoffset={132 - (discipline / 100) * 132}
                 />
               </svg>
-              <div className="-mt-0.5 font-mono text-base font-bold leading-none">
-                {discipline}
-                <span className="ml-1 text-[8px] text-[#9CA3AF]">/100</span>
+              <div className="absolute inset-x-0 top-[32px] flex items-baseline justify-center gap-1">
+                <span className="font-numeric text-xl font-bold leading-none text-[#F5F7FB]">{discipline}</span>
+                <span className="font-numeric text-[9px] font-medium text-[#7E8798]">/100</span>
               </div>
             </div>
-            <div className={`mt-1 text-[9px] leading-tight ${discipline>=80?"text-[#46C99A]":discipline>=60?"text-[#FFB855]":"text-[#F26A70]"}`}>{discipline>=80?"Excellent":discipline>=60?"À consolider":discipline?"À améliorer":"En attente"}</div>
-            <svg viewBox="0 0 80 18" className="mx-auto mt-1 h-3 w-24 max-w-full">
+            <div className={`mt-1.5 text-[10px] font-medium leading-none ${discipline>=80?"text-[#46C99A]":discipline>=60?"text-[#FFB855]":"text-[#F26A70]"}`}>{discipline>=80?"Excellent":discipline>=60?"À consolider":discipline?"À améliorer":"En attente"}</div>
+            <svg viewBox="0 0 80 18" className="mx-auto mt-2 h-3 w-[88px] max-w-full" aria-hidden="true">
               <path d={discipline > 0 ? "M0,15 L10,12 L20,13 L30,9 L40,10 L50,6 L60,7 L70,3 L80,4" : "M0,13 L80,13"} stroke={discipline > 0 ? "#7C4DFF" : "#343A47"} strokeWidth="1.5" fill="none" />
             </svg>
           </div>

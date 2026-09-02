@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Check, Clock3, FileSpreadsheet, Layers3, Link2, ShieldCheck, Upload, WalletCards } from "lucide-react";
 import PublicHeader from "@/components/PublicHeader";
-import { Logo } from "@/components/Logo";
+import PublicFooter from "@/components/PublicFooter";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/context/I18nContext";
 import { INTEGRATIONS } from "@/config/integrations";
@@ -28,7 +28,7 @@ const methodIcons = {
 
 function StatusBadge({ status, children }) {
   const available = status === "available";
-  return <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[.11em] ${available ? "border-[#17E6AF]/25 bg-[#17E6AF]/[0.07] text-[#6DE8C2]" : "border-[#7657FF]/25 bg-[#7657FF]/[0.08] text-[#B4A3F8]"}`}>
+  return <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[.11em] ${available ? "border-[#46C99A]/25 bg-[#46C99A]/[0.07] text-[#65D8AE]" : "border-[#7657FF]/25 bg-[#7657FF]/[0.08] text-[#B4A3F8]"}`}>
     {available ? <Check className="h-3 w-3" /> : <Clock3 className="h-3 w-3" />}{children}
   </span>;
 }
@@ -62,12 +62,12 @@ export default function PlatformsPage() {
   const upcomingMethods = INTEGRATIONS.filter(item => item.status !== "available");
 
   return <div className="min-h-screen overflow-hidden bg-[#050505] text-white">
-    <PublicHeader />
+    <PublicHeader variant="landing" />
     <main id="main-content">
-      <section className="relative border-b border-white/[0.06] px-5 pb-20 pt-20 sm:px-6 sm:pb-24 sm:pt-24 lg:px-10 lg:pb-28 lg:pt-28">
+      <section className="relative border-b border-white/[0.06] px-5 pb-20 pt-40 sm:px-6 sm:pb-24 sm:pt-44 lg:px-10 lg:pb-28 lg:pt-48">
         <div className="pointer-events-none absolute left-1/2 top-0 h-[440px] w-[860px] -translate-x-1/2 rounded-full bg-[#5E42D5]/[0.10] blur-[120px]" />
         <div className="relative mx-auto max-w-[1180px] text-center">
-          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[#17E6AF]/20 bg-[#17E6AF]/[0.045] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[.17em] text-[#68DDB9]"><span className="h-1.5 w-1.5 rounded-full bg-[#17E6AF]" />{tr("Compatibilité PipsEvo", "PipsEvo compatibility")}</div>
+          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[#46C99A]/20 bg-[#46C99A]/[0.045] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[.17em] text-[#65D8AE]"><span className="h-1.5 w-1.5 rounded-full bg-[#46C99A]" />{tr("Compatibilité PipsEvo", "PipsEvo compatibility")}</div>
           <h1 className="mx-auto mt-7 max-w-4xl text-balance text-[40px] font-semibold leading-[1.02] tracking-[-0.045em] text-[#F3F4F6] sm:text-5xl lg:text-[68px]">{tr("Toutes tes plateformes. Un seul suivi cohérent.", "All your platforms. One consistent workflow.")}</h1>
           <p className="mx-auto mt-6 max-w-2xl text-[15px] leading-7 text-[#949CAB] sm:text-base">{tr("Ajoute tes comptes financés, structure tes trades et suis les limites de chaque prop firm depuis PipsEvo, sans mélanger compatibilité de suivi et connexion automatique.", "Add your funded accounts, structure your trades, and track each prop firm's limits from PipsEvo—without confusing tracking compatibility with automatic connections.")}</p>
           <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
@@ -76,7 +76,7 @@ export default function PlatformsPage() {
           </div>
           <div className="mx-auto mt-12 grid max-w-3xl grid-cols-3 divide-x divide-white/[0.08] rounded-2xl border border-white/[0.075] bg-[#080A10]/80 py-5">
             <div><strong className="block text-2xl font-semibold text-white">{PROP_FIRMS.length}</strong><span className="mt-1 block text-[9px] uppercase tracking-[.12em] text-[#69717F]">Prop firms</span></div>
-            <div><strong className="block text-2xl font-semibold text-[#66E8BF]">{availableMethods.length}</strong><span className="mt-1 block text-[9px] uppercase tracking-[.12em] text-[#69717F]">{tr("Modes disponibles", "Available methods")}</span></div>
+            <div><strong className="block text-2xl font-semibold text-[#46C99A]">{availableMethods.length}</strong><span className="mt-1 block text-[9px] uppercase tracking-[.12em] text-[#69717F]">{tr("Modes disponibles", "Available methods")}</span></div>
             <div><strong className="block text-2xl font-semibold text-[#A994FF]">2</strong><span className="mt-1 block text-[9px] uppercase tracking-[.12em] text-[#69717F]">{tr("Marchés couverts", "Markets covered")}</span></div>
           </div>
         </div>
@@ -107,11 +107,11 @@ export default function PlatformsPage() {
           </div>
 
           <div className="mt-10 grid gap-5 lg:grid-cols-2">
-            <div className="rounded-[24px] border border-[#17E6AF]/20 bg-[#17E6AF]/[0.035] p-5 sm:p-7">
-              <div className="flex items-center justify-between gap-4"><h3 className="text-lg font-semibold">{tr("Disponible maintenant", "Available now")}</h3><span className="h-2 w-2 rounded-full bg-[#17E6AF] shadow-[0_0_16px_rgba(23,230,175,.8)]" /></div>
+            <div className="rounded-[24px] border border-[#46C99A]/20 bg-[#46C99A]/[0.035] p-5 sm:p-7">
+              <div className="flex items-center justify-between gap-4"><h3 className="text-lg font-semibold">{tr("Disponible maintenant", "Available now")}</h3><span className="h-2 w-2 rounded-full bg-[#46C99A] shadow-[0_0_16px_rgba(70,201,154,.65)]" /></div>
               <div className="mt-5 space-y-3">{availableMethods.map(item => {
                 const Icon = methodIcons[item.id] || FileSpreadsheet;
-                return <article key={item.id} className="rounded-2xl border border-white/[0.07] bg-[#080A10] p-4 sm:p-5"><div className="flex items-start gap-4"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#17E6AF]/20 bg-[#17E6AF]/[0.06] text-[#65DDB8]"><Icon className="h-[18px] w-[18px]" /></span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h4 className="font-semibold text-[#EAECF0]">{item.name}</h4><StatusBadge status={item.status}>{item.statusLabel}</StatusBadge></div><p className="mt-2 text-xs leading-5 text-[#858D9C]">{item.description}</p>{item.id === "csv" && <Link to={user ? "/app/journal" : "/register"} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#77E3C0]">{tr("Ouvrir l’import", "Open import")}<ArrowRight className="h-3.5 w-3.5" /></Link>}</div></div></article>;
+                return <article key={item.id} className="rounded-2xl border border-white/[0.07] bg-[#080A10] p-4 sm:p-5"><div className="flex items-start gap-4"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#46C99A]/20 bg-[#46C99A]/[0.06] text-[#65D8AE]"><Icon className="h-[18px] w-[18px]" /></span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h4 className="font-semibold text-[#EAECF0]">{item.name}</h4><StatusBadge status={item.status}>{item.statusLabel}</StatusBadge></div><p className="mt-2 text-xs leading-5 text-[#858D9C]">{item.description}</p>{item.id === "csv" && <Link to={user ? "/app/journal" : "/register"} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#65D8AE]">{tr("Ouvrir l’import", "Open import")}<ArrowRight className="h-3.5 w-3.5" /></Link>}</div></div></article>;
               })}</div>
             </div>
 
@@ -153,8 +153,6 @@ export default function PlatformsPage() {
       </section>
     </main>
 
-    <footer className="border-t border-white/[0.07] px-5 py-12 sm:px-6 lg:px-10">
-      <div className="mx-auto flex max-w-[1180px] flex-col justify-between gap-8 sm:flex-row sm:items-end"><div><Logo size="md" /><p className="mt-4 max-w-sm text-xs leading-5 text-[#727A89]">{tr("Journal, discipline et suivi multi-comptes pour traders financés.", "Journal, discipline, and multi-account tracking for funded traders.")}</p></div><div className="flex flex-wrap gap-x-6 gap-y-3 text-xs text-[#7B8392]"><Link to="/">{tr("Accueil", "Home")}</Link><Link to="/pricing">{tr("Tarifs", "Pricing")}</Link><Link to="/faq">FAQ</Link><Link to="/contact">Contact</Link></div></div>
-    </footer>
+    <PublicFooter />
   </div>;
 }

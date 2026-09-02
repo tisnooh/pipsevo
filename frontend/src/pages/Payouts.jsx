@@ -126,7 +126,7 @@ export default function Payouts() {
           <form onClick={(e)=>e.stopPropagation()} onSubmit={create} className="pe-card pe-card-pad w-full max-w-md space-y-4 glow-green max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between"><h2 className="pe-section-title">Enregistrer un payout</h2><button type="button" onClick={()=>setOpen(false)} aria-label="Fermer" className="pe-icon-button"><X className="w-4 h-4"/></button></div>
             <div>
-              <label className="text-xs font-mono uppercase text-[#9CA3AF]">Compte</label>
+              <label className="pe-field-label">Compte</label>
               <select value={form.account_id} onChange={(e)=>setForm({...form,account_id:e.target.value})} data-testid="p-account" className="pe-control mt-1 w-full">
                 {accs.map(a => <option key={a.id} value={a.id}>{a.firm} — {a.name}</option>)}
               </select>
@@ -149,8 +149,8 @@ const Stat = ({ label, value, color, icon: Icon }) => (
   </div>
 );
 const SimOut = ({ label, value, color }) => (
-  <div className="card-flat p-3"><div className="text-pe-micro text-[#9CA3AF] uppercase font-mono">{label}</div><div className="font-numeric font-bold mt-1" style={{color}}>{value}</div></div>
+  <div className="card-flat p-3"><div className="pe-metric-label">{label}</div><div className="font-numeric font-bold mt-1" style={{color}}>{value}</div></div>
 );
 const Fld = ({ label, value, onChange, type="text", testid }) => (
-  <div><label className="text-xs font-mono uppercase text-[#9CA3AF]">{label}</label><input type={type} required value={value} onChange={(e)=>onChange(e.target.value)} data-testid={testid} className="pe-control mt-1 w-full font-numeric"/></div>
+  <div><label className="pe-field-label">{label}</label><input type={type} required value={value} onChange={(e)=>onChange(e.target.value)} data-testid={testid} className="pe-control mt-1.5 w-full font-numeric"/></div>
 );

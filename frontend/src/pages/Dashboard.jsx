@@ -216,7 +216,7 @@ export default function Dashboard() {
         <div className={`${panel} overflow-hidden lg:col-span-2`}>
           <div className="border-b border-white/[0.07] p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5"><div className="text-sm font-semibold">Trades récents</div><span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] font-mono text-[#9CA3AF]">{filtered.length} affichés</span></div>
+              <div className="flex items-center gap-2.5"><div className="text-sm font-semibold">Trades récents</div><span className="font-numeric rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] text-[#9CA3AF]">{filtered.length} affichés</span></div>
               <Link to="/app/journal" className="text-xs text-[#9B8DE1] transition hover:text-white">Ouvrir le journal →</Link>
             </div>
           </div>
@@ -295,7 +295,7 @@ export default function Dashboard() {
                     <div className="flex items-center gap-2.5 min-w-0"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#15182A] text-[10px] font-bold text-[#B58BFF]">{String(a.firm || a.name || "C").slice(0,2).toUpperCase()}</span><div className="min-w-0"><div className="text-xs font-medium truncate">{a.name || a.firm}</div><div className="text-[9px] text-[#6B7280] truncate mt-0.5">{a.firm || "Compte de trading"}</div></div></div>
                     <div className="text-right shrink-0"><div className="text-xs font-numeric font-semibold" style={{ color: pnl >= 0 ? "#46C99A" : "#F26A70" }}>{money(pnl,{signDisplay:"always"})}</div><div className="text-[9px] text-[#6B7280] mt-0.5">P&amp;L</div></div>
                   </div>
-                  <div className="mt-3 flex items-center gap-2"><div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full" style={{width:`${health}%`, background: accent}}/></div><span className="w-7 text-right text-[9px] font-mono text-[#8B93A3]">{health}%</span></div>
+                  <div className="mt-3 flex items-center gap-2"><div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full" style={{width:`${health}%`, background: accent}}/></div><span className="font-numeric w-7 text-right text-[9px] text-[#8B93A3]">{health}%</span></div>
                 </div>
               );
             })}
@@ -333,7 +333,7 @@ function StreakValue({ label, streak, accent }) {
   const state = streak.count ? (streak.positive ? "gagnants" : "perdants") : "en attente";
   return <div className="rounded-lg border border-[#6571CF]/15 bg-[#090E1C] px-2 py-2 text-center">
     <div className="text-[8px] uppercase tracking-[.14em] text-[#667188]">{label}</div>
-    <div className="mx-auto mt-1.5 grid h-8 w-8 place-items-center rounded-full border-2 font-mono text-sm font-semibold text-white" style={{ borderColor: streak.count ? accent : "#263048", boxShadow: streak.count ? `0 0 16px ${accent}33` : "none" }}>{streak.count}</div>
+    <div className="font-numeric mx-auto mt-1.5 grid h-8 w-8 place-items-center rounded-full border-2 text-sm font-semibold text-white" style={{ borderColor: streak.count ? accent : "#263048", boxShadow: streak.count ? `0 0 16px ${accent}33` : "none" }}>{streak.count}</div>
     <div className={`mt-1 text-[8px] ${streak.count && !streak.positive ? "text-[#F26A70]" : "text-[#78839A]"}`}>{state}</div>
   </div>;
 }
@@ -350,7 +350,7 @@ function TradeCalendarPanel({ cells, label, accent, money, onPrevious, onNext, o
         <button type="button" onClick={onNext} className="grid h-8 w-8 place-items-center rounded-lg border border-[#6571CF]/15 text-[#8690A5] transition hover:border-[#7881E8]/35 hover:text-white" aria-label="Mois suivant"><ChevronRight className="h-4 w-4" /></button>
         <button type="button" onClick={onToday} className="ml-1 rounded-lg border border-[#6571CF]/15 px-3 py-2 text-[10px] text-[#98A1B5] transition hover:border-[#7881E8]/35 hover:text-white">Ce mois</button>
       </div>
-      <div className="flex flex-wrap items-center gap-2 text-[10px]"><Link to="/app/day-view" className="rounded-lg border border-[#8067F4]/30 bg-[#8067F4]/10 px-2.5 py-1.5 font-semibold text-[#B7A8FF] transition hover:border-[#8067F4]/55 hover:text-white">Vue journalière</Link><span className="rounded-lg border border-[#6571CF]/15 bg-[#090E1C] px-2.5 py-1.5 text-[#8B95A9]">{activeDays} jour{activeDays > 1 ? "s" : ""} tradé{activeDays > 1 ? "s" : ""}</span><span className={`rounded-lg border px-2.5 py-1.5 font-mono ${monthPnl > 0 ? "border-[#46C99A]/20 bg-[#46C99A]/[0.07] text-[#46C99A]" : monthPnl < 0 ? "border-[#F26A70]/20 bg-[#F26A70]/[0.07] text-[#F26A70]" : "border-[#6571CF]/15 bg-[#090E1C] text-[#8B95A9]"}`}>{money(monthPnl, { signDisplay: "always" })}</span></div>
+      <div className="flex flex-wrap items-center gap-2 text-[10px]"><Link to="/app/day-view" className="rounded-lg border border-[#8067F4]/30 bg-[#8067F4]/10 px-2.5 py-1.5 font-semibold text-[#B7A8FF] transition hover:border-[#8067F4]/55 hover:text-white">Vue journalière</Link><span className="rounded-lg border border-[#6571CF]/15 bg-[#090E1C] px-2.5 py-1.5 text-[#8B95A9]">{activeDays} jour{activeDays > 1 ? "s" : ""} tradé{activeDays > 1 ? "s" : ""}</span><span className={`font-numeric rounded-lg border px-2.5 py-1.5 ${monthPnl > 0 ? "border-[#46C99A]/20 bg-[#46C99A]/[0.07] text-[#46C99A]" : monthPnl < 0 ? "border-[#F26A70]/20 bg-[#F26A70]/[0.07] text-[#F26A70]" : "border-[#6571CF]/15 bg-[#090E1C] text-[#8B95A9]"}`}>{money(monthPnl, { signDisplay: "always" })}</span></div>
     </div>
     <div className="p-2 sm:p-4">
       <div className="grid grid-cols-7 gap-1 text-center text-[8px] font-medium uppercase tracking-[.12em] text-[#5F6A80] sm:gap-2 sm:text-[9px]">{["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => <div key={day} className="py-1.5">{day}</div>)}</div>
@@ -367,8 +367,8 @@ function TradeCalendarPanel({ cells, label, accent, money, onPrevious, onNext, o
             className={`relative min-h-[58px] rounded-lg border p-1.5 text-left transition sm:min-h-[92px] sm:p-2.5 ${!cell.inMonth ? "cursor-default border-transparent bg-transparent opacity-25" : hasTrades ? positive ? "border-[#46C99A]/30 bg-[#46C99A]/[0.08] hover:border-[#46C99A]/55" : negative ? "border-[#F26A70]/30 bg-[#F26A70]/[0.08] hover:border-[#F26A70]/55" : "border-[#6571CF]/18 bg-[#6571CF]/[0.06] hover:border-[#727DDE]/35" : "border-[#6571CF]/12 bg-[#090E1C] hover:border-[#727DDE]/28"}`}
             aria-label={`${cell.key}, ${cell.trades.length} trades, ${money(cell.pnl)}`}
           >
-            <div className="text-right font-mono text-[9px] text-[#7F899E] sm:text-[10px]">{cell.day}</div>
-            {hasTrades && <div className="mt-1 text-center sm:mt-3"><div className={`truncate font-mono text-[8px] font-semibold sm:text-xs ${positive ? "text-[#46C99A]" : negative ? "text-[#F26A70]" : "text-[#9C8EF0]"}`}>{money(cell.pnl, { signDisplay: "always", maximumFractionDigits: 0 })}</div><div className="mt-1 hidden text-[8px] text-[#69758B] sm:block">{cell.trades.length} trade{cell.trades.length > 1 ? "s" : ""}</div><span className="mx-auto mt-1 block h-1 w-1 rounded-full sm:hidden" style={{ background: positive ? "#46C99A" : negative ? "#F26A70" : accent }} /></div>}
+            <div className="font-numeric text-right text-[9px] text-[#7F899E] sm:text-[10px]">{cell.day}</div>
+            {hasTrades && <div className="mt-1 text-center sm:mt-3"><div className={`font-numeric truncate text-[8px] font-semibold sm:text-xs ${positive ? "text-[#46C99A]" : negative ? "text-[#F26A70]" : "text-[#9C8EF0]"}`}>{money(cell.pnl, { signDisplay: "always", maximumFractionDigits: 0 })}</div><div className="mt-1 hidden text-[8px] text-[#69758B] sm:block">{cell.trades.length} trade{cell.trades.length > 1 ? "s" : ""}</div><span className="mx-auto mt-1 block h-1 w-1 rounded-full sm:hidden" style={{ background: positive ? "#46C99A" : negative ? "#F26A70" : accent }} /></div>}
           </button>;
         })}
       </div>
@@ -503,7 +503,7 @@ function MiniGauge({ value, display, suffix, accent, id }) {
 
 function DisciplineRow({ label, value, progress, accent }) {
   return <div>
-    <div className="flex items-center justify-between gap-2 text-[10px]"><span className="text-[#747D91]">{label}</span><span className="font-mono text-[#CBD0DC]">{value}</span></div>
+    <div className="flex items-center justify-between gap-2 text-[10px]"><span className="text-[#747D91]">{label}</span><span className="font-numeric text-[#CBD0DC]">{value}</span></div>
     <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#1C2538]"><div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${clamp(progress)}%`, background: accent }} /></div>
   </div>;
 }

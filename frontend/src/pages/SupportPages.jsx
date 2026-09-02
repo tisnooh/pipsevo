@@ -1,34 +1,87 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Clock3, Mail, Minus, ShieldCheck } from "lucide-react";
-import { Logo } from "@/components/Logo";
+import { ArrowRight, BookOpen, Brain, Check, ChevronDown, CircleHelp, Clock3, LifeBuoy, Mail, Minus, Search, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
 import PublicHeader from "@/components/PublicHeader";
+import PublicFooter from "@/components/PublicFooter";
 import { contact } from "@/lib/api";
 import { toast } from "sonner";
 import { openCookieSettings } from "@/components/CookieConsent";
 import { BILLING_CONFIG, COMMERCIAL_PHASES, PLANS, PRICING_COMPARISON, formatBillingPrice, launchOfferCopy } from "@/config/billing";
 import { captureCommercialEvent } from "@/lib/commercialAnalytics";
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/context/I18nContext";
 
 const faqs = [
-  ["Comment ajouter mes trades ?", "Depuis le Journal, clique sur Nouveau trade, choisis ton compte puis renseigne le résultat et le contexte du trade."],
-  ["Quelles prop firms sont compatibles ?", "La saisie guidée couvre actuellement Topstep, Apex, FTMO, FundedNext, The5ers et Take Profit Trader. Leur présence dans PipsEvo indique une compatibilité de suivi, pas un partenariat officiel."],
-  ["PipsEvo donne-t-il des signaux ?", "Non. Le service analyse uniquement tes performances, ta discipline et tes habitudes."],
-  ["Mes données sont-elles privées ?", "Tes données sont associées à ton compte et les routes privées nécessitent une authentification."],
-  ["Puis-je utiliser plusieurs comptes ?", "Oui. Le plan bêta permet de centraliser plusieurs comptes et de filtrer les résultats par compte."],
-  ["Comment fonctionne le coach IA ?", "Il s'appuie sur tes derniers trades pour proposer une analyse comportementale, jamais des ordres d'achat ou de vente."],
-  ["Puis-je résilier à tout moment ?", "Aucun abonnement payant n'est proposé pendant la bêta. Les modalités de résiliation seront affichées clairement avant toute future souscription."],
+  { category: "start", questionFr: "Comment ajouter mon premier trade ?", questionEn: "How do I add my first trade?", answerFr: "Depuis le Journal, clique sur « Nouveau trade », choisis ton compte puis renseigne le résultat, le contexte et le respect de ton plan. Tu peux compléter les détails plus tard.", answerEn: "From the Journal, select “New trade”, choose your account, then enter the result, context, and plan compliance. You can complete the details later." },
+  { category: "start", questionFr: "Puis-je importer un historique existant ?", questionEn: "Can I import an existing history?", answerFr: "Oui, l’import CSV sécurisé est disponible depuis le Journal. Les connexions automatiques restent clairement indiquées comme étant en préparation tant qu’elles ne sont pas validées.", answerEn: "Yes. Secure CSV import is available from the Journal. Automatic connections remain clearly marked as in preparation until they are validated." },
+  { category: "accounts", questionFr: "Quelles prop firms sont compatibles ?", questionEn: "Which prop firms are supported?", answerFr: "Le suivi guidé couvre actuellement Topstep, Apex, FTMO, FundedNext, The5ers et Take Profit Trader. Leur présence indique une compatibilité de suivi, pas un partenariat officiel.", answerEn: "Guided tracking currently covers Topstep, Apex, FTMO, FundedNext, The5ers, and Take Profit Trader. Their presence indicates tracking compatibility, not an official partnership." },
+  { category: "accounts", questionFr: "Puis-je suivre plusieurs comptes ?", questionEn: "Can I track multiple accounts?", answerFr: "Oui. PipsEvo centralise les comptes et permet de filtrer les résultats par compte, période et actif. Les limites du plan actif sont toujours affichées avant l’ajout.", answerEn: "Yes. PipsEvo centralizes accounts and lets you filter results by account, period, and asset. Your current plan limits are always shown before adding one." },
+  { category: "analysis", questionFr: "PipsEvo donne-t-il des signaux de trading ?", questionEn: "Does PipsEvo provide trading signals?", answerFr: "Non. PipsEvo analyse uniquement tes propres données, ta discipline et ton processus. Il ne prédit pas le marché et ne recommande aucune entrée ou sortie.", answerEn: "No. PipsEvo only analyzes your own data, discipline, and process. It does not predict markets or recommend entries or exits." },
+  { category: "analysis", questionFr: "Comment fonctionne Atlas IA ?", questionEn: "How does Atlas AI work?", answerFr: "Atlas s’appuie sur les trades présents dans ton journal pour faire ressortir des habitudes, écarts au plan et pistes de travail. Une réponse utile doit pouvoir être reliée aux données utilisées.", answerEn: "Atlas uses the trades in your journal to surface habits, plan deviations, and areas to work on. A useful answer should be traceable to the data it used." },
+  { category: "security", questionFr: "Mes données sont-elles privées ?", questionEn: "Is my data private?", answerFr: "Tes données sont associées à ton compte et les espaces privés exigent une authentification. Les données d’analyse facultatives ne sont chargées qu’après ton accord.", answerEn: "Your data is linked to your account and private areas require authentication. Optional analytics data is only loaded after your consent." },
+  { category: "security", questionFr: "Puis-je exporter ou supprimer mes données ?", questionEn: "Can I export or delete my data?", answerFr: "Oui. L’export est disponible dans les paramètres. Tu peux également demander la suppression définitive de ton compte depuis ton espace ou contacter le support.", answerEn: "Yes. Export is available in Settings. You can also request permanent account deletion from your workspace or contact support." },
+  { category: "billing", questionFr: "La bêta est-elle vraiment gratuite ?", questionEn: "Is the beta really free?", answerFr: "Oui. Aucun abonnement payant ni carte bancaire ne sont requis pendant la bêta. Les futurs tarifs seront annoncés avant toute activation.", answerEn: "Yes. No paid subscription or credit card is required during beta. Future pricing will be announced before any activation." },
+  { category: "billing", questionFr: "Que signifient les fonctions « prévues » ?", questionEn: "What do “planned” features mean?", answerFr: "Elles font partie de la feuille de route, mais ne sont ni présentées comme actives ni vendues aujourd’hui. Leur disponibilité peut encore évoluer.", answerEn: "They are part of the roadmap but are not presented as active or sold today. Their availability may still change." },
 ];
 
-function PublicLayout({ title, subtitle, children, wide = false }) {
-  return <div className="min-h-screen bg-[#050505] text-white">
-    <PublicHeader />
-    <main id="main-content" className={`${wide ? "max-w-6xl" : "max-w-5xl"} mx-auto px-4 pb-14 pt-12 sm:px-6 sm:pt-14 md:py-16`}><div className="mb-9 text-center sm:mb-10"><h1 className="pe-marketing-title mx-auto text-gradient">{title}</h1><p className="pe-marketing-copy mx-auto mt-4">{subtitle}</p></div>{children}</main>
-    <Footer/>
+function PublicLayout({ eyebrow = "PipsEvo", title, subtitle, children, wide = false }) {
+  return <div className="min-h-screen overflow-hidden bg-[#050505] text-white">
+    <PublicHeader variant="landing" />
+    <main id="main-content" className={`relative mx-auto px-5 pb-24 pt-40 sm:px-6 sm:pt-44 lg:px-10 lg:pb-32 lg:pt-48 ${wide ? "max-w-[1280px]" : "max-w-[1120px]"}`}>
+      <div className="pointer-events-none absolute left-1/2 top-24 h-72 w-[720px] max-w-[90vw] -translate-x-1/2 rounded-full bg-[#7657FF]/[0.10] blur-[110px]" />
+      <div className="relative mb-12 text-center sm:mb-14">
+        <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[#7657FF]/25 bg-[#7657FF]/[0.07] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.18em] text-[#B29FFF]"><Sparkles className="h-3 w-3" />{eyebrow}</div>
+        <h1 className="pe-marketing-title mx-auto mt-6 text-[#F2F3F6]">{title}</h1>
+        <p className="pe-marketing-copy mx-auto mt-4">{subtitle}</p>
+      </div>
+      <div className="relative">{children}</div>
+    </main>
+    <PublicFooter />
   </div>;
 }
 
-export function FAQPage(){return <PublicLayout title="Questions fréquentes" subtitle="Tout ce qu'il faut savoir pour utiliser PipsEvo."><div className="max-w-3xl mx-auto space-y-3">{faqs.map(([q,a])=><details key={q} className="card-flat p-5"><summary className="cursor-pointer font-semibold">{q}</summary><p className="text-sm text-[#9CA3AF] mt-3 leading-relaxed">{a}</p></details>)}</div></PublicLayout>}
+export function FAQPage(){
+  const { language, t } = useI18n();
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("all");
+  const categories = [
+    ["all", t("Toutes", "All")], ["start", t("Démarrage", "Getting started")], ["accounts", t("Comptes", "Accounts")],
+    ["analysis", t("Analyse", "Analysis")], ["security", t("Sécurité", "Security")], ["billing", t("Bêta et tarifs", "Beta and pricing")],
+  ];
+  const normalizedQuery = query.trim().toLocaleLowerCase(language === "en" ? "en" : "fr");
+  const filtered = useMemo(() => faqs.filter(item => {
+    if (category !== "all" && item.category !== category) return false;
+    if (!normalizedQuery) return true;
+    const haystack = `${language === "en" ? item.questionEn : item.questionFr} ${language === "en" ? item.answerEn : item.answerFr}`.toLocaleLowerCase(language === "en" ? "en" : "fr");
+    return haystack.includes(normalizedQuery);
+  }), [category, language, normalizedQuery]);
+
+  return <PublicLayout eyebrow={t("Base de connaissances", "Knowledge base")} title={t("Questions fréquentes", "Frequently asked questions")} subtitle={t("Des réponses précises sur le journal, les comptes financés, Atlas et la sécurité de tes données.", "Clear answers about the journal, funded accounts, Atlas, and your data security.")} wide>
+    <div className="mx-auto max-w-4xl">
+      <label className="relative block">
+        <span className="sr-only">{t("Rechercher dans la FAQ", "Search the FAQ")}</span>
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#737C8C]" />
+        <input value={query} onChange={event => setQuery(event.target.value)} className="h-14 w-full rounded-2xl border border-white/[0.09] bg-[#0A0C14] pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-[#656D7B] focus:border-[#7657FF]/65 focus:ring-4 focus:ring-[#7657FF]/10" placeholder={t("Rechercher une question…", "Search for a question…")} />
+      </label>
+      <div className="mt-4 flex gap-2 overflow-x-auto pb-2" aria-label={t("Catégories de questions", "Question categories")}>{categories.map(([id, label]) => <button key={id} type="button" aria-pressed={category === id} onClick={() => setCategory(id)} className={`shrink-0 rounded-full border px-3.5 py-2 text-xs font-medium transition ${category === id ? "border-[#7657FF]/55 bg-[#7657FF]/15 text-[#D9D0FF]" : "border-white/[0.08] bg-white/[0.02] text-[#8E96A5] hover:border-white/20 hover:text-white"}`}>{label}</button>)}</div>
+      <div className="mt-8 divide-y divide-white/[0.07] overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#090B12]">
+        {filtered.map(item => {
+          const question = language === "en" ? item.questionEn : item.questionFr;
+          const answer = language === "en" ? item.answerEn : item.answerFr;
+          return <details key={question} className="group px-5 sm:px-7">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-5 py-5 text-left text-[15px] font-semibold text-[#E7E9EE] sm:py-6"><span>{question}</span><ChevronDown className="h-4 w-4 shrink-0 text-[#7C8494] transition group-open:rotate-180 group-open:text-[#AA94FF]" /></summary>
+            <p className="max-w-3xl pb-6 pr-9 text-sm leading-7 text-[#8D95A4]">{answer}</p>
+          </details>;
+        })}
+        {!filtered.length && <div className="px-6 py-12 text-center"><CircleHelp className="mx-auto h-6 w-6 text-[#876DFF]" /><p className="mt-4 font-semibold">{t("Aucun résultat pour cette recherche.", "No result for this search.")}</p><button type="button" onClick={() => { setQuery(""); setCategory("all"); }} className="mt-3 text-sm text-[#AA94FF] hover:text-white">{t("Réinitialiser la recherche", "Reset search")}</button></div>}
+      </div>
+      <div className="mt-8 flex flex-col items-start justify-between gap-5 rounded-[22px] border border-[#7657FF]/20 bg-[#7657FF]/[0.055] p-6 sm:flex-row sm:items-center">
+        <div><h2 className="font-semibold text-[#F0F1F4]">{t("Tu ne trouves pas ta réponse ?", "Can’t find your answer?")}</h2><p className="mt-1.5 text-sm text-[#8F97A6]">{t("Explique-nous précisément ce qui te bloque.", "Tell us exactly what is blocking you.")}</p></div>
+        <Link to="/contact" className="btn-primary inline-flex shrink-0 items-center gap-2 !rounded-xl">{t("Contacter le support", "Contact support")}<ArrowRight className="h-4 w-4" /></Link>
+      </div>
+    </div>
+  </PublicLayout>;
+}
 
 export function ContactPage(){
   const [form,setForm]=useState({name:"",email:"",subject:"",message:""});
@@ -54,7 +107,7 @@ export function PricingPage(){
   const subtitle=isBeta?"Teste les fonctions essentielles de PipsEvo gratuitement, sans carte bancaire.":isLaunch?`${launch.title} ${launch.detail}`:"Deux formules claires, sans engagement et adaptées à ton rythme.";
   const visiblePlans=isBeta?[PLANS.beta,PLANS.essential,PLANS.pro]:[PLANS.essential,PLANS.pro];
   return <PublicLayout title={title} subtitle={subtitle} wide>
-    {isBeta&&<div className="mx-auto mb-8 max-w-3xl rounded-2xl border border-[#00E676]/20 bg-[#00E676]/[0.05] p-5 text-center"><div className="text-xs font-mono uppercase tracking-[.2em] text-[#00E676]">Bêta gratuite en cours</div><p className="mt-2 text-sm leading-relaxed text-[#B5BBC9]">Les fonctions indiquées comme « prévues » ne sont pas encore vendues ni présentées comme disponibles. Tu peux utiliser la bêta immédiatement et sans carte bancaire.</p></div>}
+    {isBeta&&<div className="mx-auto mb-8 max-w-3xl rounded-2xl border border-[#46C99A]/20 bg-[#46C99A]/[0.05] p-5 text-center"><div className="text-xs font-mono uppercase tracking-[.2em] text-[#46C99A]">Bêta gratuite en cours</div><p className="mt-2 text-sm leading-relaxed text-[#B5BBC9]">Les fonctions indiquées comme « prévues » ne sont pas encore vendues ni présentées comme disponibles. Tu peux utiliser la bêta immédiatement et sans carte bancaire.</p></div>}
     {isLaunch&&<div className="mx-auto mb-8 max-w-3xl rounded-2xl border border-[#7C4DFF]/30 bg-gradient-to-r from-[#7C4DFF]/10 to-[#4F8CFF]/10 p-5 text-center"><div className="text-xs font-mono uppercase tracking-[.2em] text-[#C8AEFF]">Offre réservée aux utilisateurs ayant rejoint la bêta</div><p className="mt-2 text-sm text-white">Sans engagement. Annulation possible à tout moment.</p>{BILLING_CONFIG.launchOfferEndDate&&<p className="mt-2 text-xs text-[#9CA3AF]">Offre valable jusqu’au {new Date(BILLING_CONFIG.launchOfferEndDate).toLocaleDateString("fr-FR")}.</p>}</div>}
     <div className="mb-5 text-center text-xs font-mono uppercase tracking-[.2em] text-[#7E8798]">{isBeta?"Accès actuel et tarifs mensuels prévus":"Abonnements mensuels"}</div>
     <div className={`mx-auto grid max-w-6xl gap-5 ${visiblePlans.length===3?"lg:grid-cols-3":"md:grid-cols-2"}`}>
@@ -69,21 +122,21 @@ const Plan=({plan,phase,recommended=false,current=false,authenticated=false})=>{
   const unavailable=phase===COMMERCIAL_PHASES.BETA&&!isBetaPlan;
   const event=plan.id==="pro"?"pro_clicked":"essential_clicked";
   const launchPro=phase===COMMERCIAL_PHASES.LAUNCH_OFFER&&plan.id==="pro";
-  return <article className={`card-elev relative flex h-full flex-col overflow-hidden p-6 sm:p-7 ${recommended?"glow-purple border-[#7C4DFF]/55":""} ${current?"border-[#00E676]/35 bg-[#00E676]/[0.025]":""}`}>
+  return <article className={`card-elev relative flex h-full flex-col overflow-hidden p-6 sm:p-7 ${recommended?"glow-purple border-[#7C4DFF]/55":""} ${current?"border-[#46C99A]/35 bg-[#46C99A]/[0.025]":""}`}>
     {recommended&&<span className="pe-badge absolute right-5 top-5 border-[#7C4DFF]/35 bg-[#7C4DFF]/15 text-[#C8AEFF]">LE PLUS COMPLET</span>}
-    {current&&<span className="pe-badge absolute right-5 top-5 border-[#00E676]/30 bg-[#00E676]/10 text-[#70F5AE]">DISPONIBLE</span>}
+    {current&&<span className="pe-badge absolute right-5 top-5 border-[#46C99A]/30 bg-[#46C99A]/10 text-[#65D8AE]">DISPONIBLE</span>}
     <div className="pr-24 text-[#B58BFF] font-mono uppercase text-xs">{plan.name}</div>
     <div className="mt-4 flex flex-wrap items-end gap-2"><span className="text-4xl font-bold font-numeric">{launchPro?formatBillingPrice(BILLING_CONFIG.prices.betaLaunch):formatBillingPrice(plan.price)}</span>{!isBetaPlan&&<span className="pb-1 text-sm text-[#9CA3AF]">/mois</span>}</div>
     {launchPro&&<p className="mt-2 text-xs text-[#C8AEFF]">Premier mois, puis {formatBillingPrice(BILLING_CONFIG.prices.pro)}/mois.</p>}
     <p className="mt-4 min-h-10 text-sm leading-relaxed text-[#9CA3AF]">{plan.description}</p>
-    <div className="mt-6 flex-1 space-y-3">{plan.features.map(x=><div key={x} className="flex gap-2 text-sm text-[#D0D4DE]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#00E676]"/>{x}</div>)}</div>
+    <div className="mt-6 flex-1 space-y-3">{plan.features.map(x=><div key={x} className="flex gap-2 text-sm text-[#D0D4DE]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#46C99A]"/>{x}</div>)}</div>
     {current?<Link to={authenticated?"/app/dashboard":"/register"} onClick={()=>captureCommercialEvent("beta_cta_clicked",{phase,authenticated})} className="btn-primary mt-7 inline-flex w-full items-center justify-center">{authenticated?"Ouvrir mon espace":"Commencer gratuitement"}</Link>:<button type="button" disabled onClick={()=>captureCommercialEvent(event,{phase})} title={unavailable?"Disponible après la bêta":"Paiement en cours de préparation"} className={`${recommended?"btn-primary":"btn-ghost"} mt-7 w-full cursor-not-allowed opacity-60`}>{unavailable?"Disponible après la bêta":launchPro?`Profiter de l’offre à ${formatBillingPrice(BILLING_CONFIG.prices.betaLaunch)}`:`Choisir ${plan.id==="pro"?"Pro":"Essential"}`}</button>}
     {!current&&<p className="mt-2 text-center text-pe-micro text-[#7E8798]">{unavailable?"Fonctionnalités et paiement encore en préparation.":"Aucun débit aujourd’hui."}</p>}
   </article>;
 };
 
 const ComparisonValue=({value})=>{
-  if(value===true)return <span className="inline-flex items-center gap-1.5 text-[#CFEFDD]"><Check className="h-4 w-4 text-[#00E676]"/>Inclus</span>;
+  if(value===true)return <span className="inline-flex items-center gap-1.5 text-[#CFEFDD]"><Check className="h-4 w-4 text-[#46C99A]"/>Inclus</span>;
   if(value==="planned")return <span className="inline-flex items-center gap-1.5 text-[#C8AEFF]"><Clock3 className="h-4 w-4"/>Prévu</span>;
   if(value===false)return <span className="inline-flex items-center gap-1.5 text-[#6F7787]"><Minus className="h-4 w-4"/>Non inclus</span>;
   return <span className="text-[#D6D9E2]">{value}</span>;
@@ -94,11 +147,11 @@ const PricingComparison=()=> <section aria-labelledby="pricing-comparison-title"
   <div className="hidden overflow-hidden rounded-3xl border border-white/[0.08] bg-[#090B13] lg:block">
     <table className="w-full table-fixed border-collapse text-left text-sm">
       <caption className="sr-only">Comparaison des formules Bêta, Essential et Pro</caption>
-      <thead className="bg-[#0F1220]"><tr><th scope="col" className="w-[46%] px-6 py-5 text-xs uppercase tracking-[.16em] text-[#8E96A7]">Fonctionnalité</th><th scope="col" className="w-[18%] px-4 py-5 text-[#70F5AE]">Bêta</th><th scope="col" className="w-[18%] px-4 py-5 text-white">Essential</th><th scope="col" className="w-[18%] px-4 py-5 text-[#C8AEFF]">Pro</th></tr></thead>
+      <thead className="bg-[#0F1220]"><tr><th scope="col" className="w-[46%] px-6 py-5 text-xs uppercase tracking-[.16em] text-[#8E96A7]">Fonctionnalité</th><th scope="col" className="w-[18%] px-4 py-5 text-[#65D8AE]">Bêta</th><th scope="col" className="w-[18%] px-4 py-5 text-white">Essential</th><th scope="col" className="w-[18%] px-4 py-5 text-[#C8AEFF]">Pro</th></tr></thead>
       <tbody>{PRICING_COMPARISON.map(section=><React.Fragment key={section.id}><tr><th colSpan={4} scope="colgroup" className="border-y border-white/[0.07] bg-white/[0.025] px-6 py-4 text-xs font-semibold uppercase tracking-[.16em] text-[#B58BFF]">{section.title}</th></tr>{section.rows.map(row=><tr key={row.label} className="border-b border-white/[0.06] last:border-b-0"><th scope="row" className="px-6 py-4 font-medium text-[#E5E7ED]">{row.label}</th><td className="px-4 py-4"><ComparisonValue value={row.beta}/></td><td className="px-4 py-4"><ComparisonValue value={row.essential}/></td><td className="bg-[#7C4DFF]/[0.025] px-4 py-4"><ComparisonValue value={row.pro}/></td></tr>)}</React.Fragment>)}</tbody>
     </table>
   </div>
-  <div className="space-y-4 lg:hidden">{PRICING_COMPARISON.map(section=><details key={section.id} className="card-flat group overflow-hidden" open={section.id==="accounts"}><summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-semibold"><span>{section.title}</span><span aria-hidden="true" className="text-xl text-[#B58BFF] transition-transform group-open:rotate-45">+</span></summary><div className="border-t border-white/[0.07] px-4 pb-4">{section.rows.map(row=><div key={row.label} className="border-b border-white/[0.06] py-4 last:border-b-0"><div className="mb-3 text-sm font-medium text-white">{row.label}</div><div className="grid grid-cols-3 gap-2 text-xs"><div><div className="mb-1.5 text-pe-micro uppercase tracking-wider text-[#70F5AE]">Bêta</div><ComparisonValue value={row.beta}/></div><div><div className="mb-1.5 text-pe-micro uppercase tracking-wider text-[#9CA3AF]">Essential</div><ComparisonValue value={row.essential}/></div><div><div className="mb-1.5 text-pe-micro uppercase tracking-wider text-[#C8AEFF]">Pro</div><ComparisonValue value={row.pro}/></div></div></div>)}</div></details>)}</div>
+  <div className="space-y-4 lg:hidden">{PRICING_COMPARISON.map(section=><details key={section.id} className="card-flat group overflow-hidden" open={section.id==="accounts"}><summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-semibold"><span>{section.title}</span><span aria-hidden="true" className="text-xl text-[#B58BFF] transition-transform group-open:rotate-45">+</span></summary><div className="border-t border-white/[0.07] px-4 pb-4">{section.rows.map(row=><div key={row.label} className="border-b border-white/[0.06] py-4 last:border-b-0"><div className="mb-3 text-sm font-medium text-white">{row.label}</div><div className="grid grid-cols-3 gap-2 text-xs"><div><div className="mb-1.5 text-pe-micro uppercase tracking-wider text-[#65D8AE]">Bêta</div><ComparisonValue value={row.beta}/></div><div><div className="mb-1.5 text-pe-micro uppercase tracking-wider text-[#9CA3AF]">Essential</div><ComparisonValue value={row.essential}/></div><div><div className="mb-1.5 text-pe-micro uppercase tracking-wider text-[#C8AEFF]">Pro</div><ComparisonValue value={row.pro}/></div></div></div>)}</div></details>)}</div>
 </section>;
 
 const legal = {
@@ -142,9 +195,48 @@ const posts=[
 ];
 export function BlogPage(){return <PublicLayout title="Guides PipsEvo" subtitle="Des méthodes concrètes sur la discipline, l'analyse et les comptes financés."><div className="grid md:grid-cols-2 gap-4">{posts.map((post,i)=><details key={post.title} className="card-elev p-6 group"><summary className="cursor-pointer list-none"><div className="flex items-start justify-between gap-4"><div><div className="text-pe-micro text-[#B58BFF] font-mono">GUIDE {String(i+1).padStart(2,"0")} · 3 MIN</div><h2 className="font-semibold text-lg mt-3">{post.title}</h2></div><span className="text-[#B58BFF] text-xl transition-transform group-open:rotate-45">+</span></div><p className="text-sm text-[#9CA3AF] mt-3 leading-relaxed">{post.intro}</p></summary><ol className="mt-5 space-y-3 border-t border-white/[0.07] pt-5">{post.steps.map((step,index)=><li key={step} className="flex gap-3 text-sm text-[#B5BBC9] leading-relaxed"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#7C4DFF]/15 text-pe-micro text-[#B58BFF]">{index+1}</span>{step}</li>)}</ol><Link to="/register" className="text-sm text-[#B58BFF] hover:text-white inline-block mt-5">Appliquer dans mon journal →</Link></details>)}</div></PublicLayout>}
 
-export function HelpPage(){return <PublicLayout title="Centre d'aide" subtitle="Trouve rapidement la bonne ressource."><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"><HelpCard to="/faq" t="FAQ" d="Réponses aux questions courantes."/><HelpCard to="/platforms" t="Plateformes" d="Compatibilité et futures intégrations."/><HelpCard to="/contact" t="Support" d="Écris directement à l'équipe."/><HelpCard to="/blog" t="Guides" d="Bonnes pratiques pour progresser."/><HelpCard to="/security" t="Sécurité" d="Protection du compte et des données."/><HelpCard to="/app/settings" t="Mon compte" d="Profil, formule et préférences."/></div></PublicLayout>}
-const HelpCard=({to,t,d})=><Link to={to} className="card-elev p-6 hover:border-[#7C4DFF]/40 transition"><h2 className="font-semibold">{t}</h2><p className="text-sm text-[#9CA3AF] mt-2">{d}</p><span className="text-[#B58BFF] text-sm inline-block mt-4">Ouvrir →</span></Link>;
+export function HelpPage(){
+  const { t } = useI18n();
+  const resources = [
+    { to: "/faq", icon: CircleHelp, title: "FAQ", titleEn: "FAQ", description: "Réponses rapides sur les comptes, les imports, Atlas et la bêta.", descriptionEn: "Quick answers about accounts, imports, Atlas, and the beta." },
+    { to: "/blog", icon: BookOpen, title: "Guides pratiques", titleEn: "Practical guides", description: "Construis un journal utile et analyse tes habitudes sans te mentir.", descriptionEn: "Build a useful journal and analyze your habits honestly." },
+    { to: "/platforms", icon: WalletCards, title: "Plateformes et imports", titleEn: "Platforms and imports", description: "Vérifie ce qui fonctionne maintenant et ce qui reste en préparation.", descriptionEn: "See what works now and what is still in preparation." },
+    { to: "/security", icon: ShieldCheck, title: "Sécurité et données", titleEn: "Security and data", description: "Comprends les protections actuelles et garde le contrôle sur tes données.", descriptionEn: "Understand current protections and keep control of your data." },
+    { to: "/app/coach", icon: Brain, title: "Utiliser Atlas", titleEn: "Using Atlas", description: "Pose de meilleures questions à ton historique et interprète les réponses.", descriptionEn: "Ask better questions about your history and interpret the answers." },
+    { to: "/contact", icon: LifeBuoy, title: "Support PipsEvo", titleEn: "PipsEvo support", description: "Signale un problème ou envoie une suggestion directement à l’équipe.", descriptionEn: "Report an issue or send feedback directly to the team." },
+  ];
+  const steps = [
+    ["01", t("Créer ou choisir un compte", "Create or choose an account"), t("Renseigne ses objectifs et ses limites officielles.", "Enter its official goals and limits.")],
+    ["02", t("Ajouter des trades", "Add trades"), t("Saisis-les manuellement ou utilise l’import CSV.", "Enter them manually or use CSV import.")],
+    ["03", t("Lire les tendances", "Read the patterns"), t("Compare performance, discipline et risque sur une période utile.", "Compare performance, discipline, and risk over a useful period.")],
+  ];
 
-export function AffiliatePage(){return <PublicLayout title="Programme partenaire en préparation" subtitle="Les candidatures ne créent actuellement aucun droit à commission."><div className="grid md:grid-cols-2 gap-5 max-w-4xl mx-auto"><div className="card-elev p-7"><h2 className="text-xl font-semibold">Une communication responsable</h2><p className="text-sm text-[#9CA3AF] mt-3">Le futur programme pourra s’adresser aux formateurs, créateurs et communautés qui parlent de processus et de discipline sans promettre de gains.</p><div className="space-y-2 mt-5 text-sm">{["Aucune promesse de rendement","Transparence sur les liens partenaires","Respect de l’identité PipsEvo","Conditions écrites avant activation"].map(x=><div key={x} className="flex gap-2"><Check className="w-4 h-4 text-[#00E676]"/>{x}</div>)}</div></div><div className="card-elev p-7"><h2 className="text-xl font-semibold">Manifester son intérêt</h2><p className="text-sm text-[#9CA3AF] mt-3">Présente ton audience et ton approche. L’équipe te recontactera uniquement lorsque le programme sera prêt.</p><Link to="/contact" className="btn-primary block text-center mt-6">Contacter l’équipe</Link><Link to="/affiliate-terms" className="text-xs text-[#B58BFF] block text-center mt-4">Lire les conditions préliminaires</Link></div></div></PublicLayout>}
+  return <PublicLayout eyebrow={t("Assistance PipsEvo", "PipsEvo support")} title={t("Centre d’aide", "Help center")} subtitle={t("Trouve la bonne ressource, configure ton espace et obtiens une réponse claire quand quelque chose bloque.", "Find the right resource, set up your workspace, and get a clear answer when something blocks you.")} wide>
+    <section aria-labelledby="help-resources-title">
+      <div className="flex items-end justify-between gap-6"><div><h2 id="help-resources-title" className="text-2xl font-semibold tracking-[-0.03em] text-[#EEF0F4]">{t("Choisis ton point de départ", "Choose where to start")}</h2><p className="mt-2 text-sm text-[#858D9C]">{t("Chaque ressource mène à une action précise.", "Each resource leads to a specific action.")}</p></div><Link to="/faq" className="hidden items-center gap-2 text-sm font-semibold text-[#A994FF] hover:text-white sm:inline-flex">{t("Voir toute la FAQ", "View all FAQs")}<ArrowRight className="h-4 w-4" /></Link></div>
+      <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{resources.map(resource => <HelpCard key={resource.to + resource.title} resource={resource} t={t} />)}</div>
+    </section>
 
-function Footer(){return <footer className="border-t border-white/5 px-5 py-10"><div className="max-w-6xl mx-auto grid sm:grid-cols-3 gap-6 text-sm"><div><Logo/><p className="text-[#6B7280] mt-3">Journal et discipline pour traders financés.</p><p className="text-pe-micro text-[#4B5563] mt-3">PipsEvo ne fournit aucun conseil financier ni signal.</p></div><div><div className="font-semibold mb-3">Aide</div><div className="flex flex-col gap-2 text-[#9CA3AF]"><Link to="/help">Centre d'aide</Link><Link to="/contact">Contact</Link><Link to="/platforms">Plateformes et imports</Link><Link to="/blog">Guides</Link><Link to="/faq">FAQ</Link><Link to="/affiliate">Programme partenaire</Link></div></div><div><div className="font-semibold mb-3">Légal</div><div className="flex flex-col items-start gap-2 text-[#9CA3AF]"><Link to="/terms">Conditions d'utilisation</Link><Link to="/privacy">Confidentialité</Link><Link to="/security">Sécurité</Link><Link to="/affiliate-terms">Conditions partenaires</Link><button onClick={openCookieSettings} className="hover:text-white">Gérer les cookies</button></div></div></div></footer>}
+    <section className="mt-16 overflow-hidden rounded-[26px] border border-white/[0.08] bg-[#090B12] sm:mt-20" aria-labelledby="quick-start-title">
+      <div className="border-b border-white/[0.07] px-6 py-6 sm:px-8"><div className="text-[10px] font-semibold uppercase tracking-[.18em] text-[#9D87FF]">{t("Démarrage rapide", "Quick start")}</div><h2 id="quick-start-title" className="mt-2 text-2xl font-semibold tracking-[-0.03em]">{t("Passe des données brutes à une lecture utile.", "Turn raw data into useful insight.")}</h2></div>
+      <div className="grid lg:grid-cols-3">{steps.map(([number, title, copy], index) => <div key={number} className={`p-6 sm:p-8 ${index ? "border-t border-white/[0.07] lg:border-l lg:border-t-0" : ""}`}><span className="text-xs font-semibold text-[#8067F4]">{number}</span><h3 className="mt-4 font-semibold text-[#EBEDF1]">{title}</h3><p className="mt-2 text-sm leading-6 text-[#858D9C]">{copy}</p></div>)}</div>
+    </section>
+
+    <section className="relative mt-8 overflow-hidden rounded-[26px] border border-[#7657FF]/25 bg-[#0B0B14] px-6 py-10 sm:px-10 sm:py-12">
+      <span className="pointer-events-none absolute -right-20 top-1/2 h-56 w-56 -translate-y-1/2 rounded-full bg-[#7657FF]/15 blur-[80px]" />
+      <div className="relative flex flex-col items-start justify-between gap-6 md:flex-row md:items-center"><div><h2 className="text-2xl font-semibold tracking-[-0.03em]">{t("Besoin d’une réponse humaine ?", "Need a human answer?")}</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-[#8D95A4]">{t("Envoie le contexte, la page concernée et le message affiché. Plus la demande est précise, plus la réponse sera utile.", "Send the context, the affected page, and the displayed message. The more precise the request, the more useful the answer.")}</p></div><Link to="/contact" className="btn-primary inline-flex shrink-0 items-center gap-2 !rounded-xl">{t("Écrire au support", "Contact support")}<ArrowRight className="h-4 w-4" /></Link></div>
+    </section>
+  </PublicLayout>;
+}
+
+const HelpCard=({resource,t})=>{
+  const Icon=resource.icon;
+  return <Link to={resource.to} className="group min-h-[210px] rounded-[22px] border border-white/[0.08] bg-[#090B12] p-6 transition duration-300 hover:-translate-y-1 hover:border-[#7657FF]/40 hover:bg-[#0C0E17] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7657FF]/65">
+    <span className="grid h-11 w-11 place-items-center rounded-xl border border-[#7657FF]/25 bg-[#7657FF]/[0.08] text-[#A790FF]"><Icon className="h-5 w-5" /></span>
+    <h3 className="mt-6 font-semibold text-[#E9EBEF]">{t(resource.title,resource.titleEn)}</h3>
+    <p className="mt-2 text-sm leading-6 text-[#858D9C]">{t(resource.description,resource.descriptionEn)}</p>
+    <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[#9F88FF] transition group-hover:text-white">{t("Ouvrir", "Open")}<ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></span>
+  </Link>;
+};
+
+export function AffiliatePage(){return <PublicLayout title="Programme partenaire en préparation" subtitle="Les candidatures ne créent actuellement aucun droit à commission."><div className="grid md:grid-cols-2 gap-5 max-w-4xl mx-auto"><div className="card-elev p-7"><h2 className="text-xl font-semibold">Une communication responsable</h2><p className="text-sm text-[#9CA3AF] mt-3">Le futur programme pourra s’adresser aux formateurs, créateurs et communautés qui parlent de processus et de discipline sans promettre de gains.</p><div className="space-y-2 mt-5 text-sm">{["Aucune promesse de rendement","Transparence sur les liens partenaires","Respect de l’identité PipsEvo","Conditions écrites avant activation"].map(x=><div key={x} className="flex gap-2"><Check className="w-4 h-4 text-[#46C99A]"/>{x}</div>)}</div></div><div className="card-elev p-7"><h2 className="text-xl font-semibold">Manifester son intérêt</h2><p className="text-sm text-[#9CA3AF] mt-3">Présente ton audience et ton approche. L’équipe te recontactera uniquement lorsque le programme sera prêt.</p><Link to="/contact" className="btn-primary block text-center mt-6">Contacter l’équipe</Link><Link to="/affiliate-terms" className="text-xs text-[#B58BFF] block text-center mt-4">Lire les conditions préliminaires</Link></div></div></PublicLayout>}

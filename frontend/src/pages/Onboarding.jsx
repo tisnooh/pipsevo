@@ -111,7 +111,7 @@ export default function Onboarding() {
           {step === 5 && (
             <div className="mt-3">
               <h2 className="text-2xl sm:text-3xl font-bold text-gradient">Combien de comptes ?</h2>
-              <input type="number" min="1" max="50" value={numAccounts} onChange={(e)=>setNumAccounts(e.target.value)} data-testid="onb-num-accounts" className="mt-5 sm:mt-7 w-full bg-[#0D1020] border border-white/10 rounded-xl px-4 py-4 text-2xl sm:text-3xl font-mono outline-none focus:border-[#7C4DFF]" />
+              <input type="number" min="1" max="50" value={numAccounts} onChange={(e)=>setNumAccounts(e.target.value)} data-testid="onb-num-accounts" className="font-numeric mt-5 w-full rounded-xl border border-white/10 bg-[#0D1020] px-4 py-4 text-2xl outline-none focus:border-[#7C4DFF] sm:mt-7 sm:text-3xl" />
             </div>
           )}
 
