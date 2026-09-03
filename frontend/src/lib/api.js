@@ -1,6 +1,8 @@
 import axios from "axios";
 import { supabase, SUPABASE_AUTH_STORAGE_KEY } from "@/lib/supabase";
 import { AUTH_CONFIG } from "@/config/auth";
+import { notifyAppDataChanged } from "@/lib/appDataEvents";
+import { tradeDateKey } from "@/lib/tradeCalendar";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
@@ -218,18 +220,21 @@ export const accounts = {
     const user = await currentAuthUser();
     const { data, error } = await supabase.from("accounts").insert({ ...cleanAccount(values), user_id: user.id }).select().single();
     check(error, "Impossible de créer le compte");
+    notifyAppDataChanged(["accounts", "trades", "dashboard", "discipline"]);
     return response(enrichAccount(data));
   },
   update: async (id, values) => {
     const user = await currentAuthUser();
     const { data, error } = await supabase.from("accounts").update(cleanAccount(values)).eq("id", id).eq("user_id", user.id).select().single();
     check(error, "Impossible de modifier le compte");
+    notifyAppDataChanged(["accounts", "dashboard", "discipline"]);
     return response(enrichAccount(data));
   },
   delete: async (id) => {
     const user = await currentAuthUser();
     const { error } = await supabase.from("accounts").delete().eq("id", id).eq("user_id", user.id);
     check(error, "Impossible de supprimer le compte");
+    notifyAppDataChanged(["accounts", "trades", "dashboard", "discipline", "analytics", "dna"]);
     return response({ ok: true });
   },
 };
@@ -261,18 +266,21 @@ export const trades = {
     const user = await currentAuthUser();
     const { data, error } = await supabase.from("trades").insert({ ...cleanTrade(values), user_id: user.id }).select().single();
     check(error, "Impossible d’ajouter le trade");
+    notifyAppDataChanged(["trades", "dashboard", "discipline", "analytics", "dna"]);
     return response(normalizeTrade(data));
   },
   update: async (id, values) => {
     const user = await currentAuthUser();
     const { data, error } = await supabase.from("trades").update(cleanTrade(values)).eq("id", id).eq("user_id", user.id).select().single();
     check(error, "Impossible de modifier le trade");
+    notifyAppDataChanged(["trades", "dashboard", "discipline", "analytics", "dna"]);
     return response(normalizeTrade(data));
   },
   delete: async (id) => {
     const user = await currentAuthUser();
     const { error } = await supabase.from("trades").delete().eq("id", id).eq("user_id", user.id);
     check(error, "Impossible de supprimer le trade");
+    notifyAppDataChanged(["trades", "dashboard", "discipline", "analytics", "dna"]);
     return response({ ok: true });
   },
   importCsv: async ({ fileName, rows, totalRows, skippedRows = 0, errorRows = 0 }) => {
@@ -304,6 +312,7 @@ export const trades = {
         completed_at: new Date().toISOString(),
       }).eq("id", batch.id).eq("user_id", user.id);
       check(completeError, "Les trades sont importés, mais le rapport n’a pas pu être finalisé");
+      notifyAppDataChanged(["trades", "dashboard", "discipline", "analytics", "dna"]);
       return response({ batch: { ...batch, status: "completed", imported_rows: imported.length }, trades: imported });
     } catch (error) {
       await supabase.from("trades").delete().eq("import_batch_id", batch.id).eq("user_id", user.id);
@@ -317,6 +326,7 @@ export const trades = {
     check(deleteError, "Impossible d’annuler cet import");
     const { error: batchError } = await supabase.from("trade_imports").update({ status: "rolled_back", completed_at: new Date().toISOString() }).eq("id", batchId).eq("user_id", user.id);
     check(batchError, "Les trades sont supprimés, mais le rapport n’a pas pu être mis à jour");
+    notifyAppDataChanged(["trades", "dashboard", "discipline", "analytics", "dna"]);
     return response({ ok: true });
   },
 };
@@ -334,12 +344,14 @@ export const payouts = {
     const payload = { account_id: values.account_id, amount: Number(values.amount), date: values.date, note: values.note || null, user_id: user.id };
     const { data, error } = await supabase.from("payouts").insert(payload).select().single();
     check(error, "Impossible d’enregistrer le payout");
+    notifyAppDataChanged(["payouts", "dashboard"]);
     return response(normalizePayout(data));
   },
   delete: async (id) => {
     const user = await currentAuthUser();
     const { error } = await supabase.from("payouts").delete().eq("id", id).eq("user_id", user.id);
     check(error, "Impossible de supprimer le payout");
+    notifyAppDataChanged(["payouts", "dashboard"]);
     return response({ ok: true });
   },
 };
@@ -410,7 +422,7 @@ const buildDashboard = (accountRows, tradeRows, payoutRows) => {
   const survival = accountRows.length ? Math.trunc(accountRows.reduce((sum, item) => sum + enrichAccount(item).survival_score, 0) / accountRows.length) : 100;
   let running = 0;
   const pnlByDate = completedTrades.reduce((result, item) => {
-    const date = item.date || "Date inconnue";
+    const date = tradeDateKey(item.date) || "Date inconnue";
     result[date] = (result[date] || 0) + Number(item.pnl);
     return result;
   }, {});
@@ -484,28 +496,34 @@ export const newsletter = {
   updatePreferences: (preferences) => api.put("/email-preferences", preferences),
 };
 
+const integrationMutation = async (request) => {
+  const result = await request;
+  notifyAppDataChanged(["accounts", "trades", "dashboard", "discipline", "analytics", "dna"]);
+  return result;
+};
+
 export const integrationConnections = {
   capabilities: () => api.get("/integrations/capabilities"),
   list: () => api.get("/integrations/connections"),
   startOAuth: (provider, returnPath = "/app/settings") =>
     api.post("/integrations/oauth/start", { provider, return_path: returnPath }),
   completeOAuth: (provider, code, state) =>
-    api.post("/integrations/oauth/complete", { provider, code, state }),
+    integrationMutation(api.post("/integrations/oauth/complete", { provider, code, state })),
   connectTradeLocker: (credentials) =>
-    api.post("/integrations/tradelocker/connect", credentials),
-  startMetaApi: (payload) => api.post("/integrations/metaapi/start", payload),
+    integrationMutation(api.post("/integrations/tradelocker/connect", credentials)),
+  startMetaApi: (payload) => integrationMutation(api.post("/integrations/metaapi/start", payload)),
   searchMetaTraderServers: (platform, query) =>
     api.get("/integrations/metaapi/servers", { params: { platform, query } }),
   finalizeMetaApi: (connectionId) =>
-    api.post(`/integrations/metaapi/${connectionId}/finalize`),
+    integrationMutation(api.post(`/integrations/metaapi/${connectionId}/finalize`)),
   selectAccounts: (connectionId, accountIds) =>
-    api.post(`/integrations/${connectionId}/accounts/select`, { account_ids: accountIds }),
-  syncAccount: (accountId) => api.post(`/integrations/accounts/${accountId}/sync`),
+    integrationMutation(api.post(`/integrations/${connectionId}/accounts/select`, { account_ids: accountIds })),
+  syncAccount: (accountId) => integrationMutation(api.post(`/integrations/accounts/${accountId}/sync`)),
   testMT5: (credentials) => api.post("/integrations/mt5/test", credentials),
-  connectMT5: (credentials) => api.post("/integrations/mt5/connect", credentials),
-  sync: (connectionId) => api.post(`/integrations/${connectionId}/sync`),
-  reconnect: (connectionId, credentials) => api.post(`/integrations/${connectionId}/reconnect`, credentials),
-  disconnect: (connectionId) => api.delete(`/integrations/${connectionId}`),
+  connectMT5: (credentials) => integrationMutation(api.post("/integrations/mt5/connect", credentials)),
+  sync: (connectionId) => integrationMutation(api.post(`/integrations/${connectionId}/sync`)),
+  reconnect: (connectionId, credentials) => integrationMutation(api.post(`/integrations/${connectionId}/reconnect`, credentials)),
+  disconnect: (connectionId) => integrationMutation(api.delete(`/integrations/${connectionId}`)),
   joinWaitlist: async () => {
     const user = await currentAuthUser();
     const { data, error } = await supabase

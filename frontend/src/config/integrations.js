@@ -13,7 +13,7 @@ export const INTEGRATIONS = Object.freeze([
     name: "Import CSV",
     status: "available",
     statusLabel: "Disponible en bêta",
-    description: "Prévisualisation, validation, détection des doublons et annulation pour les fichiers CSV et rapports HTML MetaTrader.",
+    description: "Prévisualisation, validation, détection des doublons et annulation pour MetaTrader, cTrader, NinjaTrader, Quantower, Sierra Chart et le modèle CSV PipsEvo.",
   },
   {
     id: "mt5",

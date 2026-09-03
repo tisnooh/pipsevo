@@ -28,6 +28,20 @@ export function writeSettings(next) {
   return settings;
 }
 
+export function listenForSettingsChanges(callback) {
+  if (typeof window === "undefined") return () => {};
+  const onSettings = event => callback(event.detail || readSettings());
+  const onStorage = event => {
+    if (event.key === SETTINGS_KEY) callback(readSettings());
+  };
+  window.addEventListener(SETTINGS_EVENT, onSettings);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(SETTINGS_EVENT, onSettings);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
 export function applyDocumentPreferences(settings = readSettings()) {
   document.documentElement.lang = settings.language === "en" ? "en" : "fr";
   document.documentElement.dataset.density = settings.compactMode ? "compact" : "comfortable";

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { coach, dashboard } from "@/lib/api";
 import { toast } from "sonner";
 import { Sparkles, Send, Brain, AlertTriangle, Target, Clock, Shield, Trophy } from "lucide-react";
@@ -7,6 +7,7 @@ import { useI18n } from "@/context/I18nContext";
 import { useAuth } from "@/context/AuthContext";
 import { canUseFeature } from "@/config/billing";
 import { FeatureGate } from "@/components/FeatureGate";
+import { listenForAppDataChanges } from "@/lib/appDataEvents";
 
 const PRESETS = [
   { fr:"Analyse mon mois", en:"Analyze my month" },
@@ -28,10 +29,16 @@ export default function AICoach() {
   const [summary, setSummary] = useState(null);
   const [initialLoading, setInitialLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!hasCoachAccess) { setInitialLoading(false); return; }
+    setInitialLoading(true);
     Promise.all([coach.history(),dashboard()]).then(([h,d])=>{setHistory(h.data);setSummary(d.data)}).catch(()=>toast.error("Impossible de charger l’analyse")).finally(()=>setInitialLoading(false));
   }, [hasCoachAccess]);
+  useEffect(() => {
+    load();
+    if (!hasCoachAccess) return undefined;
+    return listenForAppDataChanges(load,["trades","dashboard"]);
+  }, [hasCoachAccess,load]);
   const planRate = summary?.metrics?.plan_respect_rate;
   const insights = summary?.kpis?.total_trades ? [
     { I: AlertTriangle, t: "Respect du plan", d: planRate === null || planRate === undefined ? "Pas encore mesuré" : `${planRate}% des trades renseignés respectent le plan`, c: planRate === null || planRate === undefined ? "#7E8798" : planRate>=80?"#46C99A":"#FFB855" },

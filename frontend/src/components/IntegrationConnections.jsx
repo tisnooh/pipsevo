@@ -8,6 +8,7 @@ import { integrationConnections } from "@/lib/api";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { localDateKey } from "@/lib/tradeCalendar";
 
 const PROVIDERS = [
   { id: "ctrader", name: "cTrader", mark: "cT", copy: "OAuth officiel et comptes cTrader autorisés en lecture seule." },
@@ -342,7 +343,7 @@ function MetaTraderFields({ form, field }) {
     <Field label="Numéro de compte"><input required inputMode="numeric" pattern="[0-9]+" value={form.login} onChange={e => field("login", e.target.value.replace(/\D/g, ""))}/></Field>
     <div className="relative"><Field label="Serveur"><input required autoComplete="off" placeholder="Ex. FTMO-Demo" value={form.server} onChange={e => { field("server", e.target.value); field("broker_name", ""); }}/></Field>{searching && <Loader2 className="absolute bottom-3.5 right-4 h-4 w-4 animate-spin text-[#7C4DFF]"/>}{suggestions.length > 0 && <div className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-xl border border-[#6571CF]/25 bg-[#11162A] p-1 shadow-2xl">{suggestions.map(item => <button key={`${item.broker}-${item.server}`} type="button" onClick={() => { field("server", item.server); field("broker_name", item.broker); setSuggestions([]); }} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-white/5"><span className="block text-xs text-white">{item.server}</span><span className="mt-0.5 block text-[10px] text-[#737C8D]">{item.broker}</span></button>)}</div>}{searchError && <p className="mt-1.5 text-[10px] text-[#FFB855]">{searchError}</p>}{form.broker_name && <p className="mt-1.5 text-[10px] text-[#67E9AD]">Serveur reconnu · {form.broker_name}</p>}</div>
     <Field label="Mot de passe investisseur"><input required type="password" autoComplete="new-password" value={form.password} onChange={e => field("password", e.target.value)}/></Field>
-    <Field label="Importer l’historique depuis"><input type="date" max={new Date().toISOString().slice(0, 10)} value={form.start_date} onChange={e => field("start_date", e.target.value)}/></Field>
+    <Field label="Importer l’historique depuis"><input type="date" max={localDateKey()} value={form.start_date} onChange={e => field("start_date", e.target.value)}/></Field>
     <p className="text-[11px] leading-relaxed text-[#737C8D]">Laisse la date vide pour importer tout l’historique disponible. Utilise le mot de passe investisseur : PipsEvo importe en lecture seule et ne le conserve pas.</p>
   </>;
 }

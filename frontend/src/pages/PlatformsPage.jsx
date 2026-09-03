@@ -1,11 +1,12 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Check, Clock3, FileSpreadsheet, Layers3, Link2, ShieldCheck, Upload, WalletCards } from "lucide-react";
+import { ArrowRight, Check, Clock3, ExternalLink, FileSpreadsheet, Layers3, Link2, ShieldCheck, Upload, WalletCards } from "lucide-react";
 import PublicHeader from "@/components/PublicHeader";
 import PublicFooter from "@/components/PublicFooter";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/context/I18nContext";
 import { INTEGRATIONS } from "@/config/integrations";
+import { IMPORT_FORMATS_IN_VALIDATION, IMPORT_PLATFORMS } from "@/config/importPlatforms";
 import { PROP_FIRMS } from "@/lib/journalPreferences";
 
 const firmPresentation = {
@@ -54,6 +55,40 @@ function FirmCard({ firm, tr }) {
   </article>;
 }
 
+function ImportPlatformCard({ platform, tr }) {
+  return <article className="group relative overflow-hidden rounded-[22px] border border-white/[0.075] bg-[#090B11] p-5 transition duration-300 hover:-translate-y-1 hover:border-[#46C99A]/30 sm:p-6">
+    <span className="pointer-events-none absolute -right-14 -top-14 h-36 w-36 rounded-full bg-[#46C99A]/0 blur-[55px] transition duration-300 group-hover:bg-[#46C99A]/[0.10]" />
+    <div className="relative flex min-h-12 items-start justify-between gap-4">
+      <div className={`flex h-12 min-w-16 max-w-[150px] items-center rounded-xl border border-white/[0.07] px-3 ${platform.logoSurface || "bg-white/[0.035]"}`}>
+        <img src={platform.logo} alt={`${platform.name} logo`} className={`${platform.logoClass} max-w-full object-contain object-left`} />
+      </div>
+      <StatusBadge status="available">{tr("Import testé", "Tested import")}</StatusBadge>
+    </div>
+    <div className="relative mt-6">
+      <h3 className="text-lg font-semibold tracking-[-0.02em] text-[#ECEEF2]">{platform.name}</h3>
+      <p className="mt-1 text-xs text-[#7C8493]">{tr(platform.marketsFr, platform.marketsEn)}</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {platform.formats.map(format => <span key={format} className="rounded-full border border-[#46C99A]/20 bg-[#46C99A]/[0.055] px-2.5 py-1 text-[10px] font-semibold text-[#65D8AE]">{format}</span>)}
+      </div>
+      <p className="mt-4 min-h-10 text-[11px] leading-5 text-[#8A92A1]">{tr(platform.instructionsFr, platform.instructionsEn)}</p>
+      <a href={platform.sourceUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#A994FF] transition hover:text-[#C5B7FF]">{tr("Voir l’export officiel", "View official export guide")}<ExternalLink className="h-3 w-3" /></a>
+    </div>
+  </article>;
+}
+
+function ValidationPlatformCard({ platform, tr }) {
+  return <article className="flex items-start gap-4 rounded-2xl border border-white/[0.07] bg-[#090B11] p-4">
+    <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.035] p-2">
+      <img src={platform.logo} alt={`${platform.name} logo`} className="max-h-full max-w-full object-contain" />
+    </div>
+    <div className="min-w-0 flex-1">
+      <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-semibold text-[#E7E9EE]">{platform.name}</h3><span className="rounded-full border border-[#7657FF]/25 bg-[#7657FF]/[0.08] px-2 py-0.5 text-[9px] font-semibold text-[#B4A3F8]">{platform.format}</span></div>
+      <p className="mt-1.5 text-[11px] leading-5 text-[#7E8695]">{tr(platform.noteFr, platform.noteEn)}</p>
+      <a href={platform.sourceUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-[#9D87FF]">{tr("Source officielle", "Official source")}<ExternalLink className="h-3 w-3" /></a>
+    </div>
+  </article>;
+}
+
 export default function PlatformsPage() {
   const { user } = useAuth();
   const { language } = useI18n();
@@ -72,17 +107,45 @@ export default function PlatformsPage() {
           <p className="mx-auto mt-6 max-w-2xl text-[15px] leading-7 text-[#949CAB] sm:text-base">{tr("Ajoute tes comptes financés, structure tes trades et suis les limites de chaque prop firm depuis PipsEvo, sans mélanger compatibilité de suivi et connexion automatique.", "Add your funded accounts, structure your trades, and track each prop firm's limits from PipsEvo—without confusing tracking compatibility with automatic connections.")}</p>
           <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
             <Link to={user ? "/app/accounts" : "/register"} className="btn-primary inline-flex items-center justify-center gap-2 !rounded-xl">{user ? tr("Ajouter un compte", "Add an account") : tr("Commencer gratuitement", "Start for free")}<ArrowRight className="h-4 w-4" /></Link>
-            <a href="#compatibility" className="btn-ghost inline-flex items-center justify-center gap-2 !rounded-xl">{tr("Voir les plateformes", "View platforms")}<ArrowRight className="h-4 w-4" /></a>
+            <a href="#imports" className="btn-ghost inline-flex items-center justify-center gap-2 !rounded-xl">{tr("Voir les plateformes", "View platforms")}<ArrowRight className="h-4 w-4" /></a>
           </div>
           <div className="mx-auto mt-12 grid max-w-3xl grid-cols-3 divide-x divide-white/[0.08] rounded-2xl border border-white/[0.075] bg-[#080A10]/80 py-5">
             <div><strong className="block text-2xl font-semibold text-white">{PROP_FIRMS.length}</strong><span className="mt-1 block text-[9px] uppercase tracking-[.12em] text-[#69717F]">Prop firms</span></div>
-            <div><strong className="block text-2xl font-semibold text-[#46C99A]">{availableMethods.length}</strong><span className="mt-1 block text-[9px] uppercase tracking-[.12em] text-[#69717F]">{tr("Modes disponibles", "Available methods")}</span></div>
+            <div><strong className="block text-2xl font-semibold text-[#46C99A]">{IMPORT_PLATFORMS.length}</strong><span className="mt-1 block text-[9px] uppercase tracking-[.12em] text-[#69717F]">{tr("Imports testés", "Tested imports")}</span></div>
             <div><strong className="block text-2xl font-semibold text-[#A994FF]">2</strong><span className="mt-1 block text-[9px] uppercase tracking-[.12em] text-[#69717F]">{tr("Marchés couverts", "Markets covered")}</span></div>
           </div>
         </div>
       </section>
 
-      <section id="compatibility" className="scroll-mt-24 px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28">
+      <section id="imports" className="scroll-mt-24 px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28">
+        <div className="mx-auto max-w-[1180px]">
+          <div className="grid gap-8 lg:grid-cols-[1fr_.7fr] lg:items-end">
+            <div className="max-w-3xl">
+              <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[.21em] text-[#65D8AE]"><span className="h-px w-7 bg-[#46C99A]" />{tr("Import de trades", "Trade import")}</div>
+              <h2 className="mt-5 text-balance text-3xl font-semibold tracking-[-0.035em] text-[#F1F2F5] sm:text-4xl lg:text-5xl">{tr("Importe ton historique depuis les plateformes déjà prises en charge.", "Import your history from supported platforms.")}</h2>
+            </div>
+            <p className="text-sm leading-7 text-[#8D95A4]">{tr("Chaque format annoncé comme disponible est couvert par l’importeur et vérifié avant écriture : aperçu, erreurs, doublons et annulation de l’import.", "Every format shown as available is handled by the importer and checked before writing: preview, errors, duplicates, and import rollback.")}</p>
+          </div>
+
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {IMPORT_PLATFORMS.map(platform => <ImportPlatformCard key={platform.id} platform={platform} tr={tr} />)}
+          </div>
+
+          <div className="mt-6 flex flex-col items-start justify-between gap-4 rounded-2xl border border-[#46C99A]/20 bg-[#46C99A]/[0.035] p-5 sm:flex-row sm:items-center">
+            <div><h3 className="text-sm font-semibold text-[#E9EBEF]">{tr("Ton export ne correspond à aucune plateforme ?", "Your export does not match any platform?")}</h3><p className="mt-1 text-xs leading-5 text-[#858D9C]">{tr("Le modèle CSV universel PipsEvo reste disponible pour n’importe quel broker ou journal.", "The universal PipsEvo CSV template remains available for any broker or journal.")}</p></div>
+            <Link to={user ? "/app/journal" : "/register"} className="btn-primary inline-flex shrink-0 items-center gap-2 !rounded-xl text-sm">{tr("Ouvrir l’import", "Open import")}<Upload className="h-4 w-4" /></Link>
+          </div>
+
+          <div className="mt-12 rounded-[24px] border border-[#7657FF]/20 bg-[#7657FF]/[0.035] p-5 sm:p-7">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.16em] text-[#A994FF]"><Clock3 className="h-3.5 w-3.5" />{tr("Formats identifiés", "Identified formats")}</div><h3 className="mt-3 text-xl font-semibold text-[#ECEEF2]">{tr("Exports officiels encore en validation", "Official exports still being validated")}</h3></div><p className="max-w-lg text-xs leading-5 text-[#858D9C]">{tr("Ils ne sont pas encore présentés comme compatibles : l’adaptateur et ses fichiers réels doivent d’abord passer les tests.", "They are not yet presented as compatible: the adapter and real files must pass tests first.")}</p></div>
+            <div className="mt-5 grid gap-3 lg:grid-cols-3">{IMPORT_FORMATS_IN_VALIDATION.map(platform => <ValidationPlatformCard key={platform.id} platform={platform} tr={tr} />)}</div>
+          </div>
+
+          <p className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-4 py-3 text-[10px] leading-5 text-[#777F8E]">{tr("Les logos et marques appartiennent à leurs détenteurs. Leur affichage décrit uniquement un format d’import ou d’export et n’implique aucun partenariat avec PipsEvo.", "Logos and trademarks belong to their owners. Their display only describes an import or export format and does not imply any partnership with PipsEvo.")}</p>
+        </div>
+      </section>
+
+      <section id="compatibility" className="scroll-mt-24 border-t border-white/[0.06] bg-[#07080C] px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28">
         <div className="mx-auto max-w-[1180px]">
           <div className="max-w-2xl">
             <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[.21em] text-[#9D87FF]"><span className="h-px w-7 bg-[#7657FF]" />Prop firms</div>
@@ -96,7 +159,7 @@ export default function PlatformsPage() {
         </div>
       </section>
 
-      <section className="border-y border-white/[0.06] bg-[#07080C] px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28">
+      <section className="border-y border-white/[0.06] px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28">
         <div className="mx-auto max-w-[1180px]">
           <div className="grid gap-10 lg:grid-cols-[.78fr_1.22fr] lg:items-end">
             <div>

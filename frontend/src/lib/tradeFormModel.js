@@ -1,9 +1,10 @@
 import { accountMarkets } from "./journalPreferences";
+import { localDateKey } from "./tradeCalendar";
 
 export const createEmptyTradeForm = (account, last = {}) => {
   const markets=accountMarkets(account); const rememberedMarket=last.market_type && (markets.length===0 || markets.includes(last.market_type)) ? last.market_type : null;
   return {
-    instrument:"",direction:"long",result_status:"winner",pnl:"",r:"",account_id:account?.id || "",market_type:rememberedMarket || account?.market_type || markets[0] || "futures",date:new Date().toISOString().slice(0,10),
+    instrument:"",direction:"long",result_status:"winner",pnl:"",r:"",account_id:account?.id || "",market_type:rememberedMarket || account?.market_type || markets[0] || "futures",date:localDateKey(),
     session:last.session || "",setups:last.setups || [],emotion:last.emotion || "",emotion_secondary:"",emotion_intensity:last.emotion_intensity || "medium",
     entry:"",exit_price:"",stop:"",take_profit:"",size:"1",point_value:"",commission:"0",entry_time:"",exit_time:"",duration:last.duration || "",duration_minutes:null,
     mistakes:[],exit_reason:"",tags:[],notes:"",plan_override:false,plan_exception_reason:"",

@@ -1,13 +1,13 @@
 const HEADER_ALIASES = {
   account: ["account", "account_id", "account id", "compte", "compte id", "nom du compte"],
-  date: ["date", "trade date", "date du trade"],
-  instrument: ["instrument", "symbol", "symbole", "asset", "actif"],
-  direction: ["direction", "side", "sens", "type"],
-  entry: ["entry", "entry price", "entree", "entrée", "prix entree", "prix d'entrée"],
-  exit_price: ["exit", "exit price", "sortie", "prix sortie", "prix de sortie"],
+  date: ["date", "date/time", "date time", "datetime", "trade date", "date du trade", "entry time", "entrytime", "entry date time", "opening time", "open time"],
+  instrument: ["instrument", "symbol", "symbolname", "symbol name", "symbole", "contract", "product", "asset", "actif"],
+  direction: ["direction", "side", "sens", "type", "trade type", "tradetype", "market position", "market pos.", "opening direction", "b/s"],
+  entry: ["entry", "entry price", "entryprice", "avg. entry price", "average entry price", "entree", "entrée", "prix entree", "prix d'entrée", "price"],
+  exit_price: ["exit", "exit price", "exitprice", "closing price", "closingprice", "avg. exit price", "sortie", "prix sortie", "prix de sortie"],
   stop: ["stop", "stop loss", "sl"],
   take_profit: ["take profit", "tp", "target", "objectif"],
-  pnl: ["pnl", "p&l", "profit", "resultat", "résultat"],
+  pnl: ["pnl", "p&l", "profit", "profit/loss", "profit loss", "net p/l", "net pnl", "netprofit", "net profit", "closed p/l", "realized p&l", "realized pnl", "resultat", "résultat"],
   result_status: ["status", "statut", "result status"],
   market_type: ["market", "market type", "marche", "marché", "type de marche"],
   session: ["session"],
@@ -15,11 +15,11 @@ const HEADER_ALIASES = {
   emotion: ["emotion", "émotion"],
   notes: ["notes", "note", "comment"],
   plan_respected: ["plan respected", "plan respecte", "plan respecté"],
-  entry_time: ["entry time", "heure entree", "heure d'entrée"],
-  exit_time: ["exit time", "heure sortie", "heure de sortie"],
-  size: ["size", "quantity", "quantite", "quantité", "lots", "volume"],
-  commission: ["commission", "fees", "frais"],
-  external_trade_id: ["trade id", "external id", "ticket", "order id", "position", "deal"],
+  entry_time: ["heure entree", "heure d'entrée"],
+  exit_time: ["exit time", "exittime", "closing time", "closingtime", "exit date time", "heure sortie", "heure de sortie"],
+  size: ["size", "quantity", "qty", "trade quantity", "volumeinunits", "volume in units", "quantite", "quantité", "lots", "volume", "amount"],
+  commission: ["commission", "commissions", "fee", "fees", "frais"],
+  external_trade_id: ["trade id", "tradeid", "trade number", "positionid", "position id", "external id", "ticket", "order id", "position", "deal"],
 };
 
 const canonical = (value) => String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -110,15 +110,27 @@ export const parseMetaTraderHtml = (text) => {
 
 const parseNumber = (value) => {
   if (value === "" || value === null || value === undefined) return null;
-  const cleaned = String(value).replace(/[$€£\s]/g, "").replace(/,(?=\d{1,2}$)/, ".");
-  const number = Number(cleaned);
+  let cleaned = String(value).trim().replace(/[−–—]/g, "-");
+  const negative = /^\(.*\)$/.test(cleaned);
+  cleaned = cleaned.replace(/[()$€£¥\s]/g, "").replace(/[^0-9,.'+-]/g, "").replace(/'/g, "");
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+  if (lastComma > -1 && lastDot > -1) {
+    cleaned = lastComma > lastDot
+      ? cleaned.replace(/\./g, "").replace(",", ".")
+      : cleaned.replace(/,/g, "");
+  } else if (lastComma > -1) {
+    const decimals = cleaned.length - lastComma - 1;
+    cleaned = decimals > 0 && decimals <= 2 ? cleaned.replace(/,/g, ".") : cleaned.replace(/,/g, "");
+  }
+  const number = Number(cleaned) * (negative ? -1 : 1);
   return Number.isFinite(number) ? number : NaN;
 };
 
 const parseDate = (value) => {
   const source = String(value || "").trim();
   if (!source) return null;
-  const french = source.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  const french = source.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:\s|$)/);
   if (french) return `${french[3]}-${french[2].padStart(2, "0")}-${french[1].padStart(2, "0")}`;
   const metaTrader = source.match(/^(\d{4})[.\/-](\d{1,2})[.\/-](\d{1,2})(?:\s|$)/);
   if (metaTrader) return `${metaTrader[1]}-${metaTrader[2].padStart(2, "0")}-${metaTrader[3].padStart(2, "0")}`;
@@ -192,7 +204,7 @@ const prepareRows = ({ rows, accounts = [], existingTrades = [], importSource = 
       emotion: String(raw.emotion || "").trim() || null,
       notes: String(raw.notes || "").trim() || null,
       plan_respected: normalizeBoolean(raw.plan_respected),
-      entry_time: String(raw.entry_time || "").trim() || null,
+      entry_time: String(raw.entry_time || raw.date || "").trim() || null,
       exit_time: String(raw.exit_time || "").trim() || null,
       external_trade_id: String(raw.external_trade_id || "").trim() || null,
       import_source: importSource,

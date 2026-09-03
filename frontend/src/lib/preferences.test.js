@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, formatDate, formatMoney, readSettings, SETTINGS_EVENT, writeSettings } from "./preferences";
+import { DEFAULT_SETTINGS, formatDate, formatMoney, listenForSettingsChanges, readSettings, SETTINGS_EVENT, SETTINGS_KEY, writeSettings } from "./preferences";
 
 beforeEach(() => localStorage.clear());
 
@@ -18,4 +18,13 @@ test("la devise suit la langue et la devise sélectionnées", () => {
 test("une date sans heure ne change pas de jour selon le fuseau", () => {
   const settings = { ...DEFAULT_SETTINGS, language: "en", timezone: "America/New_York" };
   expect(formatDate("2026-07-13", { settings })).toBe("07/13/2026");
+});
+
+test("une modification faite dans un autre onglet resynchronise les préférences", () => {
+  const listener = jest.fn();
+  const stop = listenForSettingsChanges(listener);
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ language: "en", currency: "EUR" }));
+  window.dispatchEvent(new StorageEvent("storage", { key: SETTINGS_KEY }));
+  expect(listener).toHaveBeenCalledWith(expect.objectContaining({ language: "en", currency: "EUR" }));
+  stop();
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { dashboard, trades, accounts as accAPI } from "@/lib/api";
 import { Link } from "react-router-dom";
 import { Plus, Sparkles, Calendar, BarChart3, RefreshCw, ShieldCheck, WalletCards, ChevronLeft, ChevronRight, Flame, X, BookOpen } from "lucide-react";
@@ -8,7 +8,8 @@ import useAppSettings from "@/hooks/useAppSettings";
 import CommercialBanner from "@/components/CommercialBanner";
 import { DashboardTemplateManager } from "@/components/dashboard/DashboardTemplateManager";
 import { DEFAULT_DASHBOARD_TEMPLATES, readDashboardTemplateState } from "@/lib/dashboardTemplates";
-import { buildMonthCells, groupTradesByDate } from "@/lib/tradeCalendar";
+import { CALENDAR_MONTHS_FR, buildTradeCalendarMonth, calendarYears, localDateKey, localMonthKey, shiftMonthKey, tradeDateKey } from "@/lib/tradeCalendar";
+import { listenForAppDataChanges } from "@/lib/appDataEvents";
 
 const EMPTY_KPIS = { funded_capital: 0, total_profit: 0, remaining_drawdown: 0, estimated_payout: 0, discipline_score: 0, trader_score: 0, total_payouts: 0, active_accounts: 0, total_trades: 0 };
 const EMPTY_METRICS = { winrate: 0, profit_factor: 0, avg_win: 0, avg_loss: 0, plan_respect_rate: 0 };
@@ -23,21 +24,24 @@ export default function Dashboard() {
   const [period, setPeriod] = useState("30");
   const [accountFilter, setAccountFilter] = useState("");
   const [assetFilter, setAssetFilter] = useState("");
-  const [calendarMonth, setCalendarMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [calendarMonth, setCalendarMonth] = useState(localMonthKey);
   const [selectedDay, setSelectedDay] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [templateState, setTemplateState] = useState(readDashboardTemplateState);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
       const [dashResponse, tradeResponse, accountResponse] = await Promise.all([dashboard(), trades.list(), accAPI.list()]);
       setD(dashResponse.data); setRecent(tradeResponse.data); setAccs(accountResponse.data);
     } catch (e) { setError(e.response?.data?.detail || "Impossible de charger le tableau de bord."); }
     finally { setLoading(false); }
-  };
-  useEffect(() => { load(); }, []);
+  }, []);
+  useEffect(() => {
+    load();
+    return listenForAppDataChanges(load, ["accounts", "trades", "payouts", "dashboard"]);
+  }, [load]);
   useEffect(() => {
     if (!selectedDay) return undefined;
     const previousOverflow = document.body.style.overflow;
@@ -52,14 +56,17 @@ export default function Dashboard() {
 
   const k = d?.kpis || EMPTY_KPIS;
   const m = d?.metrics || EMPTY_METRICS;
-  const cutoff = Date.now() - Number(period) * 86400000;
-  const inPeriod = (item) => !item?.date || new Date(item.date).getTime() >= cutoff;
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - Math.max(0, Number(period) - 1));
+  const cutoffKey = localDateKey(cutoffDate);
+  const inPeriod = (item) => !item?.date || tradeDateKey(item.date) >= cutoffKey;
   const tradeList = recent.filter(inPeriod);
   const accList = accs;
-  const scopedTrades = tradeList.filter(t =>
-    (!accountFilter || t.account_id === accountFilter) &&
-    (!assetFilter || t.instrument === assetFilter)
-  );
+  const matchesDashboardFilters = useCallback((trade) =>
+    (!accountFilter || trade.account_id === accountFilter) &&
+    (!assetFilter || trade.instrument === assetFilter), [accountFilter, assetFilter]);
+  const scopedTrades = tradeList.filter(matchesDashboardFilters);
+  const calendarTrades = useMemo(() => recent.filter(matchesDashboardFilters), [recent, matchesDashboardFilters]);
   let runningEquity = 0;
   const equityData = [...scopedTrades]
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
@@ -77,7 +84,7 @@ export default function Dashboard() {
   const scopedGrossLoss = Math.abs(scopedLosses.reduce((sum, t) => sum + Number(t.pnl || 0), 0));
   const scopedProfitFactor = scopedGrossLoss ? scopedGrossProfit / scopedGrossLoss : 0;
   const totalsByDay = scopedTrades.reduce((days, trade) => {
-    const date = trade.date || "—";
+    const date = tradeDateKey(trade.date) || "—";
     days[date] = (days[date] || 0) + Number(trade.pnl || 0);
     return days;
   }, {});
@@ -96,16 +103,26 @@ export default function Dashboard() {
         ? `Ton plan est respecté sur ${m.plan_respect_rate}% des trades renseignés. Priorité : réduire les prises hors plan.`
         : `Ton plan est respecté sur ${m.plan_respect_rate}% des trades renseignés. Continue à documenter chaque décision.`;
   const dailyData = Object.values(scopedTrades.reduce((days, trade) => {
-    const date = trade.date || "—";
+    const date = tradeDateKey(trade.date) || "—";
     days[date] ||= { date, pnl: 0 };
     days[date].pnl += Number(trade.pnl || 0);
     return days;
   }, {})).sort((a, b) => String(a.date).localeCompare(String(b.date))).slice(-7);
-  const calendarCells = useMemo(() => buildMonthCells(calendarMonth, groupTradesByDate(scopedTrades)), [calendarMonth, scopedTrades]);
-  const calendarLabel = useMemo(() => {
-    const [year, month] = calendarMonth.split("-").map(Number);
-    return new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
-  }, [calendarMonth]);
+  const calendarView = useMemo(() => buildTradeCalendarMonth(calendarMonth, calendarTrades), [calendarMonth, calendarTrades]);
+  const [calendarYear, calendarMonthNumber] = calendarMonth.split("-").map(Number);
+  const calendarYearOptions = useMemo(() => calendarYears(calendarTrades, calendarMonth), [calendarMonth, calendarTrades]);
+  const selectCalendarMonth = useCallback((year, month) => {
+    setCalendarMonth(`${year}-${String(month).padStart(2, "0")}`);
+    setSelectedDay(null);
+  }, []);
+  const moveCalendarMonth = useCallback((amount) => {
+    setCalendarMonth(currentMonth => shiftMonthKey(currentMonth, amount));
+    setSelectedDay(null);
+  }, []);
+  const resetCalendarMonth = useCallback(() => {
+    setCalendarMonth(localMonthKey());
+    setSelectedDay(null);
+  }, []);
   const tradeTimeData = scopedTrades.map((trade) => ({ hour: tradeHour(trade), pnl: Number(trade.pnl || 0), instrument: trade.instrument })).filter((point) => point.hour !== null);
   const tradeDurationData = scopedTrades.map((trade) => ({ minutes: tradeDurationMinutes(trade), pnl: Number(trade.pnl || 0), instrument: trade.instrument })).filter((point) => point.minutes !== null);
   const templates = useMemo(() => [...DEFAULT_DASHBOARD_TEMPLATES, ...templateState.custom], [templateState.custom]);
@@ -129,7 +146,7 @@ export default function Dashboard() {
           <DashboardTemplateManager state={templateState} onChange={setTemplateState} />
           <label className={`${control} flex items-center gap-2`}><Calendar className="h-3.5 w-3.5 text-[#777D88]"/><select value={period} onChange={e=>setPeriod(e.target.value)} className="min-w-0 bg-transparent"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select></label>
           <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className={control}><option value="">Tous les comptes</option>{accList.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
-          <select value={assetFilter} onChange={e=>setAssetFilter(e.target.value)} className={control}><option value="">Tous les actifs</option>{[...new Set(tradeList.map(t=>t.instrument))].filter(Boolean).map(x=><option key={x}>{x}</option>)}</select>
+          <select value={assetFilter} onChange={e=>setAssetFilter(e.target.value)} className={control}><option value="">Tous les actifs</option>{[...new Set(recent.map(t=>t.instrument))].filter(Boolean).map(x=><option key={x}>{x}</option>)}</select>
           <Link to="/app/accounts?new=1" className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#6F56D9] px-3 text-xs font-semibold text-white transition hover:bg-[#7D64E4]" data-testid="dash-add-account"><Plus className="h-3.5 w-3.5"/>Ajouter un compte</Link>
         </div>
       </header>
@@ -175,13 +192,18 @@ export default function Dashboard() {
       </div>}
 
       <TradeCalendarPanel
-        cells={calendarCells}
-        label={calendarLabel}
+        key={calendarView.monthKey}
+        calendar={calendarView}
         accent={accent}
         money={money}
-        onPrevious={() => setCalendarMonth(shiftMonth(calendarMonth, -1))}
-        onNext={() => setCalendarMonth(shiftMonth(calendarMonth, 1))}
-        onToday={() => setCalendarMonth(new Date().toISOString().slice(0, 7))}
+        onPrevious={() => moveCalendarMonth(-1)}
+        onNext={() => moveCalendarMonth(1)}
+        onToday={resetCalendarMonth}
+        month={calendarMonthNumber}
+        year={calendarYear}
+        years={calendarYearOptions}
+        onSelectMonth={(nextMonth) => selectCalendarMonth(calendarYear, nextMonth)}
+        onSelectYear={(nextYear) => selectCalendarMonth(nextYear, calendarMonthNumber)}
         onSelect={setSelectedDay}
       />
 
@@ -338,19 +360,19 @@ function StreakValue({ label, streak, accent }) {
   </div>;
 }
 
-function TradeCalendarPanel({ cells, label, accent, money, onPrevious, onNext, onToday, onSelect }) {
-  const monthCells = cells.filter((cell) => cell.inMonth);
-  const monthPnl = monthCells.reduce((sum, cell) => sum + cell.pnl, 0);
-  const activeDays = monthCells.filter((cell) => cell.trades.length).length;
-  return <section className="overflow-hidden rounded-xl border border-[#6571CF]/20 bg-[#0D1120] shadow-[inset_0_1px_0_rgba(255,255,255,.025)]" data-testid="dashboard-trade-calendar">
+function TradeCalendarPanel({ calendar, accent, money, onPrevious, onNext, onToday, month, year, years, onSelectMonth, onSelectYear, onSelect }) {
+  const { cells, label, monthKey, activeDays, tradeCount, pnl: monthPnl } = calendar;
+  return <section className="overflow-hidden rounded-xl border border-[#6571CF]/20 bg-[#0D1120] shadow-[inset_0_1px_0_rgba(255,255,255,.025)]" data-testid="dashboard-trade-calendar" data-month={monthKey}>
     <div className="flex flex-col gap-3 border-b border-[#6571CF]/15 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={onPrevious} className="grid h-8 w-8 place-items-center rounded-lg border border-[#6571CF]/15 text-[#8690A5] transition hover:border-[#7881E8]/35 hover:text-white" aria-label="Mois précédent"><ChevronLeft className="h-4 w-4" /></button>
-        <div className="min-w-[150px] text-center"><h2 className="text-sm font-semibold capitalize text-[#E7E9F1]">{label}</h2><p className="mt-0.5 text-[9px] text-[#687288]">Calendrier des trades</p></div>
+        <select value={month} onChange={(event) => onSelectMonth(Number(event.target.value))} className="pe-control !h-8 min-w-[118px] !px-2 text-xs capitalize" aria-label="Mois du calendrier" data-testid="calendar-month-select">{CALENDAR_MONTHS_FR.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</select>
+        <select value={year} onChange={(event) => onSelectYear(Number(event.target.value))} className="pe-control !h-8 min-w-[78px] !px-2 text-xs" aria-label="Année du calendrier">{years.map(value => <option key={value} value={value}>{value}</option>)}</select>
         <button type="button" onClick={onNext} className="grid h-8 w-8 place-items-center rounded-lg border border-[#6571CF]/15 text-[#8690A5] transition hover:border-[#7881E8]/35 hover:text-white" aria-label="Mois suivant"><ChevronRight className="h-4 w-4" /></button>
         <button type="button" onClick={onToday} className="ml-1 rounded-lg border border-[#6571CF]/15 px-3 py-2 text-[10px] text-[#98A1B5] transition hover:border-[#7881E8]/35 hover:text-white">Ce mois</button>
+        <span className="sr-only" aria-live="polite" data-testid="calendar-month-label">{label}</span>
       </div>
-      <div className="flex flex-wrap items-center gap-2 text-[10px]"><Link to="/app/day-view" className="rounded-lg border border-[#8067F4]/30 bg-[#8067F4]/10 px-2.5 py-1.5 font-semibold text-[#B7A8FF] transition hover:border-[#8067F4]/55 hover:text-white">Vue journalière</Link><span className="rounded-lg border border-[#6571CF]/15 bg-[#090E1C] px-2.5 py-1.5 text-[#8B95A9]">{activeDays} jour{activeDays > 1 ? "s" : ""} tradé{activeDays > 1 ? "s" : ""}</span><span className={`font-numeric rounded-lg border px-2.5 py-1.5 ${monthPnl > 0 ? "border-[#46C99A]/20 bg-[#46C99A]/[0.07] text-[#46C99A]" : monthPnl < 0 ? "border-[#F26A70]/20 bg-[#F26A70]/[0.07] text-[#F26A70]" : "border-[#6571CF]/15 bg-[#090E1C] text-[#8B95A9]"}`}>{money(monthPnl, { signDisplay: "always" })}</span></div>
+      <div className="flex flex-wrap items-center gap-2 text-[10px]" aria-live="polite"><Link to="/app/day-view" className="rounded-lg border border-[#8067F4]/30 bg-[#8067F4]/10 px-2.5 py-1.5 font-semibold text-[#B7A8FF] transition hover:border-[#8067F4]/55 hover:text-white">Vue journalière</Link><span className="rounded-lg border border-[#6571CF]/15 bg-[#090E1C] px-2.5 py-1.5 text-[#8B95A9]" data-testid="calendar-active-days">{activeDays} jour{activeDays === 1 ? "" : "s"} tradé{activeDays === 1 ? "" : "s"} · {tradeCount} trade{tradeCount === 1 ? "" : "s"}</span><span className={`font-numeric rounded-lg border px-2.5 py-1.5 ${monthPnl > 0 ? "border-[#46C99A]/20 bg-[#46C99A]/[0.07] text-[#46C99A]" : monthPnl < 0 ? "border-[#F26A70]/20 bg-[#F26A70]/[0.07] text-[#F26A70]" : "border-[#6571CF]/15 bg-[#090E1C] text-[#8B95A9]"}`} data-testid="calendar-month-pnl">{money(monthPnl, { signDisplay: "always" })}</span></div>
     </div>
     <div className="p-2 sm:p-4">
       <div className="grid grid-cols-7 gap-1 text-center text-[8px] font-medium uppercase tracking-[.12em] text-[#5F6A80] sm:gap-2 sm:text-[9px]">{["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => <div key={day} className="py-1.5">{day}</div>)}</div>
@@ -367,7 +389,7 @@ function TradeCalendarPanel({ cells, label, accent, money, onPrevious, onNext, o
             className={`relative min-h-[58px] rounded-lg border p-1.5 text-left transition sm:min-h-[92px] sm:p-2.5 ${!cell.inMonth ? "cursor-default border-transparent bg-transparent opacity-25" : hasTrades ? positive ? "border-[#46C99A]/30 bg-[#46C99A]/[0.08] hover:border-[#46C99A]/55" : negative ? "border-[#F26A70]/30 bg-[#F26A70]/[0.08] hover:border-[#F26A70]/55" : "border-[#6571CF]/18 bg-[#6571CF]/[0.06] hover:border-[#727DDE]/35" : "border-[#6571CF]/12 bg-[#090E1C] hover:border-[#727DDE]/28"}`}
             aria-label={`${cell.key}, ${cell.trades.length} trades, ${money(cell.pnl)}`}
           >
-            <div className="font-numeric text-right text-[9px] text-[#7F899E] sm:text-[10px]">{cell.day}</div>
+            <div className="font-numeric text-right text-[9px] text-[#7F899E] sm:text-[10px]">{cell.inMonth ? cell.day : ""}</div>
             {hasTrades && <div className="mt-1 text-center sm:mt-3"><div className={`font-numeric truncate text-[8px] font-semibold sm:text-xs ${positive ? "text-[#46C99A]" : negative ? "text-[#F26A70]" : "text-[#9C8EF0]"}`}>{money(cell.pnl, { signDisplay: "always", maximumFractionDigits: 0 })}</div><div className="mt-1 hidden text-[8px] text-[#69758B] sm:block">{cell.trades.length} trade{cell.trades.length > 1 ? "s" : ""}</div><span className="mx-auto mt-1 block h-1 w-1 rounded-full sm:hidden" style={{ background: positive ? "#46C99A" : negative ? "#F26A70" : accent }} /></div>}
           </button>;
         })}
@@ -584,12 +606,6 @@ function tradeDurationMinutes(trade) {
     if (Number.isFinite(difference) && difference >= 0) return Math.round(difference);
   }
   return null;
-}
-
-function shiftMonth(monthKey, amount) {
-  const [year, month] = monthKey.split("-").map(Number);
-  const date = new Date(year, month - 1 + amount, 1, 12);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function formatDuration(value) {

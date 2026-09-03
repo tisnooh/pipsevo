@@ -7,6 +7,7 @@ import { PROP_FIRMS, marketKeys } from "@/lib/journalPreferences";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import CsvExportButton from "@/components/CsvExportButton";
 import AccountSetupFlow from "@/components/AccountSetupFlow";
+import { listenForAppDataChanges } from "@/lib/appDataEvents";
 
 const blank = { name: "Combine", firm: "", market_type: "futures", balance: 50000, initial_balance: 50000, profit_target: 3000, max_drawdown: 2000, daily_loss_limit: 1000, status: "active" };
 
@@ -32,7 +33,7 @@ export default function Accounts() {
     catch (e) { setError(e.response?.data?.detail || "Impossible de charger les comptes."); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); return listenForAppDataChanges(load, ["external"]); }, [load]);
 
   const showCreate = () => {
     setSetupWelcome(false);

@@ -1,25 +1,25 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BookOpen, Brain, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { accounts as accountsAPI, trades as tradesAPI } from "@/lib/api";
-import { buildMonthCells, groupTradesByDate } from "@/lib/tradeCalendar";
+import { CALENDAR_MONTHS_FR, buildTradeCalendarMonth, calendarYears, localDateKey, localMonthKey, shiftMonthKey, tradeDateKey } from "@/lib/tradeCalendar";
 import useAppSettings from "@/hooks/useAppSettings";
-
-const today = new Date().toISOString().slice(0, 10);
+import { listenForAppDataChanges } from "@/lib/appDataEvents";
 
 export default function DayView() {
   const { money } = useAppSettings();
   const [params, setParams] = useSearchParams();
   const requestedDate = params.get("date");
-  const [month, setMonth] = useState(() => requestedDate?.slice(0, 7) || today.slice(0, 7));
-  const [selectedDate, setSelectedDate] = useState(requestedDate || "");
+  const initialDate = /^\d{4}-\d{2}-\d{2}$/.test(tradeDateKey(requestedDate)) ? tradeDateKey(requestedDate) : "";
+  const [month, setMonth] = useState(() => initialDate.slice(0, 7) || localMonthKey());
+  const [selectedDate, setSelectedDate] = useState(initialDate);
   const [tradeList, setTradeList] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
       const [tradeResponse, accountResponse] = await Promise.all([tradesAPI.list(), accountsAPI.list()]);
@@ -28,34 +28,63 @@ export default function DayView() {
     } catch (requestError) {
       setError(requestError.response?.data?.detail || "Impossible de charger les séances.");
     } finally { setLoading(false); }
-  };
-  useEffect(() => { load(); }, []);
+  }, []);
+  useEffect(() => {
+    load();
+    return listenForAppDataChanges(load, ["accounts", "trades"]);
+  }, [load]);
+  useEffect(() => {
+    const dateKey = tradeDateKey(requestedDate);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+      setMonth(dateKey.slice(0, 7));
+      setSelectedDate(dateKey);
+    } else if (!requestedDate) {
+      setSelectedDate("");
+    }
+  }, [requestedDate]);
 
-  const grouped = useMemo(() => groupTradesByDate(tradeList), [tradeList]);
-  const cells = useMemo(() => buildMonthCells(month, grouped), [month, grouped]);
-  const availableDays = useMemo(() => Object.entries(grouped)
-    .filter(([key]) => key.startsWith(month))
-    .sort(([a], [b]) => b.localeCompare(a)), [grouped, month]);
+  const calendarView = useMemo(() => buildTradeCalendarMonth(month, tradeList), [month, tradeList]);
+  const [selectedYear, selectedMonth] = month.split("-").map(Number);
+  const yearOptions = useMemo(() => calendarYears(tradeList, month), [month, tradeList]);
+  const availableDays = useMemo(() => calendarView.cells
+    .filter(cell => cell.inMonth && cell.trades.length > 0)
+    .map(cell => [cell.key, cell.trades])
+    .sort(([a], [b]) => b.localeCompare(a)), [calendarView]);
   const visibleDays = selectedDate && selectedDate.startsWith(month)
     ? availableDays.filter(([key]) => key === selectedDate)
     : availableDays;
+  const today = localDateKey();
 
-  const chooseDate = (key) => {
+  const chooseDate = useCallback((key) => {
     setSelectedDate(key);
     setParams({ date: key }, { replace: true });
-  };
-  const showAll = () => {
+  }, [setParams]);
+  const showAll = useCallback(() => {
     setSelectedDate("");
     setParams({}, { replace: true });
-  };
-  const shiftMonth = (amount) => {
-    const [year, monthNumber] = month.split("-").map(Number);
-    const next = new Date(year, monthNumber - 1 + amount, 1, 12);
-    setMonth(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`);
+  }, [setParams]);
+  const shiftMonth = useCallback((amount) => {
+    setMonth(currentMonth => shiftMonthKey(currentMonth, amount));
     setSelectedDate("");
     setParams({}, { replace: true });
-  };
-  const monthLabel = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(new Date(`${month}-01T12:00:00`));
+  }, [setParams]);
+  const selectMonth = useCallback((year, monthNumber) => {
+    setMonth(`${year}-${String(monthNumber).padStart(2, "0")}`);
+    setSelectedDate("");
+    setParams({}, { replace: true });
+  }, [setParams]);
+  const goToToday = useCallback(() => {
+    const dateKey = localDateKey();
+    const hasSession = tradeList.some(trade => tradeDateKey(trade.date) === dateKey);
+    setMonth(dateKey.slice(0, 7));
+    setSelectedDate(hasSession ? dateKey : "");
+    setParams(hasSession ? { date: dateKey } : {}, { replace: true });
+  }, [setParams, tradeList]);
+  useEffect(() => {
+    if (loading || !selectedDate || selectedDate.slice(0, 7) !== month) return;
+    const sessionExists = calendarView.cells.some(cell => cell.key === selectedDate && cell.trades.length > 0);
+    if (!sessionExists) showAll();
+  }, [calendarView, loading, month, selectedDate, showAll]);
 
   return <div className="pe-page pe-page-stack mx-auto max-w-[1800px]">
     <div className="pe-page-header">
@@ -68,16 +97,16 @@ export default function DayView() {
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_310px]">
       <main className="min-w-0 space-y-3">
         <div className="pe-card flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2"><button onClick={() => shiftMonth(-1)} className="pe-icon-button !h-9 !w-9" aria-label="Mois précédent"><ChevronLeft className="h-4 w-4"/></button><div className="min-w-[150px] text-center text-sm font-semibold capitalize">{monthLabel}</div><button onClick={() => shiftMonth(1)} className="pe-icon-button !h-9 !w-9" aria-label="Mois suivant"><ChevronRight className="h-4 w-4"/></button></div>
+          <div className="flex flex-wrap items-center gap-2"><button onClick={() => shiftMonth(-1)} className="pe-icon-button !h-9 !w-9" aria-label="Mois précédent"><ChevronLeft className="h-4 w-4"/></button><select value={selectedMonth} onChange={(event) => selectMonth(selectedYear, Number(event.target.value))} className="pe-control !h-9 min-w-[125px] !px-2 text-xs" aria-label="Mois de la vue journalière">{CALENDAR_MONTHS_FR.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</select><select value={selectedYear} onChange={(event) => selectMonth(Number(event.target.value), selectedMonth)} className="pe-control !h-9 min-w-[82px] !px-2 text-xs" aria-label="Année de la vue journalière">{yearOptions.map(value => <option key={value} value={value}>{value}</option>)}</select><button onClick={() => shiftMonth(1)} className="pe-icon-button !h-9 !w-9" aria-label="Mois suivant"><ChevronRight className="h-4 w-4"/></button><span className="sr-only" aria-live="polite" data-testid="day-view-month-label">{calendarView.label}</span></div>
           <button onClick={showAll} className={`min-h-9 rounded-pe-md border px-3 text-xs font-semibold transition ${!selectedDate ? "border-[#8067F4]/45 bg-[#8067F4]/15 text-white" : "border-[#6571CF]/20 text-[#98A1B5] hover:text-white"}`}>Toutes les séances</button>
         </div>
 
         {loading ? Array.from({ length: 2 }).map((_, index) => <div key={index} className="pe-card h-72 animate-pulse"/>) : visibleDays.length ? visibleDays.map(([key, dayTrades]) => <DaySession key={key} dateKey={key} trades={dayTrades} accounts={accounts} money={money}/>) : <div className="pe-card pe-empty-state"><div><CalendarRange className="mx-auto h-9 w-9 text-[#8067F4]"/><h2 className="mt-4 text-lg font-semibold">Aucune séance sur cette période</h2><p className="pe-page-copy mt-2">Les journées apparaîtront ici dès que des trades seront synchronisés ou ajoutés au journal.</p></div></div>}
       </main>
 
-      <aside className="pe-card h-fit xl:sticky xl:top-4">
-        <div className="pe-card-header"><div><div className="pe-card-title capitalize">{monthLabel}</div><div className="pe-card-meta mt-1">Choisis une journée</div></div><button onClick={() => { setMonth(today.slice(0, 7)); chooseDate(today); }} className="text-xs font-semibold text-[#9C8EF0]">Aujourd’hui</button></div>
-        <div className="p-3"><div className="mb-2 grid grid-cols-7 gap-1 text-center text-[9px] font-semibold uppercase text-[#687288]">{["Lu","Ma","Me","Je","Ve","Sa","Di"].map(label => <span key={label}>{label}</span>)}</div><div className="grid grid-cols-7 gap-1">{cells.map(cell => { const active = cell.key === selectedDate; const hasTrades = cell.trades.length > 0; const positive = cell.pnl > 0; const negative = cell.pnl < 0; return <button key={cell.key} disabled={!cell.inMonth} onClick={() => chooseDate(cell.key)} className={`relative aspect-square rounded-md border text-[10px] transition ${!cell.inMonth ? "border-transparent opacity-20" : hasTrades ? positive ? "border-[#46C99A]/35 bg-[#46C99A]/10 text-[#DDF8EE] hover:border-[#46C99A]/60" : negative ? "border-[#F26A70]/35 bg-[#F26A70]/10 text-[#FFE3E5] hover:border-[#F26A70]/60" : "border-[#6571CF]/20 bg-[#6571CF]/[0.07] text-[#DDE5FF] hover:border-[#8067F4]/50" : "border-[#6571CF]/12 bg-[#090E1C] text-[#687288] hover:border-[#6571CF]/30"} ${active && cell.inMonth ? "ring-1 ring-[#8067F4] ring-offset-1 ring-offset-[#0D1120]" : ""}`}><span>{cell.day}</span>{hasTrades && <i className={`absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full ${positive ? "bg-[#46C99A]" : negative ? "bg-[#F26A70]" : "bg-[#8067F4]"}`}/>}</button>; })}</div></div>
+      <aside className="pe-card h-fit xl:sticky xl:top-4" data-month={calendarView.monthKey}>
+        <div className="pe-card-header"><div><div className="pe-card-title capitalize" aria-live="polite">{calendarView.label}</div><div className="pe-card-meta mt-1">Choisis une journée</div></div><button onClick={goToToday} className="text-xs font-semibold text-[#9C8EF0]">Aujourd’hui</button></div>
+        <div className="p-3"><div className="mb-2 grid grid-cols-7 gap-1 text-center text-[9px] font-semibold uppercase text-[#687288]">{["Lu","Ma","Me","Je","Ve","Sa","Di"].map(label => <span key={label}>{label}</span>)}</div><div key={calendarView.monthKey} className="grid grid-cols-7 gap-1">{calendarView.cells.map(cell => { const active = cell.key === selectedDate; const hasTrades = cell.trades.length > 0; const positive = cell.pnl > 0; const negative = cell.pnl < 0; return <button key={cell.key} disabled={!cell.inMonth || !hasTrades} onClick={() => chooseDate(cell.key)} className={`relative aspect-square rounded-md border text-[10px] transition ${!cell.inMonth ? "border-transparent opacity-20" : hasTrades ? positive ? "border-[#46C99A]/35 bg-[#46C99A]/10 text-[#DDF8EE] hover:border-[#46C99A]/60" : negative ? "border-[#F26A70]/35 bg-[#F26A70]/10 text-[#FFE3E5] hover:border-[#F26A70]/60" : "border-[#6571CF]/20 bg-[#6571CF]/[0.07] text-[#DDE5FF] hover:border-[#8067F4]/50" : "border-[#6571CF]/12 bg-[#090E1C] text-[#687288]"} ${active && cell.inMonth ? "ring-1 ring-[#8067F4] ring-offset-1 ring-offset-[#0D1120]" : ""}`}><span>{cell.inMonth ? cell.day : ""}</span>{hasTrades && <i className={`absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full ${positive ? "bg-[#46C99A]" : negative ? "bg-[#F26A70]" : "bg-[#8067F4]"}`}/>}</button>; })}</div></div>
       </aside>
     </div>
   </div>;

@@ -25,7 +25,7 @@ import MarketTerminal from "@/pages/MarketTerminal";
 import EconomicCalendar from "@/pages/EconomicCalendar";
 import DayView from "@/pages/DayView";
 import NewsletterActionPage from "@/pages/NewsletterActionPage";
-import { FAQPage, ContactPage, PricingPage, LegalPage, BlogPage, HelpPage, AffiliatePage } from "@/pages/SupportPages";
+import { FAQPage, ContactPage, PricingPage, LegalPage, BlogPage, GuideArticlePage, HelpPage, AffiliatePage } from "@/pages/SupportPages";
 import PlatformsPage from "@/pages/PlatformsPage";
 import CookieConsent from "@/components/CookieConsent";
 import RouteSEO from "@/components/RouteSEO";
@@ -89,6 +89,7 @@ export default function App() {
           <Route path="/affiliate-terms" element={<LegalPage type="affiliate" />} />
           <Route path="/platforms" element={<PlatformsPage />} />
           <Route path="/blog" element={<BlogPage />} />
+          <Route path="/blog/:slug" element={<GuideArticlePage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/affiliate" element={<AffiliatePage />} />
           <Route path="/onboarding" element={<OnboardingGate><Onboarding /></OnboardingGate>} />

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { applyDocumentPreferences, readSettings, SETTINGS_EVENT, writeSettings } from "@/lib/preferences";
+import { applyDocumentPreferences, listenForSettingsChanges, readSettings, writeSettings } from "@/lib/preferences";
 
 const I18nContext = createContext(null);
 
@@ -208,13 +208,11 @@ function translateNode(node, language) {
     if (!current.trim()) return;
     if (!originalText.has(node) || (renderedText.has(node) && current !== renderedText.get(node))) originalText.set(node, current);
     const source = originalText.get(node);
-    if (language === "fr") { if (current !== source) node.nodeValue = source; renderedText.delete(node); return; }
-    if (renderedText.get(node) === current) return;
     const lead = source.match(/^\s*/)?.[0] || "";
     const trail = source.match(/\s*$/)?.[0] || "";
-    const translated = `${lead}${translateText(source.trim())}${trail}`;
-    if (current !== translated) node.nodeValue = translated;
-    renderedText.set(node, translated);
+    const next = language === "en" ? `${lead}${translateText(source.trim())}${trail}` : source;
+    if (current !== next) node.nodeValue = next;
+    renderedText.set(node, next);
     return;
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return;
@@ -227,7 +225,7 @@ function translateNode(node, language) {
     const current = node.getAttribute(attr);
     if (!(attr in attrs) || (attrs[`${attr}Rendered`] && current !== attrs[`${attr}Rendered`])) attrs[attr] = current;
     const next = language === "en" ? translateText(attrs[attr]) : attrs[attr];
-    node.setAttribute(attr, next); attrs[`${attr}Rendered`] = language === "en" ? next : null;
+    node.setAttribute(attr, next); attrs[`${attr}Rendered`] = next;
   }
   node.childNodes.forEach(child => translateNode(child, language));
 }
@@ -242,9 +240,7 @@ export function I18nProvider({ children }) {
   const t = useCallback((fr, en) => language === "en" ? (en || translateText(fr)) : fr, [language]);
 
   useEffect(() => {
-    const sync = (event) => setLanguageState((event.detail || readSettings()).language === "en" ? "en" : "fr");
-    window.addEventListener(SETTINGS_EVENT, sync);
-    return () => window.removeEventListener(SETTINGS_EVENT, sync);
+    return listenForSettingsChanges(settings => setLanguageState(settings.language === "en" ? "en" : "fr"));
   }, []);
 
   useEffect(() => {

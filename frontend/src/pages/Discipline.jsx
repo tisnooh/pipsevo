@@ -1,16 +1,18 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { dashboard, trades as tradesAPI, accounts as accountsAPI } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { AlertTriangle, CheckCircle2, RefreshCw, XCircle } from "lucide-react";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { evaluateRiskAlerts } from "@/lib/riskEngine";
+import { localDateKey, tradeDateKey } from "@/lib/tradeCalendar";
+import { listenForAppDataChanges } from "@/lib/appDataEvents";
 
 export default function Discipline() {
   const { user }=useAuth(); const { money }=useAppSettings(); const [d,setD]=useState(null); const [trades,setTrades]=useState([]); const [accounts,setAccounts]=useState([]); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
-  const load=async()=>{setLoading(true);setError("");try{const[a,b,c]=await Promise.all([dashboard(),tradesAPI.list(),accountsAPI.list()]);setD(a.data);setTrades(b.data);setAccounts(c.data)}catch(e){setError(e.response?.data?.detail||"Impossible de charger la discipline.")}finally{setLoading(false)}};
-  useEffect(()=>{load()},[]);
+  const load=useCallback(async()=>{setLoading(true);setError("");try{const[a,b,c]=await Promise.all([dashboard(),tradesAPI.list(),accountsAPI.list()]);setD(a.data);setTrades(b.data);setAccounts(c.data)}catch(e){setError(e.response?.data?.detail||"Impossible de charger la discipline.")}finally{setLoading(false)}},[]);
+  useEffect(()=>{load();return listenForAppDataChanges(load,["accounts","trades","discipline","dashboard"])},[load]);
   const rules=useMemo(()=>user?.rules||{},[user?.rules]); const k=d?.kpis||{discipline_score:0,total_trades:0}; const m=d?.metrics||{plan_respect_rate:0};
-  const insight=useMemo(()=>{const today=new Date().toISOString().slice(0,10);const todays=trades.filter(t=>t.date===today);const todayPnl=todays.reduce((s,t)=>s+Number(t.pnl||0),0);let consecutive=0;for(const t of [...trades].sort((a,b)=>String(b.date).localeCompare(String(a.date)))){if(Number(t.pnl)<0)consecutive++;else break}const violations=trades.filter(t=>t.plan_respected===false).length;return{todayCount:todays.length,todayPnl,consecutive,violations}},[trades]);
+  const insight=useMemo(()=>{const today=localDateKey();const todays=trades.filter(t=>tradeDateKey(t.date)===today);const todayPnl=todays.reduce((s,t)=>s+Number(t.pnl||0),0);let consecutive=0;for(const t of [...trades].sort((a,b)=>`${tradeDateKey(b.date)}|${b.created_at||""}`.localeCompare(`${tradeDateKey(a.date)}|${a.created_at||""}`))){if(Number(t.pnl)<0)consecutive++;else break}const violations=trades.filter(t=>t.plan_respected===false).length;return{todayCount:todays.length,todayPnl,consecutive,violations}},[trades]);
   const maxTrades=Number(rules.max_trades||3),dailyLimit=Number(rules.daily_loss_limit||0),stopAfter=Number(rules.stop_after_loss||2);
   const riskAlerts=useMemo(()=>evaluateRiskAlerts({accounts,trades,rules}),[accounts,trades,rules]);
   const hasMeasuredPlan = m.plan_respect_rate !== null && m.plan_respect_rate !== undefined;

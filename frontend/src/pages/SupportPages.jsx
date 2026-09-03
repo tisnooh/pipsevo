@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowRight, BookOpen, Brain, Check, ChevronDown, CircleHelp, Clock3, LifeBuoy, Mail, Minus, Search, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
+import { Link, useParams } from "react-router-dom";
+import { ArrowLeft, ArrowRight, BookOpen, Brain, Check, ChevronDown, ChevronRight, CircleHelp, Clock3, LifeBuoy, Mail, Minus, Search, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
 import PublicHeader from "@/components/PublicHeader";
 import PublicFooter from "@/components/PublicFooter";
 import { contact } from "@/lib/api";
@@ -10,6 +10,7 @@ import { BILLING_CONFIG, COMMERCIAL_PHASES, PLANS, PRICING_COMPARISON, formatBil
 import { captureCommercialEvent } from "@/lib/commercialAnalytics";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/context/I18nContext";
+import { getGuideBySlug, guides } from "@/content/guides";
 
 const faqs = [
   { category: "start", questionFr: "Comment ajouter mon premier trade ?", questionEn: "How do I add my first trade?", answerFr: "Depuis le Journal, clique sur « Nouveau trade », choisis ton compte puis renseigne le résultat, le contexte et le respect de ton plan. Tu peux compléter les détails plus tard.", answerEn: "From the Journal, select “New trade”, choose your account, then enter the result, context, and plan compliance. You can complete the details later." },
@@ -185,15 +186,81 @@ const legal = {
 };
 export function LegalPage({type}){const page=legal[type];return <PublicLayout title={page.title} subtitle={page.intro}><div className="card-elev p-6 sm:p-8 max-w-3xl mx-auto"><div className="flex items-center justify-between gap-3 border-b border-white/[0.07] pb-5"><ShieldCheck className="text-[#B58BFF]"/><span className="text-pe-micro text-[#6B7280]">Mise à jour : 13 juillet 2026</span></div><div className="mt-6 space-y-7">{page.sections.map(([heading,text])=><section key={heading}><h2 className="font-semibold">{heading}</h2><p className="text-sm text-[#B5BBC9] mt-2 leading-relaxed">{text}</p></section>)}</div>{type==="privacy"&&<button onClick={openCookieSettings} className="btn-ghost mt-8">Gérer mes préférences de cookies</button>}</div></PublicLayout>}
 
-const posts=[
-  {title:"Construire un journal de trading utile",intro:"Un bon journal relie le résultat, le contexte, l'émotion et le respect du plan.",steps:["Note le setup et la raison d'entrée avant d'évaluer le résultat.","Ajoute le risque prévu, le résultat en R et le respect de tes règles.","Relis chaque semaine les erreurs qui se répètent, pas seulement les pertes."]},
-  {title:"Comprendre le drawdown d'une prop firm",intro:"Mesure le drawdown consommé avant de chercher à accélérer les gains.",steps:["Identifie si la limite est fixe, quotidienne ou suiveuse.","Calcule ton coussin restant avant chaque nouvelle session.","Réduis le risque quand la marge de sécurité diminue au lieu de tenter de te refaire."]},
-  {title:"Pourquoi suivre son R multiple",intro:"Le R multiple compare des trades malgré des tailles de position différentes.",steps:["Définis 1R comme le montant réellement risqué au départ.","Exprime chaque gain ou perte en multiple de ce risque.","Compare ensuite les setups sur une série suffisante, jamais sur un seul trade."]},
-  {title:"Éviter le revenge trading",intro:"Une règle simple après une perte protège mieux qu'une décision prise sous pression.",steps:["Impose une pause mesurable après une perte ou une violation de règle.","Note l'émotion et l'urgence ressenties avant toute nouvelle entrée.","Mesure le coût des trades pris hors plan pour rendre le pattern visible."]},
-  {title:"Préparer une demande de payout",intro:"Un payout durable dépend autant de la régularité que du profit brut.",steps:["Relis les règles officielles et les jours minimum de ta firme.","Vérifie le coussin de drawdown qui restera après le retrait.","Conserve une trace de la demande et du montant réellement reçu."]},
-  {title:"Utiliser un backtest sans se mentir",intro:"Un backtest crédible inclut aussi les périodes difficiles et les frais.",steps:["Définis les règles avant de commencer et ne les change pas au milieu du test.","Teste plusieurs contextes de marché avec un échantillon suffisant.","Compare espérance, drawdown et séries de pertes avant de passer en conditions réelles."]},
-];
-export function BlogPage(){return <PublicLayout title="Guides PipsEvo" subtitle="Des méthodes concrètes sur la discipline, l'analyse et les comptes financés."><div className="grid md:grid-cols-2 gap-4">{posts.map((post,i)=><details key={post.title} className="card-elev p-6 group"><summary className="cursor-pointer list-none"><div className="flex items-start justify-between gap-4"><div><div className="text-pe-micro text-[#B58BFF] font-mono">GUIDE {String(i+1).padStart(2,"0")} · 3 MIN</div><h2 className="font-semibold text-lg mt-3">{post.title}</h2></div><span className="text-[#B58BFF] text-xl transition-transform group-open:rotate-45">+</span></div><p className="text-sm text-[#9CA3AF] mt-3 leading-relaxed">{post.intro}</p></summary><ol className="mt-5 space-y-3 border-t border-white/[0.07] pt-5">{post.steps.map((step,index)=><li key={step} className="flex gap-3 text-sm text-[#B5BBC9] leading-relaxed"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#7C4DFF]/15 text-pe-micro text-[#B58BFF]">{index+1}</span>{step}</li>)}</ol><Link to="/register" className="text-sm text-[#B58BFF] hover:text-white inline-block mt-5">Appliquer dans mon journal →</Link></details>)}</div></PublicLayout>}
+function GuideCard({ guide, language, featured = false }) {
+  const title = guide.title[language];
+  const summary = guide.summary[language];
+  const category = guide.category[language];
+  return <Link to={`/blog/${guide.slug}`} className={`group relative flex overflow-hidden rounded-[24px] border border-white/[0.09] bg-[#0A0C15] transition duration-300 hover:-translate-y-1 hover:border-[#7657FF]/45 hover:bg-[#0D0F1B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7657FF]/70 ${featured ? "min-h-[330px] p-7 sm:p-9 lg:min-h-[390px]" : "min-h-[260px] p-6 sm:p-7"}`}>
+    <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-[#7657FF]/[0.13] blur-3xl transition group-hover:bg-[#7657FF]/[0.2]" />
+    <div className="relative flex w-full flex-col">
+      <div className="flex items-center justify-between gap-4 text-[10px] font-semibold uppercase tracking-[.17em] text-[#A995FF]"><span>{category}</span><span className="font-mono text-[#676F80]">{guide.number}</span></div>
+      <h2 className={`mt-7 max-w-2xl font-semibold tracking-[-0.035em] text-[#F0F1F5] ${featured ? "text-3xl leading-tight sm:text-4xl" : "text-xl leading-snug sm:text-2xl"}`}>{title}</h2>
+      <p className={`mt-4 max-w-2xl leading-7 text-[#9098A8] ${featured ? "text-base" : "text-sm"}`}>{summary}</p>
+      <div className="mt-auto flex items-center justify-between gap-4 pt-8"><span className="inline-flex items-center gap-2 text-xs text-[#747D8D]"><Clock3 className="h-4 w-4" />{guide.readTime} min</span><span className="inline-flex items-center gap-2 text-sm font-semibold text-[#B6A5FF] transition group-hover:text-white">{language === "en" ? "Read guide" : "Lire le guide"}<ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span></div>
+    </div>
+  </Link>;
+}
+
+export function BlogPage(){
+  const { language, t } = useI18n();
+  return <PublicLayout eyebrow={t("Bibliothèque PipsEvo", "PipsEvo library")} title={t("Guides pratiques", "Practical guides")} subtitle={t("Des méthodes structurées pour mieux documenter tes décisions, protéger ton risque et relire tes habitudes.", "Structured methods to document decisions, protect risk, and review your habits.")} wide>
+    <section aria-labelledby="featured-guide-title">
+      <div className="mb-6 flex items-end justify-between gap-5"><div><div className="text-[10px] font-semibold uppercase tracking-[.18em] text-[#8F78F8]">{t("Commencer ici", "Start here")}</div><h2 id="featured-guide-title" className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#EEF0F4]">{t("Construis une base de travail fiable", "Build a reliable working foundation")}</h2></div><span className="hidden text-sm text-[#747C8B] sm:block">{guides.length} {t("guides disponibles", "guides available")}</span></div>
+      <GuideCard guide={guides[0]} language={language} featured />
+    </section>
+    <section className="mt-14 sm:mt-20" aria-labelledby="all-guides-title">
+      <div className="mb-6"><div className="text-[10px] font-semibold uppercase tracking-[.18em] text-[#8F78F8]">{t("Bibliothèque", "Library")}</div><h2 id="all-guides-title" className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#EEF0F4]">{t("Approfondis un sujet", "Explore a topic")}</h2></div>
+      <div className="grid gap-4 md:grid-cols-2">{guides.slice(1).map(guide => <GuideCard key={guide.slug} guide={guide} language={language} />)}</div>
+    </section>
+    <div className="mt-14 flex flex-col items-start justify-between gap-5 rounded-[24px] border border-[#7657FF]/25 bg-[#7657FF]/[0.07] p-7 sm:flex-row sm:items-center"><div><h2 className="text-xl font-semibold text-[#F0F1F5]">{t("Passe de la lecture à la pratique", "Move from reading to practice")}</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-[#8E96A5]">{t("Crée ton journal, renseigne quelques trades et utilise tes propres données pour appliquer ces méthodes.", "Create your journal, add a few trades, and use your own data to apply these methods.")}</p></div><Link to="/register" className="btn-primary inline-flex shrink-0 items-center gap-2 !rounded-xl">{t("Créer mon espace", "Create my workspace")}<ArrowRight className="h-4 w-4" /></Link></div>
+  </PublicLayout>;
+}
+
+export function GuideArticlePage(){
+  const { slug } = useParams();
+  const { language, t } = useI18n();
+  const guide = getGuideBySlug(slug);
+  if (!guide) return <PublicLayout eyebrow={t("Guide introuvable", "Guide not found")} title={t("Cette ressource n’existe pas", "This resource does not exist")} subtitle={t("Le lien a peut-être changé ou le guide a été déplacé.", "The link may have changed or the guide may have moved.")}><div className="text-center"><Link to="/blog" className="btn-primary inline-flex items-center gap-2 !rounded-xl"><ArrowLeft className="h-4 w-4" />{t("Retour aux guides", "Back to guides")}</Link></div></PublicLayout>;
+
+  const title = guide.title[language];
+  const summary = guide.summary[language];
+  const related = guides.filter(item => item.slug !== guide.slug).slice(Math.max(0, Number(guide.number) - 2), Math.max(0, Number(guide.number) - 2) + 2);
+  return <PublicLayout eyebrow={`${guide.category[language]} · ${guide.readTime} min`} title={title} subtitle={summary} wide>
+    <div className="mb-8 flex flex-wrap items-center gap-2 text-xs text-[#737C8C]"><Link to="/blog" className="transition hover:text-white">{t("Guides", "Guides")}</Link><ChevronRight className="h-3.5 w-3.5" /><span className="text-[#A9AFBA]">{guide.number}</span></div>
+    <div className="grid items-start gap-6 lg:grid-cols-[250px_minmax(0,1fr)]">
+      <aside className="rounded-[20px] border border-white/[0.08] bg-[#090B12] p-5 lg:sticky lg:top-32">
+        <div className="text-[10px] font-semibold uppercase tracking-[.18em] text-[#8F78F8]">{t("Dans ce guide", "In this guide")}</div>
+        <nav className="mt-4 space-y-1" aria-label={t("Sommaire du guide", "Guide contents")}>{guide.sections.map(section => <a key={section.id} href={`#${section.id}`} className="block rounded-xl px-3 py-2.5 text-sm leading-5 text-[#818A9A] transition hover:bg-white/[0.04] hover:text-white">{section.title[language]}</a>)}</nav>
+        <div className="mt-5 border-t border-white/[0.07] pt-5 text-xs leading-5 text-[#697181]"><Clock3 className="mb-2 h-4 w-4 text-[#9A83FF]" />{guide.readTime} {t("minutes de lecture", "minute read")}</div>
+      </aside>
+
+      <article className="overflow-hidden rounded-[26px] border border-white/[0.085] bg-[#090B12]">
+        <div className="border-b border-white/[0.07] bg-gradient-to-br from-[#7657FF]/[0.10] via-transparent to-transparent p-6 sm:p-9 lg:p-11">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#7657FF]/25 bg-[#7657FF]/[0.12]"><BookOpen className="h-5 w-5 text-[#B39FFF]" /></div>
+          <h2 className="mt-6 text-xl font-semibold tracking-[-0.025em] text-[#EFF0F4]">{t("Ce que tu vas obtenir", "What you will get")}</h2>
+          <p className="mt-3 max-w-3xl text-[15px] leading-7 text-[#9AA1AF]">{guide.outcome[language]}</p>
+          <div className="mt-7 grid gap-3 sm:grid-cols-3">{guide.keyPoints[language].map(point => <div key={point} className="rounded-2xl border border-white/[0.07] bg-black/20 p-4"><Check className="h-4 w-4 text-[#46C99A]" /><p className="mt-3 text-sm leading-6 text-[#B7BDC8]">{point}</p></div>)}</div>
+        </div>
+
+        <div className="space-y-12 p-6 sm:p-9 lg:p-11">{guide.sections.map(section => <section key={section.id} id={section.id} className="scroll-mt-36">
+          <h2 className="text-2xl font-semibold tracking-[-0.03em] text-[#EEF0F4]">{section.title[language]}</h2>
+          <div className="mt-5 space-y-4">{section.paragraphs[language].map(paragraph => <p key={paragraph} className="text-[15px] leading-8 text-[#969EAD]">{paragraph}</p>)}</div>
+          {section.bullets && <ul className="mt-6 grid gap-3 sm:grid-cols-2">{section.bullets[language].map(item => <li key={item} className="flex gap-3 rounded-xl border border-white/[0.07] bg-white/[0.025] p-4 text-sm leading-6 text-[#B4BAC6]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#8F78F8]" />{item}</li>)}</ul>}
+        </section>)}
+
+          <section className="rounded-[22px] border border-[#46C99A]/20 bg-[#46C99A]/[0.045] p-6 sm:p-7" aria-labelledby="guide-checklist-title">
+            <div className="text-[10px] font-semibold uppercase tracking-[.18em] text-[#46C99A]">{t("À mettre en pratique", "Put it into practice")}</div><h2 id="guide-checklist-title" className="mt-2 text-xl font-semibold text-[#EDF1F1]">{t("Ta check-list", "Your checklist")}</h2>
+            <ul className="mt-5 space-y-3">{guide.checklist[language].map(item => <li key={item} className="flex items-start gap-3 text-sm leading-6 text-[#AEB6C1]"><span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border border-[#46C99A]/35 bg-[#46C99A]/10"><Check className="h-3 w-3 text-[#46C99A]" /></span>{item}</li>)}</ul>
+          </section>
+
+          <div className="rounded-2xl border border-white/[0.07] bg-black/20 p-5 text-xs leading-6 text-[#737C8B]">{t("Contenu éducatif : adapte toujours ces principes à ta situation et vérifie les règles officielles de ta plateforme ou de ta prop firm. PipsEvo ne fournit aucun signal ni conseil financier.", "Educational content: always adapt these principles to your situation and verify the official rules of your platform or prop firm. PipsEvo provides no signals or financial advice.")}</div>
+        </div>
+      </article>
+    </div>
+
+    <section className="mt-16" aria-labelledby="related-guides-title"><div className="flex items-end justify-between gap-4"><div><div className="text-[10px] font-semibold uppercase tracking-[.18em] text-[#8F78F8]">{t("Continuer", "Keep learning")}</div><h2 id="related-guides-title" className="mt-2 text-2xl font-semibold tracking-[-0.03em]">{t("Guides associés", "Related guides")}</h2></div><Link to="/blog" className="text-sm font-semibold text-[#A994FF] hover:text-white">{t("Voir tous les guides", "View all guides")}</Link></div><div className="mt-6 grid gap-4 md:grid-cols-2">{related.map(item => <GuideCard key={item.slug} guide={item} language={language} />)}</div></section>
+  </PublicLayout>;
+}
 
 export function HelpPage(){
   const { t } = useI18n();

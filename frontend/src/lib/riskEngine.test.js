@@ -11,7 +11,7 @@ describe("moteur de risque", () => {
     const alerts = evaluateRiskAlerts({
       accounts: [account],
       trades: [
-        { account_id: "a1", date: "2026-07-25", pnl: -600, created_at: "2026-07-25T10:00:00Z" },
+        { account_id: "a1", date: "2026-07-25T09:30:00Z", pnl: -600, created_at: "2026-07-25T10:00:00Z" },
         { account_id: "a1", date: "2026-07-25", pnl: -500, created_at: "2026-07-25T11:00:00Z" },
       ],
       rules: { max_trades: 2, stop_after_loss: 2 },

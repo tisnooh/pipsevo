@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { dna } from "@/lib/api";
 import { Dna, Clock, Crosshair, Heart, FileText, RefreshCw } from "lucide-react";
+import { listenForAppDataChanges } from "@/lib/appDataEvents";
 
 export default function TradingDNA() {
   const [d, setD] = useState(null);
   const [error,setError]=useState("");
-  const load=()=>{setError("");setD(null);dna().then(r=>setD(r.data)).catch(e=>setError(e.response?.data?.detail||"Impossible de générer le rapport."))};
-  useEffect(() => { load(); }, []);
+  const load=useCallback(()=>{setError("");setD(null);dna().then(r=>setD(r.data)).catch(e=>setError(e.response?.data?.detail||"Impossible de générer le rapport."))},[]);
+  useEffect(() => { load(); return listenForAppDataChanges(load,["trades","dna"]); }, [load]);
   return (
     <div className="pe-page pe-page-stack mx-auto max-w-[1800px]">
       <TradingDNAHeader />

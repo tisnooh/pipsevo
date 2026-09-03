@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X, PanelLeftClose, PanelLeftOpen, CalendarDays, CalendarRange } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -6,9 +6,10 @@ import { LogoMark } from "@/components/Logo";
 import { dashboard, accounts as accountsAPI, trades as tradesAPI } from "@/lib/api";
 import { useI18n } from "@/context/I18nContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import { applyDocumentPreferences, readSettings, SETTINGS_EVENT } from "@/lib/preferences";
+import { applyDocumentPreferences, listenForSettingsChanges, readSettings } from "@/lib/preferences";
 import { BILLING_CONFIG, COMMERCIAL_PHASES } from "@/config/billing";
 import { evaluateRiskAlerts } from "@/lib/riskEngine";
+import { listenForAppDataChanges, notifyAppDataChanged } from "@/lib/appDataEvents";
 
 const NAV_LINKS = [
   { to: "/app/dashboard", fr: "Aperçu", en: "Overview", icon: Home, testid: "nav-dashboard" },
@@ -55,20 +56,45 @@ export default function AppShell() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [settings, setSettings] = useState(readSettings);
+  const shellRequest = useRef(0);
 
-  useEffect(() => {
-    Promise.all([dashboard(), accountsAPI.list(), tradesAPI.list()]).then(([dashboardResponse, accountResponse, tradeResponse]) => {
+  const refreshShellData = useCallback(async () => {
+    const requestId = ++shellRequest.current;
+    try {
+      const [dashboardResponse, accountResponse, tradeResponse] = await Promise.all([dashboard(), accountsAPI.list(), tradesAPI.list()]);
+      if (requestId !== shellRequest.current) return;
       setDiscipline(dashboardResponse.data?.kpis?.discipline_score ?? 0);
       setSummary(dashboardResponse.data);
       setRiskAlerts(evaluateRiskAlerts({ accounts: accountResponse.data, trades: tradeResponse.data, rules: user?.rules || {} }));
-    }).catch(() => {});
+    } catch {
+      // Les pages gardent leur propre état d'erreur. Le shell conserve la dernière valeur connue.
+    }
   }, [user?.rules]);
 
   useEffect(() => {
-    const applyPreferences = (event) => { const next = event.detail || readSettings(); setSettings(next); applyDocumentPreferences(next); };
-    applyPreferences({ detail: readSettings() });
-    window.addEventListener(SETTINGS_EVENT, applyPreferences);
-    return () => window.removeEventListener(SETTINGS_EVENT, applyPreferences);
+    refreshShellData();
+    return listenForAppDataChanges(refreshShellData, ["accounts", "trades", "payouts", "dashboard", "discipline"]);
+  }, [refreshShellData]);
+
+  useEffect(() => {
+    let lastRefresh = 0;
+    const refreshAfterBackgroundActivity = () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastRefresh < 3000) return;
+      lastRefresh = Date.now();
+      notifyAppDataChanged(["all"]);
+    };
+    document.addEventListener("visibilitychange", refreshAfterBackgroundActivity);
+    window.addEventListener("focus", refreshAfterBackgroundActivity);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshAfterBackgroundActivity);
+      window.removeEventListener("focus", refreshAfterBackgroundActivity);
+    };
+  }, []);
+
+  useEffect(() => {
+    const applyPreferences = next => { setSettings(next); applyDocumentPreferences(next); };
+    applyPreferences(readSettings());
+    return listenForSettingsChanges(applyPreferences);
   }, []);
 
   useEffect(() => { const shortcut=e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();setSearchOpen(true)}}; window.addEventListener("keydown",shortcut); return()=>window.removeEventListener("keydown",shortcut); }, []);

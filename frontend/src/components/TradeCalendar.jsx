@@ -1,8 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Target, TrendingDown, TrendingUp } from "lucide-react";
-import { buildMonthCells, groupTradesByDate, tradeDateKey } from "@/lib/tradeCalendar";
+import { CALENDAR_MONTHS_FR, buildMonthCells, calendarYears, groupTradesByDate, localDateKey, shiftMonthKey } from "@/lib/tradeCalendar";
 
-const MONTHS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const currentMonthKey = () => {
   const now = new Date();
@@ -15,13 +14,7 @@ export default function TradeCalendar({ trades, money, formatDate }) {
   const grouped = useMemo(() => groupTradesByDate(trades), [trades]);
   const cells = useMemo(() => buildMonthCells(monthKey, grouped), [monthKey, grouped]);
   const [year, month] = monthKey.split("-").map(Number);
-  const availableYears = useMemo(() => {
-    const years = new Set([new Date().getFullYear(), ...trades.map(trade => Number(tradeDateKey(trade.date).slice(0, 4))).filter(Boolean)]);
-    const min = Math.min(...years);
-    const max = Math.max(...years);
-    for (let value = min; value <= max; value += 1) years.add(value);
-    return [...years].sort((a, b) => b - a);
-  }, [trades]);
+  const availableYears = useMemo(() => calendarYears(trades, monthKey), [monthKey, trades]);
   const monthCells = cells.filter(cell => cell.inMonth);
   const monthTrades = monthCells.flatMap(cell => cell.trades);
   const monthPnl = monthTrades.reduce((sum, trade) => sum + Number(trade.pnl || 0), 0);
@@ -30,15 +23,15 @@ export default function TradeCalendar({ trades, money, formatDate }) {
   const losingDays = activeDays.filter(cell => cell.pnl < 0).length;
   const bestDay = activeDays.reduce((best, cell) => !best || cell.pnl > best.pnl ? cell : best, null);
   const selectedTrades = selectedDay ? grouped[selectedDay] || [] : [];
-  const today = tradeDateKey(new Date().toISOString());
+  const today = localDateKey();
 
   const setCalendarMonth = (nextYear, nextMonth) => {
     setMonthKey(`${nextYear}-${String(nextMonth).padStart(2, "0")}`);
     setSelectedDay(null);
   };
   const moveMonth = direction => {
-    const date = new Date(year, month - 1 + direction, 1);
-    setCalendarMonth(date.getFullYear(), date.getMonth() + 1);
+    const [nextYear, nextMonth] = shiftMonthKey(monthKey, direction).split("-").map(Number);
+    setCalendarMonth(nextYear, nextMonth);
   };
 
   return (
@@ -59,7 +52,7 @@ export default function TradeCalendar({ trades, money, formatDate }) {
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => moveMonth(-1)} aria-label="Mois précédent" className="pe-icon-button"><ChevronLeft className="h-4 w-4" /></button>
             <select aria-label="Mois du calendrier" value={month} onChange={event => setCalendarMonth(year, Number(event.target.value))} className="pe-control min-w-[135px] text-xs">
-              {MONTHS.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}
+              {CALENDAR_MONTHS_FR.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}
             </select>
             <select aria-label="Année du calendrier" value={year} onChange={event => setCalendarMonth(Number(event.target.value), month)} className="pe-control min-w-[90px] text-xs">
               {availableYears.map(value => <option key={value} value={value}>{value}</option>)}
@@ -87,7 +80,7 @@ export default function TradeCalendar({ trades, money, formatDate }) {
                 className={`relative min-h-[74px] border-b border-r border-white/[0.055] p-1.5 text-left transition sm:min-h-[108px] sm:p-3 ${!cell.inMonth ? "bg-black/20 text-[#373D49]" : hasTrades ? positive ? "bg-[#46C99A]/[0.06] text-[#8992A2] hover:bg-[#46C99A]/[0.09]" : negative ? "bg-[#F26A70]/[0.06] text-[#8992A2] hover:bg-[#F26A70]/[0.09]" : "bg-[#7C4DFF]/[0.04] text-[#8992A2] hover:bg-[#7C4DFF]/[0.07]" : "text-[#8992A2]"} ${hasTrades ? "cursor-pointer" : "cursor-default"} ${active ? "z-10 ring-1 ring-inset ring-[#7C4DFF]/60" : ""}`}
               >
                 <div className="flex items-center justify-between gap-1">
-                  <span className={`grid h-6 w-6 place-items-center rounded-full text-[10px] font-semibold sm:h-7 sm:w-7 sm:text-xs ${cell.key === today ? "bg-[#7C4DFF] text-white" : ""}`}>{cell.day}</span>
+                  <span className={`grid h-6 w-6 place-items-center rounded-full text-[10px] font-semibold sm:h-7 sm:w-7 sm:text-xs ${cell.key === today ? "bg-[#7C4DFF] text-white" : ""}`}>{cell.inMonth ? cell.day : ""}</span>
                   {hasTrades && <span className="hidden rounded-md border border-white/[0.07] px-1.5 py-0.5 text-[9px] text-[#788191] sm:block">{cell.trades.length} trade{cell.trades.length > 1 ? "s" : ""}</span>}
                 </div>
                 {hasTrades && <div className="mt-2 sm:mt-4"><div className={`truncate text-[10px] font-bold tabular-nums sm:text-sm ${positive ? "text-[#46C99A]" : negative ? "text-[#F26A70]" : "text-[#9C8EF0]"}`}>{money(cell.pnl, { notation: "compact", maximumFractionDigits: 1, signDisplay: "always" })}</div><div className="mt-1 flex gap-1">{cell.trades.slice(0, 4).map((trade, index) => <span key={`${trade.id}-${index}`} className={`h-1.5 w-1.5 rounded-full ${Number(trade.pnl || 0) > 0 ? "bg-[#46C99A]" : Number(trade.pnl || 0) < 0 ? "bg-[#F26A70]" : "bg-[#7C4DFF]"}`} />)}</div></div>}

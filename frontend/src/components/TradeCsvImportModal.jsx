@@ -73,14 +73,14 @@ export default function TradeCsvImportModal({ accounts, existingTrades, onClose,
   return <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget && !importing) onClose(); }}>
     <section role="dialog" aria-modal="true" aria-labelledby="csv-import-title" className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#090C15] shadow-2xl">
       <header className="flex items-start justify-between border-b border-white/[0.07] p-5 sm:p-6">
-        <div><h2 id="csv-import-title" className="text-xl font-bold">Importer des trades</h2><p className="mt-1 text-xs text-[#8B93A3]">Fichier CSV ou rapport HTML MetaTrader, avec validation avant toute écriture.</p></div>
+        <div><h2 id="csv-import-title" className="text-xl font-bold">Importer des trades</h2><p className="mt-1 text-xs text-[#8B93A3]">CSV, TXT tabulé ou rapport HTML MetaTrader, avec validation avant toute écriture.</p></div>
         <button type="button" onClick={onClose} disabled={importing} aria-label="Fermer" className="grid h-9 w-9 place-items-center rounded-xl text-[#8B93A3] hover:bg-white/5 hover:text-white disabled:opacity-40"><X className="h-4 w-4"/></button>
       </header>
       <div className="overflow-y-auto p-5 sm:p-6">
         <button type="button" onClick={() => inputRef.current?.click()} disabled={importing} className="flex w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[#7C4DFF]/40 bg-[#7C4DFF]/[0.06] px-5 py-8 text-center hover:border-[#7C4DFF]/70 disabled:opacity-50">
-          <FileUp className="h-7 w-7 text-[#B58BFF]"/><span className="mt-3 text-sm font-semibold">{file?.name || "Choisir un fichier CSV ou HTML"}</span><span className="mt-1 text-xs text-[#7E8798]">CSV : Compte, Date, Instrument, Direction · HTML : rapport MetaTrader exporté</span>
+          <FileUp className="h-7 w-7 text-[#B58BFF]"/><span className="mt-3 text-sm font-semibold">{file?.name || "Choisir un fichier CSV, TXT ou HTML"}</span><span className="mt-1 max-w-2xl text-xs leading-5 text-[#7E8798]">MetaTrader 4/5, cTrader, NinjaTrader 8, Quantower, Sierra Chart ou modèle CSV PipsEvo.</span>
         </button>
-        <input ref={inputRef} type="file" accept=".csv,.html,.htm,text/csv,text/html" className="sr-only" onChange={selectFile}/>
+        <input ref={inputRef} type="file" accept=".csv,.txt,.html,.htm,text/csv,text/plain,text/html" className="sr-only" onChange={selectFile}/>
         {readingError && <div className="mt-4 rounded-xl border border-[#F26A70]/25 bg-[#F26A70]/10 p-3 text-sm text-[#FF8A8A]">{readingError}</div>}
         {rows.length > 0 && <>
           <div className="mt-5 grid grid-cols-3 gap-2">

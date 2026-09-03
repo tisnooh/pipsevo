@@ -5,6 +5,8 @@ import { Plus, Banknote, Calendar, TrendingUp, Trash2, RefreshCw, X } from "luci
 import { useAppSettings } from "@/hooks/useAppSettings";
 import CsvExportButton from "@/components/CsvExportButton";
 import { calculateSafeWithdrawal } from "@/lib/riskEngine";
+import { localDateKey } from "@/lib/tradeCalendar";
+import { listenForAppDataChanges } from "@/lib/appDataEvents";
 
 export default function Payouts() {
   const { settings, money, date } = useAppSettings();
@@ -12,7 +14,7 @@ export default function Payouts() {
   const [accs, setAccs] = useState([]);
   const [kpi, setKpi] = useState(null);
   const [open, setOpen] = useState(false);
-  const today = new Date().toISOString().slice(0,10);
+  const today = localDateKey();
   const [form, setForm] = useState({ account_id: "", amount: 1000, date: today, note: "" });
   const [sim, setSim] = useState({ daily: 200, days: 20, target: 5000 });
   const [safeAccountId, setSafeAccountId] = useState("");
@@ -33,7 +35,7 @@ export default function Payouts() {
     } catch (e) { setError(e.response?.data?.detail || "Impossible de charger les payouts."); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); return listenForAppDataChanges(load, ["external"]); }, [load]);
 
   const create = async (e) => {
     e.preventDefault();

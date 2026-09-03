@@ -92,10 +92,10 @@ export default function Landing() {
             </div>
           </div>
 
-          <div className="hero-product-scene relative hidden lg:col-span-7 lg:block"><ProductDashboardMockup3D variant="hero" /></div>
+          <div className="hero-product-scene relative hidden lg:col-span-7 lg:block"><ProductDashboardPreview variant="hero" /></div>
 
           {/* Même produit sur petits écrans, recadré sur le contenu principal sans sidebar. */}
-          <div className="mx-auto mt-3 w-full max-w-[760px] lg:hidden"><ProductDashboardMockup3D variant="mobile" /></div>
+          <div className="mx-auto mt-3 w-full max-w-[760px] lg:hidden"><ProductDashboardPreview variant="mobile" /></div>
         </div>
       </section>
 

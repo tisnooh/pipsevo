@@ -1,3 +1,5 @@
+import { localDateKey, tradeDateKey } from "./tradeCalendar";
+
 const num = (value) => Number(value || 0);
 
 export const calculateSafeWithdrawal = (account, bufferPercent = 20) => {
@@ -16,13 +18,13 @@ export const calculateSafeWithdrawal = (account, bufferPercent = 20) => {
   };
 };
 
-export const evaluateRiskAlerts = ({ accounts = [], trades = [], rules = {}, today = new Date().toISOString().slice(0, 10) }) => {
+export const evaluateRiskAlerts = ({ accounts = [], trades = [], rules = {}, today = localDateKey() }) => {
   const alerts = [];
   const maxTrades = num(rules.max_trades || 0);
   const stopAfterLosses = num(rules.stop_after_loss || 0);
   accounts.forEach(account => {
     const accountTrades = trades.filter(trade => trade.account_id === account.id);
-    const todayTrades = accountTrades.filter(trade => trade.date === today);
+    const todayTrades = accountTrades.filter(trade => tradeDateKey(trade.date) === today);
     const todayPnl = todayTrades.reduce((sum, trade) => sum + num(trade.pnl), 0);
     const dailyLimit = num(account.daily_loss_limit || rules.daily_loss_limit);
     const safe = calculateSafeWithdrawal(account, 20);

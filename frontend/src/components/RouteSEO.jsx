@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useI18n } from "@/context/I18nContext";
+import { getGuideBySlug } from "@/content/guides";
 
 const ORIGIN = "https://pipsevo.vercel.app";
 const pages = {
@@ -54,7 +55,10 @@ export default function RouteSEO() {
   const { language } = useI18n();
   useEffect(() => {
     const source = language === "en" ? pagesEn : pages;
-    const [title, description] = source[pathname] || (language === "en" ? ["PipsEvo — Application", "Your personal PipsEvo workspace."] : ["PipsEvo — Application", "Espace personnel PipsEvo."]);
+    const guide = pathname.startsWith("/blog/") ? getGuideBySlug(pathname.slice(6)) : null;
+    const [title, description] = guide
+      ? [`${guide.title[language]} — PipsEvo`, guide.summary[language]]
+      : source[pathname] || (language === "en" ? ["PipsEvo — Application", "Your personal PipsEvo workspace."] : ["PipsEvo — Application", "Espace personnel PipsEvo."]);
     const isPrivate = pathname.startsWith("/app") || pathname === "/onboarding" || pathname === "/verify-email" || pathname.startsWith("/newsletter/");
     document.title = title;
     setMeta('meta[name="description"]', "content", description);
@@ -90,6 +94,16 @@ export default function RouteSEO() {
         ["PipsEvo donne-t-il des signaux ?","Non. Le service analyse uniquement tes performances, ta discipline et tes habitudes."],
         ["Puis-je utiliser plusieurs comptes ?","Oui. L'accès bêta permet de centraliser plusieurs comptes et de filtrer les résultats par compte."]
       ]).map(([name,text])=>({"@type":"Question",name,acceptedAnswer:{"@type":"Answer",text}}))
+    } : guide ? {
+      "@context":"https://schema.org",
+      "@type":"Article",
+      headline:guide.title[language],
+      description:guide.summary[language],
+      datePublished:"2026-09-03",
+      dateModified:"2026-09-03",
+      mainEntityOfPage:`${ORIGIN}${pathname}`,
+      author:{"@type":"Organization",name:"PipsEvo"},
+      publisher:{"@type":"Organization",name:"PipsEvo"}
     } : null;
     if (structuredData) {
       const script=document.createElement("script");
