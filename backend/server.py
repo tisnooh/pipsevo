@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -8,15 +8,28 @@ from pymongo.errors import DuplicateKeyError
 import os
 import logging
 import uuid
+import hashlib
+import secrets
 import bcrypt
 import jwt as pyjwt
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime, timezone, timedelta
 import anthropic
 import asyncio
 import requests
+
+from email_service import (
+    EmailConfigurationError,
+    EmailDeliveryError,
+    brand_email_html,
+    confirmation_email,
+    decode_email_token,
+    newsletter_links,
+    send_email,
+    welcome_email,
+)
 
 from economic_calendar import FOREX_FACTORY_WEEK_URL, normalize_forex_factory_events
 
@@ -132,6 +145,24 @@ async def ensure_database_indexes():
     await db.contact_messages.create_index(
         [("status", ASCENDING), ("created_at", DESCENDING)],
         name="contact_status_created",
+    )
+    await db.newsletter_subscribers.create_index(
+        [("email", ASCENDING)], unique=True, name="newsletter_email_unique"
+    )
+    await db.newsletter_subscribers.create_index(
+        [("status", ASCENDING), ("updated_at", DESCENDING)],
+        name="newsletter_status_updated",
+    )
+    await db.email_preferences.create_index(
+        [("user_id", ASCENDING)], unique=True, name="email_preferences_user_unique"
+    )
+    await db.newsletter_campaigns.create_index(
+        [("campaign_key", ASCENDING)], unique=True, name="newsletter_campaign_key_unique"
+    )
+    await db.newsletter_deliveries.create_index(
+        [("campaign_key", ASCENDING), ("email", ASCENDING)],
+        unique=True,
+        name="newsletter_delivery_unique",
     )
 
 
@@ -399,6 +430,40 @@ class ContactIn(BaseModel):
     message: str = Field(min_length=10, max_length=3000)
 
 
+class NewsletterSubscribeIn(BaseModel):
+    email: EmailStr
+    locale: Literal["fr", "en"] = "fr"
+    source: str = Field(default="website-footer", min_length=2, max_length=80)
+
+
+class NewsletterTokenIn(BaseModel):
+    token: str = Field(min_length=20, max_length=4096)
+
+
+class EmailPreferencesIn(BaseModel):
+    daily_summary: bool = True
+    risk_alerts: bool = True
+    payout_updates: bool = True
+    product_updates: bool = False
+    trading_education: bool = False
+
+
+class NewsletterCampaignIn(BaseModel):
+    campaign_key: str = Field(min_length=3, max_length=80, pattern=r"^[a-z0-9][a-z0-9-]+$")
+    subject: str = Field(min_length=3, max_length=140)
+    preheader: str = Field(min_length=3, max_length=180)
+    title: str = Field(min_length=3, max_length=140)
+    intro: str = Field(min_length=3, max_length=600)
+    body: str = Field(min_length=3, max_length=5000)
+    cta_label: Optional[str] = Field(default=None, min_length=2, max_length=80)
+    cta_url: Optional[str] = Field(default=None, pattern=r"^https://")
+    audience: Literal["all", "product_updates", "trading_education"] = "all"
+    max_recipients: int = Field(default=50, ge=1, le=100)
+
+
+DEFAULT_EMAIL_PREFERENCES = EmailPreferencesIn().model_dump()
+
+
 # ============= AUTH =============
 @api.post("/contact")
 async def contact(body: ContactIn):
@@ -406,6 +471,326 @@ async def contact(body: ContactIn):
     doc.update({"id": str(uuid.uuid4()), "status": "new", "created_at": now_utc()})
     await db.contact_messages.insert_one(doc)
     return {"ok": True, "message": "Message received"}
+
+
+def _email_delivery_id(prefix: str, value: str) -> str:
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
+    return f"pipsevo-{prefix}-{digest}"
+
+
+def _email_preferences_response(preferences: Dict[str, Any], status_value: str) -> Dict[str, Any]:
+    return {
+        "status": status_value,
+        **{
+            key: bool(preferences.get(key, default))
+            for key, default in DEFAULT_EMAIL_PREFERENCES.items()
+        },
+    }
+
+
+@api.post("/newsletter/subscribe", status_code=status.HTTP_202_ACCEPTED)
+async def newsletter_subscribe(body: NewsletterSubscribeIn):
+    """Start a double-opt-in subscription without revealing subscriber state."""
+    email = body.email.strip().lower()
+    existing = await db.newsletter_subscribers.find_one({"email": email})
+    now = datetime.now(timezone.utc)
+    last_sent = existing.get("confirmation_sent_at") if existing else None
+    if existing and existing.get("status") == "active":
+        return {"ok": True, "status": "confirmation_required"}
+    if isinstance(last_sent, datetime) and now - last_sent < timedelta(seconds=60):
+        return {"ok": True, "status": "confirmation_required"}
+
+    await db.newsletter_subscribers.update_one(
+        {"email": email},
+        {
+            "$set": {
+                "status": "pending",
+                "locale": body.locale,
+                "source": body.source,
+                "updated_at": now,
+                "product_updates": True,
+                "trading_education": True,
+            },
+            "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now},
+        },
+        upsert=True,
+    )
+
+    message = confirmation_email(email)
+    try:
+        message_id = await asyncio.to_thread(
+            send_email,
+            to=email,
+            subject=message["subject"],
+            html=message["html"],
+            text=message["text"],
+            category="marketing",
+            idempotency_key=_email_delivery_id("newsletter-confirm", f"{email}:{now:%Y%m%d%H%M}"),
+        )
+    except (EmailConfigurationError, EmailDeliveryError):
+        logging.exception("Newsletter confirmation delivery failed")
+        await db.newsletter_subscribers.update_one(
+            {"email": email}, {"$set": {"last_delivery_error_at": now}}
+        )
+        raise HTTPException(503, "L’envoi est temporairement indisponible. Réessaie dans quelques minutes.")
+
+    await db.newsletter_subscribers.update_one(
+        {"email": email},
+        {"$set": {"confirmation_sent_at": now, "last_message_id": message_id}, "$unset": {"last_delivery_error_at": ""}},
+    )
+    return {"ok": True, "status": "confirmation_required"}
+
+
+@api.post("/newsletter/confirm")
+async def newsletter_confirm(body: NewsletterTokenIn):
+    try:
+        email = decode_email_token(body.token, "newsletter-confirm")
+    except pyjwt.PyJWTError:
+        raise HTTPException(400, "Ce lien de confirmation est invalide ou a expiré.")
+
+    now = datetime.now(timezone.utc)
+    result = await db.newsletter_subscribers.update_one(
+        {"email": email},
+        {
+            "$set": {
+                "status": "active",
+                "confirmed_at": now,
+                "updated_at": now,
+                "product_updates": True,
+                "trading_education": True,
+            }
+        },
+    )
+    if not result.matched_count:
+        raise HTTPException(400, "Cette demande d’inscription n’existe plus.")
+
+    message = welcome_email(email)
+    try:
+        message_id = await asyncio.to_thread(
+            send_email,
+            to=email,
+            subject=message["subject"],
+            html=message["html"],
+            text=message["text"],
+            category="marketing",
+            idempotency_key=_email_delivery_id("newsletter-welcome", body.token),
+            unsubscribe_url=message["unsubscribe_url"],
+            one_click_unsubscribe=message["one_click_unsubscribe"],
+        )
+        await db.newsletter_subscribers.update_one(
+            {"email": email}, {"$set": {"welcome_message_id": message_id}}
+        )
+    except (EmailConfigurationError, EmailDeliveryError):
+        # Confirmation is complete even if the non-essential welcome message fails.
+        logging.exception("Newsletter welcome delivery failed")
+    return {"ok": True, "status": "active"}
+
+
+async def _unsubscribe_newsletter_token(token: str) -> None:
+    try:
+        email = decode_email_token(token, "newsletter-unsubscribe")
+    except pyjwt.PyJWTError:
+        raise HTTPException(400, "Ce lien de désinscription est invalide ou a expiré.")
+    now = datetime.now(timezone.utc)
+    await db.newsletter_subscribers.update_one(
+        {"email": email},
+        {
+            "$set": {
+                "status": "unsubscribed",
+                "product_updates": False,
+                "trading_education": False,
+                "unsubscribed_at": now,
+                "updated_at": now,
+            }
+        },
+    )
+
+
+@api.post("/newsletter/unsubscribe")
+async def newsletter_unsubscribe(body: NewsletterTokenIn):
+    await _unsubscribe_newsletter_token(body.token)
+    return {"ok": True, "status": "unsubscribed"}
+
+
+@api.post("/newsletter/one-click-unsubscribe")
+async def newsletter_one_click_unsubscribe(token: str):
+    await _unsubscribe_newsletter_token(token)
+    return {"ok": True}
+
+
+@api.get("/email-preferences")
+async def get_email_preferences(user=Depends(get_current_user)):
+    preferences = await db.email_preferences.find_one({"user_id": user["id"]}) or {}
+    subscriber = await db.newsletter_subscribers.find_one({"email": user["email"].lower()}) or {}
+    if not preferences:
+        preferences = {
+            **DEFAULT_EMAIL_PREFERENCES,
+            "product_updates": subscriber.get("status") == "active" and subscriber.get("product_updates", True),
+            "trading_education": subscriber.get("status") == "active" and subscriber.get("trading_education", True),
+        }
+    return _email_preferences_response(preferences, subscriber.get("status", "not_subscribed"))
+
+
+@api.put("/email-preferences")
+async def update_email_preferences(body: EmailPreferencesIn, user=Depends(get_current_user)):
+    now = datetime.now(timezone.utc)
+    email = user["email"].strip().lower()
+    preferences = body.model_dump()
+    await db.email_preferences.update_one(
+        {"user_id": user["id"]},
+        {
+            "$set": {**preferences, "email": email, "updated_at": now},
+            "$setOnInsert": {"id": str(uuid.uuid4()), "user_id": user["id"], "created_at": now},
+        },
+        upsert=True,
+    )
+
+    marketing_enabled = preferences["product_updates"] or preferences["trading_education"]
+    subscriber_status = "active" if marketing_enabled else "unsubscribed"
+    subscriber_update = {
+        "status": subscriber_status,
+        "product_updates": preferences["product_updates"],
+        "trading_education": preferences["trading_education"],
+        "source": "account-settings",
+        "updated_at": now,
+        "user_id": user["id"],
+    }
+    if marketing_enabled:
+        subscriber_update["confirmed_at"] = now
+    else:
+        subscriber_update["unsubscribed_at"] = now
+    await db.newsletter_subscribers.update_one(
+        {"email": email},
+        {
+            "$set": subscriber_update,
+            "$setOnInsert": {"id": str(uuid.uuid4()), "email": email, "created_at": now, "locale": "fr"},
+        },
+        upsert=True,
+    )
+    return _email_preferences_response(preferences, subscriber_status)
+
+
+@api.post("/internal/newsletter/campaigns/send")
+async def send_newsletter_campaign(
+    body: NewsletterCampaignIn,
+    x_newsletter_admin_key: Optional[str] = Header(default=None),
+):
+    """Send or resume one idempotent campaign batch.
+
+    This route is intentionally server-key protected and is not called by the
+    browser. Repeating the same campaign key skips recipients already sent.
+    """
+    configured_key = os.environ.get("NEWSLETTER_ADMIN_KEY")
+    if not configured_key:
+        raise HTTPException(503, "Newsletter campaign delivery is not configured")
+    if not x_newsletter_admin_key or not secrets.compare_digest(x_newsletter_admin_key, configured_key):
+        raise HTTPException(401, "Invalid newsletter administration key")
+    if bool(body.cta_label) != bool(body.cta_url):
+        raise HTTPException(422, "cta_label and cta_url must be supplied together")
+
+    now = datetime.now(timezone.utc)
+    content_payload = body.model_dump(exclude={"max_recipients"})
+    content_hash = hashlib.sha256(body.model_dump_json(exclude={"max_recipients"}).encode("utf-8")).hexdigest()
+    existing_campaign = await db.newsletter_campaigns.find_one({"campaign_key": body.campaign_key})
+    if existing_campaign and existing_campaign.get("content_hash") != content_hash:
+        raise HTTPException(409, "This campaign key already exists with different content")
+    await db.newsletter_campaigns.update_one(
+        {"campaign_key": body.campaign_key},
+        {
+            "$setOnInsert": {
+                "id": str(uuid.uuid4()),
+                "campaign_key": body.campaign_key,
+                "content_hash": content_hash,
+                "content": content_payload,
+                "created_at": now,
+            },
+            "$set": {"last_run_at": now},
+        },
+        upsert=True,
+    )
+
+    subscriber_filter: Dict[str, Any] = {"status": "active"}
+    if body.audience == "all":
+        subscriber_filter["$or"] = [{"product_updates": True}, {"trading_education": True}]
+    else:
+        subscriber_filter[body.audience] = True
+    sent_addresses = [
+        row["email"]
+        async for row in db.newsletter_deliveries.find(
+            {"campaign_key": body.campaign_key, "status": "sent"}, {"_id": 0, "email": 1}
+        )
+    ]
+    if sent_addresses:
+        subscriber_filter["email"] = {"$nin": sent_addresses}
+    recipients = await db.newsletter_subscribers.find(
+        subscriber_filter, {"_id": 0, "email": 1}
+    ).sort("created_at", ASCENDING).limit(body.max_recipients).to_list(length=body.max_recipients)
+
+    sent_count = 0
+    failed_count = 0
+    for recipient in recipients:
+        email = recipient["email"]
+        links = newsletter_links(email)
+        rendered_html = brand_email_html(
+            preheader=body.preheader,
+            title=body.title,
+            intro=body.intro,
+            body=body.body,
+            cta_label=body.cta_label,
+            cta_url=body.cta_url,
+            unsubscribe_url=links["unsubscribe"],
+        )
+        rendered_text = f"{body.title}\n\n{body.intro}\n\n{body.body}"
+        if body.cta_label and body.cta_url:
+            rendered_text += f"\n\n{body.cta_label}: {body.cta_url}"
+        rendered_text += f"\n\nSe désinscrire : {links['unsubscribe']}"
+        try:
+            message_id = await asyncio.to_thread(
+                send_email,
+                to=email,
+                subject=body.subject,
+                html=rendered_html,
+                text=rendered_text,
+                category="marketing",
+                idempotency_key=_email_delivery_id("campaign", f"{body.campaign_key}:{email}"),
+                unsubscribe_url=links["unsubscribe"],
+                one_click_unsubscribe=links["one_click_unsubscribe"],
+            )
+            sent_count += 1
+            await db.newsletter_deliveries.update_one(
+                {"campaign_key": body.campaign_key, "email": email},
+                {
+                    "$set": {"status": "sent", "message_id": message_id, "sent_at": datetime.now(timezone.utc)},
+                    "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now},
+                    "$inc": {"attempts": 1},
+                },
+                upsert=True,
+            )
+        except (EmailConfigurationError, EmailDeliveryError):
+            failed_count += 1
+            logging.exception("Newsletter campaign delivery failed")
+            await db.newsletter_deliveries.update_one(
+                {"campaign_key": body.campaign_key, "email": email},
+                {
+                    "$set": {"status": "failed", "failed_at": datetime.now(timezone.utc)},
+                    "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now},
+                    "$inc": {"attempts": 1},
+                },
+                upsert=True,
+            )
+
+    remaining = await db.newsletter_subscribers.count_documents(subscriber_filter)
+    await db.newsletter_campaigns.update_one(
+        {"campaign_key": body.campaign_key},
+        {"$set": {"last_batch_sent": sent_count, "last_batch_failed": failed_count, "updated_at": datetime.now(timezone.utc)}},
+    )
+    return {
+        "ok": failed_count == 0,
+        "campaign_key": body.campaign_key,
+        "sent": sent_count,
+        "failed": failed_count,
+        "remaining": max(0, remaining - sent_count),
+    }
 
 
 @api.post("/auth/register")

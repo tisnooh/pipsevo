@@ -1,8 +1,8 @@
 import { AUTH_CONFIG, hasCompletedOnboarding } from "./auth";
 
-describe("beta authentication configuration", () => {
-  test("keeps email confirmation disabled by default during beta", () => {
-    expect(AUTH_CONFIG.requireEmailConfirmation).toBe(false);
+describe("authentication configuration", () => {
+  test("requires email confirmation by default", () => {
+    expect(AUTH_CONFIG.requireEmailConfirmation).toBe(true);
   });
 
   test("uses the canonical onboarding flag and supports the legacy alias", () => {

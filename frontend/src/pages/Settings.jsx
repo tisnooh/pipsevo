@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { auth, dataExports } from "@/lib/api";
+import { auth, dataExports, newsletter } from "@/lib/api";
 import {
   AlertTriangle, Bell, BookOpen, Check, ChevronRight, CreditCard, Crown, DatabaseBackup, Download, Globe2, KeyRound,
   ListChecks, Loader2, LogOut, Mail, MonitorSmartphone, PlugZap, Save, ShieldCheck, SlidersHorizontal, Trash2, User, Volume2
@@ -71,12 +71,57 @@ export default function Settings() {
     risk: stored.risk ?? true,
     payout: stored.payout ?? true,
     product: stored.product ?? false,
+    education: stored.education ?? false,
   });
+  const [emailPreferencesStatus, setEmailPreferencesStatus] = useState("loading");
+  const [newsletterStatus, setNewsletterStatus] = useState("not_subscribed");
+  const [savingNotifications, setSavingNotifications] = useState(false);
+
+  useEffect(() => {
+    let activeRequest = true;
+    newsletter.getPreferences().then(({ data }) => {
+      if (!activeRequest) return;
+      setNotifications({
+        daily: data.daily_summary,
+        risk: data.risk_alerts,
+        payout: data.payout_updates,
+        product: data.product_updates,
+        education: data.trading_education,
+      });
+      setNewsletterStatus(data.status);
+      setEmailPreferencesStatus("ready");
+    }).catch(() => {
+      if (activeRequest) setEmailPreferencesStatus("error");
+    });
+    return () => { activeRequest = false; };
+  }, [user?.id]);
 
   const persistLocal = (message) => {
-    writeSettings({ ...preferences, ...notifications });
+    writeSettings(preferences);
     setLanguage(preferences.language);
     toast.success(message);
+  };
+
+  const saveNotifications = async () => {
+    if (savingNotifications) return;
+    setSavingNotifications(true);
+    try {
+      const { data } = await newsletter.updatePreferences({
+        daily_summary: notifications.daily,
+        risk_alerts: notifications.risk,
+        payout_updates: notifications.payout,
+        product_updates: notifications.product,
+        trading_education: notifications.education,
+      });
+      setNewsletterStatus(data.status);
+      setEmailPreferencesStatus("ready");
+      toast.success("Préférences e-mail synchronisées");
+    } catch (error) {
+      setEmailPreferencesStatus("error");
+      toast.error(error.response?.data?.detail || "Impossible de synchroniser les préférences e-mail");
+    } finally {
+      setSavingNotifications(false);
+    }
   };
 
   const saveProfile = async (e) => {
@@ -187,7 +232,24 @@ export default function Settings() {
           <div className="flex justify-end border-t border-white/[0.06] p-4 sm:px-6"><button onClick={()=>persistLocal("Préférences enregistrées")} className="btn-primary inline-flex items-center gap-2"><Save className="h-4 w-4"/>Enregistrer</button></div>
         </section>}
 
-        {active === "notifications" && <section className="card-elev overflow-hidden"><div className="border-b border-white/[0.06] p-5 sm:p-6"><h2 className="font-semibold">Notifications</h2><p className="mt-1 text-xs text-[#7E8798]">Choisis les informations que PipsEvo doit te signaler.</p></div><div className="space-y-3 p-5 sm:p-6"><Toggle checked={notifications.daily} onChange={v=>setNotifications({...notifications,daily:v})} label="Résumé quotidien" description="Reçois un résumé de tes trades, de ton P&L et de ta discipline." icon={Mail}/><Toggle checked={notifications.risk} onChange={v=>setNotifications({...notifications,risk:v})} label="Alertes de risque" description="Sois averti lorsque ton drawdown ou tes limites approchent d’un seuil critique." icon={ShieldCheck}/><Toggle checked={notifications.payout} onChange={v=>setNotifications({...notifications,payout:v})} label="Objectifs de payout" description="Suis la progression de tes objectifs et les dates estimées de payout." icon={Bell}/><Toggle checked={notifications.product} onChange={v=>setNotifications({...notifications,product:v})} label="Nouveautés PipsEvo" description="Découvre les nouvelles fonctionnalités et améliorations importantes." icon={Volume2}/></div><div className="flex justify-end border-t border-white/[0.06] p-4 sm:px-6"><button onClick={()=>persistLocal("Notifications enregistrées")} className="btn-primary inline-flex items-center gap-2"><Save className="h-4 w-4"/>Enregistrer</button></div></section>}
+        {active === "notifications" && <section className="card-elev overflow-hidden">
+          <div className="flex flex-col gap-3 border-b border-white/[0.06] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div><h2 className="font-semibold">E-mails et notifications</h2><p className="mt-1 text-xs text-[#7E8798]">Tes choix sont enregistrés sur ton compte et appliqués sur tous tes appareils.</p></div>
+            <span className={`w-fit rounded-full border px-3 py-1 text-[10px] font-medium ${emailPreferencesStatus === "ready" ? "border-[#46C99A]/25 bg-[#46C99A]/10 text-[#65E0B3]" : emailPreferencesStatus === "error" ? "border-[#FF4D5E]/25 bg-[#FF4D5E]/10 text-[#FF7A87]" : "border-white/10 text-[#8B93A3]"}`}>
+              {emailPreferencesStatus === "loading" ? "Synchronisation…" : emailPreferencesStatus === "error" ? "Synchronisation indisponible" : "Synchronisé"}
+            </span>
+          </div>
+          <div className="space-y-3 p-5 sm:p-6">
+            <div className="rounded-xl border border-[#46C99A]/20 bg-[#46C99A]/[0.05] p-4"><div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#46C99A]/10 text-[#46C99A]"><ShieldCheck className="h-4 w-4"/></span><div><div className="text-sm font-medium">Sécurité du compte</div><div className="mt-1 text-xs leading-relaxed text-[#7E8798]">Confirmation d’adresse, réinitialisation du mot de passe et alertes de sécurité restent toujours actives.</div></div><span className="ml-auto shrink-0 text-[10px] font-medium text-[#46C99A]">ACTIF</span></div></div>
+            <Toggle checked={notifications.daily} onChange={v=>setNotifications({...notifications,daily:v})} label="Résumé quotidien" description="Reçois un résumé de tes trades, de ton P&L et de ta discipline." icon={Mail}/>
+            <Toggle checked={notifications.risk} onChange={v=>setNotifications({...notifications,risk:v})} label="Alertes de risque" description="Sois averti lorsque ton drawdown ou tes limites approchent d’un seuil critique." icon={ShieldCheck}/>
+            <Toggle checked={notifications.payout} onChange={v=>setNotifications({...notifications,payout:v})} label="Objectifs de payout" description="Suis la progression de tes objectifs et les dates estimées de payout." icon={Bell}/>
+            <Toggle checked={notifications.product} onChange={v=>setNotifications({...notifications,product:v})} label="Nouveautés PipsEvo" description="Découvre les fonctionnalités et améliorations importantes." icon={Volume2}/>
+            <Toggle checked={notifications.education} onChange={v=>setNotifications({...notifications,education:v})} label="Guides et discipline" description="Reçois la newsletter éducative PipsEvo sur le journal, la discipline et le risque." icon={BookOpen}/>
+            <p className="rounded-xl border border-white/[0.06] bg-black/20 px-4 py-3 text-[11px] leading-5 text-[#70798A]">Newsletter : {newsletterStatus === "active" ? "abonnement actif" : newsletterStatus === "pending" ? "confirmation en attente" : "non abonné"}. Tu peux modifier ces choix à tout moment.</p>
+          </div>
+          <div className="flex justify-end border-t border-white/[0.06] p-4 sm:px-6"><button onClick={saveNotifications} disabled={savingNotifications || emailPreferencesStatus === "loading"} className="btn-primary inline-flex items-center gap-2 disabled:cursor-wait disabled:opacity-50">{savingNotifications ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4"/>}{savingNotifications ? "Synchronisation…" : "Enregistrer"}</button></div>
+        </section>}
 
         {active === "security" && <SecuritySettings />}
 

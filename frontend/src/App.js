@@ -24,6 +24,7 @@ import Backtest from "@/pages/Backtest";
 import MarketTerminal from "@/pages/MarketTerminal";
 import EconomicCalendar from "@/pages/EconomicCalendar";
 import DayView from "@/pages/DayView";
+import NewsletterActionPage from "@/pages/NewsletterActionPage";
 import { FAQPage, ContactPage, PricingPage, LegalPage, BlogPage, HelpPage, AffiliatePage } from "@/pages/SupportPages";
 import PlatformsPage from "@/pages/PlatformsPage";
 import CookieConsent from "@/components/CookieConsent";
@@ -77,6 +78,8 @@ export default function App() {
           <Route path="/verify-email" element={<VerifyEmailGate />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/newsletter/confirm" element={<NewsletterActionPage action="confirm" />} />
+          <Route path="/newsletter/unsubscribe" element={<NewsletterActionPage action="unsubscribe" />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/pricing" element={<PricingPage />} />

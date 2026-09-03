@@ -475,6 +475,15 @@ export const economicCalendar = {
   list: (force = false) => api.get("/economic-calendar", { params: force ? { force: true } : undefined }),
 };
 
+export const newsletter = {
+  subscribe: (email, locale = "fr", source = "website-footer") =>
+    api.post("/newsletter/subscribe", { email, locale, source }),
+  confirm: (token) => api.post("/newsletter/confirm", { token }),
+  unsubscribe: (token) => api.post("/newsletter/unsubscribe", { token }),
+  getPreferences: () => api.get("/email-preferences"),
+  updatePreferences: (preferences) => api.put("/email-preferences", preferences),
+};
+
 export const integrationConnections = {
   capabilities: () => api.get("/integrations/capabilities"),
   list: () => api.get("/integrations/connections"),

@@ -19,6 +19,8 @@ const pages = {
   "/register": ["Créer un compte — PipsEvo", "Crée gratuitement ton espace PipsEvo pendant la bêta."],
   "/verify-email": ["Confirmer ton e-mail — PipsEvo", "Confirme ton adresse e-mail pour activer ton compte PipsEvo."],
   "/login": ["Connexion — PipsEvo", "Connecte-toi à ton espace PipsEvo."],
+  "/newsletter/confirm": ["Confirmer la newsletter — PipsEvo", "Confirme ton abonnement aux communications PipsEvo."],
+  "/newsletter/unsubscribe": ["Désinscription — PipsEvo", "Gère ta désinscription des communications PipsEvo."],
 };
 
 const pagesEn = {
@@ -37,6 +39,8 @@ const pagesEn = {
   "/register": ["Create an account — PipsEvo", "Create your PipsEvo workspace for free during beta."],
   "/verify-email": ["Confirm your email — PipsEvo", "Confirm your email address to activate your PipsEvo account."],
   "/login": ["Sign in — PipsEvo", "Sign in to your PipsEvo workspace."],
+  "/newsletter/confirm": ["Confirm newsletter — PipsEvo", "Confirm your subscription to PipsEvo communications."],
+  "/newsletter/unsubscribe": ["Unsubscribe — PipsEvo", "Manage your PipsEvo marketing email subscription."],
 };
 
 const setMeta = (selector, attr, value) => {
@@ -51,7 +55,7 @@ export default function RouteSEO() {
   useEffect(() => {
     const source = language === "en" ? pagesEn : pages;
     const [title, description] = source[pathname] || (language === "en" ? ["PipsEvo — Application", "Your personal PipsEvo workspace."] : ["PipsEvo — Application", "Espace personnel PipsEvo."]);
-    const isPrivate = pathname.startsWith("/app") || pathname === "/onboarding" || pathname === "/verify-email";
+    const isPrivate = pathname.startsWith("/app") || pathname === "/onboarding" || pathname === "/verify-email" || pathname.startsWith("/newsletter/");
     document.title = title;
     setMeta('meta[name="description"]', "content", description);
     setMeta('meta[name="robots"]', "content", isPrivate ? "noindex,nofollow" : "index,follow");
