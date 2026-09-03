@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react"
+import { useCallback, useState, useEffect } from "react"
+import { useLocation, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
 import { Star, Edit2, Trash2, Camera, Check, Plus, Upload, BarChart3, Target, TrendingUp, ArrowUpRight, ArrowDownRight, Ruler, CalendarDays, X } from "lucide-react"
 import { AreaChart, Area, ResponsiveContainer } from "recharts"
@@ -11,6 +12,9 @@ import { createEmptyTradeForm, hydrateTradeForm } from "@/lib/tradeFormModel"
 import CsvExportButton from "@/components/CsvExportButton"
 import TradeCsvImportModal from "@/components/TradeCsvImportModal"
 import { useAppSettings } from "@/hooks/useAppSettings"
+import { clearPreTradeChecks, readPreTradeChecks, writePreTradeChecks } from "@/lib/preTradeChecklist"
+import { listenForAppDataChanges } from "@/lib/appDataEvents"
+import { JOURNAL_LIST_PATH, journalTradePath, resolveJournalRoute } from "@/lib/journalNavigation"
 
 const miniChartData = [
   { t: 1, v: 1.0784 }, { t: 2, v: 1.0790 }, { t: 3, v: 1.0785 },
@@ -21,6 +25,8 @@ const miniChartData = [
 export function JournalPage() {
   const { user } = useAuth()
   const { money } = useAppSettings()
+  const location = useLocation()
+  const navigate = useNavigate()
   const [tradeList, setTradeList] = useState([])
   const [accounts, setAccounts] = useState([])
   const [selectedTrade, setSelectedTrade] = useState(null)
@@ -34,42 +40,51 @@ export function JournalPage() {
   const [checklistChecks, setChecklistChecks] = useState({})
   const [accountFilter, setAccountFilter] = useState("")
   const [days, setDays] = useState("30")
-  const [dateFilter, setDateFilter] = useState(() => new URLSearchParams(window.location.search).get("date") || "")
+  const [dateFilter, setDateFilter] = useState("")
   const [form, setForm] = useState(()=>createEmptyTradeForm(null))
   const userRules = normalizeTradingRules(user?.rules)
   const activeChecklist = userRules.pre_trade_checklist.filter(item=>item.enabled !== false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     try {
       const [t, a] = await Promise.all([tradesAPI.list(), accAPI.list()])
       setTradeList(t.data)
       setAccounts(a.data)
-      if (t.data.length > 0) setSelectedTrade(t.data[0])
       if (a.data.length > 0) setForm(f => ({ ...f, account_id: a.data[0].id }))
     } catch { toast.error("Erreur de chargement") }
     finally { setLoading(false) }
-  }
-
-  useEffect(() => {
-    load()
-    if (new URLSearchParams(window.location.search).get("import") === "1") {
-      setImportOpen(true)
-      window.history.replaceState({}, "", "/app/journal")
-    }
   }, [])
 
   useEffect(() => {
-    if (!dateFilter || !tradeList.length) return
-    setDays("3650")
-    setSelectedTrade(tradeList.find((trade) => String(trade.date || "").slice(0, 10) === dateFilter) || null)
-  }, [dateFilter, tradeList])
+    load()
+    return listenForAppDataChanges(load, ["external"])
+  }, [load])
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    if (params.get("import") === "1") {
+      setImportOpen(true)
+      navigate(JOURNAL_LIST_PATH, { replace: true })
+      return
+    }
+
+    const route = resolveJournalRoute(location.search, tradeList)
+    setDateFilter(route.dateFilter)
+    setSelectedTrade(route.selectedTrade)
+    if (route.dateFilter) setDays("3650")
+  }, [location.search, navigate, tradeList])
+
+  useEffect(() => {
+    if (openForm && !editingTrade) writePreTradeChecks(checklistChecks, activeChecklist)
+  }, [activeChecklist, checklistChecks, editingTrade, openForm])
 
   const saveTrade = async (payload) => {
     setSaving(true)
     try {
       if (editingTrade) await tradesAPI.update(editingTrade.id, payload); else await tradesAPI.create(payload)
       localStorage.setItem("pipsevo_last_trade_choices",JSON.stringify({account_id:payload.account_id,session:payload.session,setups:payload.setups,emotion:payload.emotion,emotion_intensity:payload.emotion_intensity,duration:payload.duration,market_type:payload.market_type}))
+      if (!editingTrade) { clearPreTradeChecks(); setChecklistChecks({}) }
       toast.success(editingTrade ? "Trade mis à jour" : "Trade ajouté")
       setOpenForm(false)
       setEditingTrade(null)
@@ -81,7 +96,7 @@ export function JournalPage() {
   const openNewTrade = () => {
     if (!accounts.length) { toast.error("Ajoute d’abord un compte de trading"); return }
     setEditingTrade(null)
-    setChecklistChecks({})
+    setChecklistChecks(readPreTradeChecks(activeChecklist))
     let last={};try{last=JSON.parse(localStorage.getItem("pipsevo_last_trade_choices"))||{}}catch{}
     const account=accounts.find(item=>item.id===last.account_id&&(item.status||"active")==="active") || accounts.find(item=>(item.status||"active")==="active") || accounts[0]
     setForm(createEmptyTradeForm(account,last))
@@ -107,7 +122,7 @@ export function JournalPage() {
     try {
       await tradesAPI.delete(id)
       toast.success("Trade supprimé")
-      setSelectedTrade(null)
+      if (String(selectedTrade?.id) === String(id)) navigate(JOURNAL_LIST_PATH, { replace: true })
       load()
     } catch { toast.error("Erreur") }
   }
@@ -179,7 +194,7 @@ export function JournalPage() {
         <div className="pe-page-header mb-6">
           <div><div className="pe-eyebrow">Historique de trading</div><h1 className="pe-page-title mt-2">Journal</h1><p className="pe-page-copy mt-1">Analyse tes décisions, ton contexte et la qualité de ton exécution.</p></div>
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-            {dateFilter && <button type="button" onClick={()=>{setDateFilter("");window.history.replaceState({},"","/app/journal")}} className="pe-control inline-flex items-center gap-2 border-[#7165DD]/35 bg-[#7165DD]/10 text-[#C7C0FF]"><CalendarDays className="h-4 w-4"/>{new Intl.DateTimeFormat("fr-FR",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(`${dateFilter}T12:00:00`))}<X className="h-3.5 w-3.5"/></button>}
+            {dateFilter && <button type="button" onClick={()=>navigate(JOURNAL_LIST_PATH)} className="pe-control inline-flex items-center gap-2 border-[#7165DD]/35 bg-[#7165DD]/10 text-[#C7C0FF]"><CalendarDays className="h-4 w-4"/>{new Intl.DateTimeFormat("fr-FR",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(`${dateFilter}T12:00:00`))}<X className="h-3.5 w-3.5"/></button>}
             <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className="pe-control min-w-[150px] flex-1 sm:flex-none"><option value="">Tous les comptes</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
             <select value={days} onChange={e=>setDays(e.target.value)} className="pe-control min-w-[150px] flex-1 sm:flex-none"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option><option value="3650">Toute la période</option></select>
             <CsvExportButton rows={filtered} type="trades" filename="pipsevo-trades-filtres" className="btn-ghost inline-flex h-11 items-center justify-center px-4"/>
@@ -260,7 +275,7 @@ export function JournalPage() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.04 }}
-                onClick={() => setSelectedTrade(tradeList.find(t => t.id === trade.id))}
+                onClick={() => navigate(journalTradePath(trade.id))}
                 className={`grid min-w-[780px] cursor-pointer items-center border-b border-[#1E2430]/50 px-4 py-3.5 text-[13px] transition-all last:border-0 ${
                   selectedTrade?.id === trade.id ? "bg-[#15182A]" : "hover:bg-[#15182A]/50"
                 }`}
@@ -301,7 +316,7 @@ export function JournalPage() {
         return (
           <div className="fixed inset-0 z-40 bg-[#090E1C] lg:static lg:z-auto lg:w-80 lg:border-l lg:border-[#6571CF]/15 overflow-y-auto scrollbar-thin flex-shrink-0">
             <div className="p-4">
-              <button onClick={() => setSelectedTrade(null)} className="lg:hidden mb-4 text-xs text-[#9CA3AF] hover:text-white flex items-center gap-1.5">← Retour à la liste</button>
+              <button onClick={() => navigate(JOURNAL_LIST_PATH)} className="lg:hidden mb-4 text-xs text-[#9CA3AF] hover:text-white flex items-center gap-1.5">← Retour à la liste</button>
               {/* Header */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
