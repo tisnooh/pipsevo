@@ -1030,3 +1030,103 @@ html, body, #root {
   to { transform: translateX(-50%); }
 }
 .scroll-x { animation: scroll-x 40s linear infinite; }
+
+/* Landing compatibility rails */
+.logo-marquee-row {
+  width: 100%;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%);
+}
+.logo-marquee-track {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation-duration: var(--marquee-duration, 44s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.logo-marquee-track--left { animation-name: logo-marquee-left; }
+.logo-marquee-track--right { animation-name: logo-marquee-right; }
+.logo-marquee-row:hover .logo-marquee-track { animation-play-state: paused; }
+.logo-marquee-set {
+  display: flex;
+  flex-shrink: 0;
+  gap: 14px;
+  padding-right: 14px;
+}
+.logo-marquee-item {
+  display: flex;
+  min-width: 176px;
+  height: 52px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  color: #8c94a2;
+  transition: color .25s ease, opacity .25s ease;
+}
+.logo-marquee-item:hover {
+  color: #eef0f5;
+}
+.logo-marquee-image-wrap {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  overflow: hidden;
+}
+.logo-marquee-image {
+  display: block;
+  width: auto;
+  max-width: 34px;
+  max-height: 30px;
+  object-fit: contain;
+  opacity: .78;
+  filter: grayscale(1);
+  transition: filter .25s ease, opacity .25s ease, transform .25s ease;
+}
+.logo-marquee-image--e8 {
+  max-width: none;
+  max-height: none;
+  width: 68px;
+}
+.logo-marquee-item:hover .logo-marquee-image {
+  opacity: 1;
+  filter: grayscale(0);
+  transform: scale(1.04);
+}
+.logo-marquee-name {
+  max-width: 126px;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@keyframes logo-marquee-left {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+@keyframes logo-marquee-right {
+  from { transform: translate3d(-50%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+@media (min-width: 768px) {
+  .logo-marquee-set { gap: 18px; padding-right: 18px; }
+  .logo-marquee-item { min-width: 210px; height: 58px; gap: 13px; }
+  .logo-marquee-name { max-width: 150px; font-size: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .logo-marquee-row {
+    overflow-x: auto;
+    -webkit-mask-image: none;
+    mask-image: none;
+    scrollbar-width: none;
+  }
+  .logo-marquee-row::-webkit-scrollbar { display: none; }
+  .logo-marquee-track { animation: none; transform: none; }
+  .logo-marquee-set[aria-hidden="true"] { display: none; }
+}

@@ -33,6 +33,7 @@ import ProductDashboardPreview from "@/components/ProductDashboardPreview";
 import AmbientCandleField from "@/components/AmbientCandleField";
 import { useI18n } from "@/context/I18nContext";
 import { FEATURE_FLAGS } from "@/config/billing";
+import { PROP_FIRMS } from "@/config/propFirms";
 
 gsap.registerPlugin(MotionPathPlugin, ScrollTrigger);
 
@@ -45,12 +46,22 @@ const productTabs = [
   { id: "payouts", fr: "Payouts", en: "Payouts", icon: CircleDollarSign },
 ];
 
-const propFirmLogos = [
-  { name: "Topstep", src: "/brand/prop-firms/topstep.webp", className: "h-[18px] sm:h-[21px]" },
-  { name: "Apex Trader Funding", src: "/brand/prop-firms/apex.svg", className: "h-[24px] sm:h-[28px]" },
-  { name: "FTMO", src: "/brand/prop-firms/ftmo.svg", className: "h-[18px] sm:h-[21px]" },
-  { name: "FundedNext", src: "/brand/prop-firms/fundednext.png", className: "h-[19px] sm:h-[22px]" },
-  { name: "The5ers", src: "/brand/prop-firms/the5ers.svg", className: "h-[20px] sm:h-[24px]" },
+const tradingPlatformLogos = [
+  { name: "MetaTrader 4", src: "/brand/platforms/metatrader-4.png" },
+  { name: "MetaTrader 5", src: "/brand/platforms/metatrader-5.png" },
+  { name: "cTrader", src: "/brand/platforms/ctrader.svg" },
+  { name: "NinjaTrader", src: "/brand/platforms/ninjatrader.svg" },
+  { name: "Tradovate", src: "/brand/platforms/tradovate.ico" },
+  { name: "Quantower", src: "/brand/platforms/quantower.svg" },
+  { name: "Match-Trader", src: "/brand/platforms/match-trader.png" },
+  { name: "DXtrade", src: "/brand/platforms/dxtrade.png" },
+  { name: "Sierra Chart", src: "/brand/platforms/sierra-chart.png" },
+];
+
+const logoMarqueeRows = [
+  { items: PROP_FIRMS.slice(0, 9), direction: "left", duration: 42 },
+  { items: tradingPlatformLogos, direction: "right", duration: 48 },
+  { items: PROP_FIRMS.slice(9), direction: "left", duration: 45 },
 ];
 
 const systemFlowPaths = [
@@ -137,6 +148,205 @@ function SectionTitle({ eyebrow, title, copy, center = false }) {
 
 function CheckLine({ children }) {
   return <div className="flex items-start gap-3 text-sm leading-6 text-[#BEC3CD]"><span className="mt-1 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#7C4DFF]/15 text-[#A991FF]"><Check className="h-3 w-3" /></span><span>{children}</span></div>;
+}
+
+function LogoMarqueeRow({ items, direction, duration }) {
+  const renderItems = (duplicate = false) => (
+    <div className="logo-marquee-set" aria-hidden={duplicate || undefined}>
+      {items.map((item) => (
+        <div key={`${duplicate ? "copy" : "original"}-${item.id || item.name}`} className="logo-marquee-item">
+          <span className="logo-marquee-image-wrap">
+            <img
+              src={item.logo || item.src}
+              alt={duplicate ? "" : `${item.name} logo`}
+              loading="lazy"
+              decoding="async"
+              className={`logo-marquee-image ${item.id === "e8-markets" ? "logo-marquee-image--e8" : ""}`}
+            />
+          </span>
+          <span className="logo-marquee-name">{item.name}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="logo-marquee-row">
+      <div className={`logo-marquee-track logo-marquee-track--${direction}`} style={{ "--marquee-duration": `${duration}s` }}>
+        {renderItems()}
+        {renderItems(true)}
+      </div>
+    </div>
+  );
+}
+
+function LogoMarqueeSection({ t }) {
+  return (
+    <section className="relative overflow-hidden border-y border-white/[0.06] bg-[#07080B] py-16 sm:py-20">
+      <div className="pointer-events-none absolute inset-x-[28%] top-1/2 h-44 -translate-y-1/2 rounded-full bg-[#6644FF]/[0.08] blur-[90px]" />
+      <div className="relative mx-auto mb-10 flex max-w-[1280px] flex-col gap-5 px-5 sm:px-6 lg:flex-row lg:items-end lg:justify-between lg:px-10">
+        <div>
+          <Eyebrow>{t("Compatibilités PipsEvo", "PipsEvo compatibility")}</Eyebrow>
+          <h2 className="max-w-3xl text-balance text-[30px] font-semibold leading-[1.08] tracking-[-0.035em] text-[#F3F4F6] sm:text-[40px]">
+            {t("Tes prop firms et plateformes. Un seul historique de résultats.", "Your prop firms and platforms. One result history.")}
+          </h2>
+        </div>
+        <Link to="/platforms" className="inline-flex w-fit shrink-0 items-center gap-2 text-sm font-semibold text-[#A991FF] transition hover:text-white">
+          {t("Voir toutes les compatibilités", "View all compatibility")}<ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
+      <div className="relative space-y-3" aria-label={t("Prop firms et plateformes prises en charge", "Supported prop firms and platforms")}>
+        {logoMarqueeRows.map((row, index) => <LogoMarqueeRow key={`${row.direction}-${index}`} {...row} />)}
+      </div>
+      <p className="relative mx-auto mt-8 max-w-[1280px] px-5 text-center text-[11px] leading-5 text-[#626A78] sm:px-6 lg:px-10">
+        {t("Les logos restent la propriété de leurs détenteurs. Leur présence indique une compatibilité de suivi ou d’import, pas un partenariat officiel.", "Logos remain the property of their owners. Their presence indicates tracking or import compatibility, not an official partnership.")}
+      </p>
+    </section>
+  );
+}
+
+function ResultMetric({ label, value, detail, tone = "violet", progress }) {
+  const tones = {
+    green: {
+      value: "text-[#48D5A5]",
+      bar: "from-[#26B987] to-[#55E2B2]",
+      dot: "bg-[#48D5A5] shadow-[0_0_12px_rgba(72,213,165,.45)]",
+    },
+    violet: {
+      value: "text-[#B098FF]",
+      bar: "from-[#7657FF] to-[#AA91FF]",
+      dot: "bg-[#9275FF] shadow-[0_0_12px_rgba(146,117,255,.45)]",
+    },
+    blue: {
+      value: "text-[#72A5FF]",
+      bar: "from-[#4F8CFF] to-[#78B1FF]",
+      dot: "bg-[#5C97FF] shadow-[0_0_12px_rgba(92,151,255,.45)]",
+    },
+  };
+  const colors = tones[tone] || tones.violet;
+
+  return (
+    <div className="rounded-2xl border border-white/[0.07] bg-[#090B12] p-3 sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[.15em] text-[#697282]">{label}</p>
+          <p className={`mt-2 whitespace-nowrap text-[15px] font-semibold tracking-[-0.025em] sm:text-2xl ${colors.value}`}>{value}</p>
+        </div>
+        <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${colors.dot}`} />
+      </div>
+      {typeof progress === "number" && (
+        <div className="mt-4 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+          <span className={`block h-full rounded-full bg-gradient-to-r ${colors.bar}`} style={{ width: `${progress}%` }} />
+        </div>
+      )}
+      <p className="mt-2 text-[11px] leading-5 text-[#767E8D]">{detail}</p>
+    </div>
+  );
+}
+
+function RulesResultPanel({ t }) {
+  return (
+    <div className="relative overflow-hidden rounded-[24px] border border-white/[0.09] bg-[#080A10] p-4 shadow-[0_28px_80px_rgba(0,0,0,.34)] sm:p-6">
+      <div className="pointer-events-none absolute -left-16 -top-20 h-52 w-52 rounded-full bg-[#7657FF]/[0.10] blur-[65px]" />
+      <div className="relative flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.07] pb-5">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-xl border border-[#7657FF]/25 bg-[#7657FF]/10 text-[#A990FF]"><ShieldCheck className="h-[18px] w-[18px]" /></span>
+          <div>
+            <p className="text-sm font-semibold text-[#E9EBF0]">{t("Compte démo · 50 000 $US", "Demo account · US$50,000")}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[.14em] text-[#666E7D]">{t("Règles configurées", "Configured rules")}</p>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-2 rounded-full border border-[#46C99A]/25 bg-[#46C99A]/[0.08] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.12em] text-[#64D9AF]"><span className="h-1.5 w-1.5 rounded-full bg-[#46C99A]" />{t("Sous contrôle", "Under control")}</span>
+      </div>
+      <div className="relative mt-4 grid grid-cols-2 gap-2.5 sm:gap-3">
+        <ResultMetric label={t("Perte quotidienne", "Daily loss")} value={t("1 750 $US", "US$1,750")} detail={t("encore disponibles aujourd’hui", "still available today")} tone="green" progress={70} />
+        <ResultMetric label={t("Marge drawdown", "Drawdown buffer")} value={t("2 100 $US", "US$2,100")} detail={t("avant le seuil configuré", "before the configured threshold")} tone="violet" progress={42} />
+        <ResultMetric label={t("Trades aujourd’hui", "Trades today")} value="1 / 3" detail={t("limite journalière respectée", "daily limit respected")} tone="blue" progress={33} />
+        <ResultMetric label={t("Respect du plan", "Plan compliance")} value={t("Oui", "Yes")} detail={t("check-list renseignée", "checklist completed")} tone="green" progress={100} />
+      </div>
+      <p className="relative mt-4 text-center text-[10px] leading-4 text-[#596170]">{t("Aperçu avec données de démonstration.", "Preview with demo data.")}</p>
+    </div>
+  );
+}
+
+function SimulatorResultPanel({ t }) {
+  return (
+    <div className="relative overflow-hidden rounded-[24px] border border-white/[0.09] bg-[#080A10] p-4 shadow-[0_28px_80px_rgba(0,0,0,.34)] sm:p-6">
+      <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-[#4F8CFF]/[0.09] blur-[65px]" />
+      <div className="relative flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-xl border border-[#4F8CFF]/25 bg-[#4F8CFF]/10 text-[#79A8FF]"><Gauge className="h-[18px] w-[18px]" /></span>
+          <div>
+            <p className="text-sm font-semibold text-[#E9EBF0]">{t("Simulation · 100 trades", "Simulation · 100 trades")}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[.14em] text-[#666E7D]">{t("Risque composé · scénario illustratif", "Compounded risk · illustrative scenario")}</p>
+          </div>
+        </div>
+        <span className="rounded-full border border-[#7657FF]/25 bg-[#7657FF]/[0.08] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.12em] text-[#AE98FF]">1 % / trade</span>
+      </div>
+
+      <div className="relative mt-5 overflow-hidden rounded-2xl border border-white/[0.07] bg-[#07090E] px-3 pb-2 pt-4 sm:px-5">
+        <div className="mb-2 flex items-end justify-between gap-4 px-1">
+          <div><p className="text-[10px] uppercase tracking-[.14em] text-[#626B7B]">{t("Solde simulé", "Simulated balance")}</p><p className="mt-1 text-xl font-semibold text-[#EDEFF3]">56 840 $US</p></div>
+          <p className="pb-1 text-sm font-semibold text-[#48D5A5]">+13,7 %</p>
+        </div>
+        <svg viewBox="0 0 620 170" role="img" aria-label={t("Projection illustrative de la courbe de solde", "Illustrative balance curve projection")} className="h-auto w-full">
+          <defs>
+            <linearGradient id="simulator-result-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#7657FF" stopOpacity=".26" />
+              <stop offset="100%" stopColor="#7657FF" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id="simulator-result-line" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#4F8CFF" />
+              <stop offset="100%" stopColor="#A98DFF" />
+            </linearGradient>
+          </defs>
+          <path d="M8 142 C42 139 61 126 91 130 S140 112 168 116 S210 96 242 105 S282 85 318 88 S363 63 397 71 S445 48 482 57 S528 37 557 42 S588 25 612 21 L612 164 L8 164 Z" fill="url(#simulator-result-fill)" />
+          <path d="M8 142 C42 139 61 126 91 130 S140 112 168 116 S210 96 242 105 S282 85 318 88 S363 63 397 71 S445 48 482 57 S528 37 557 42 S588 25 612 21" fill="none" stroke="url(#simulator-result-line)" strokeWidth="3" strokeLinecap="round" />
+          <path d="M8 164 H612" stroke="#FFFFFF" strokeOpacity=".07" />
+        </svg>
+      </div>
+
+      <div className="relative mt-3 grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="rounded-xl border border-white/[0.07] bg-[#090B12] p-3"><p className="text-[9px] uppercase tracking-[.12em] text-[#636C7C]">{t("Drawdown max.", "Max drawdown")}</p><p className="mt-2 text-sm font-semibold text-[#FFB34D]">6,2 %</p></div>
+        <div className="rounded-xl border border-white/[0.07] bg-[#090B12] p-3"><p className="text-[9px] uppercase tracking-[.12em] text-[#636C7C]">{t("Espérance", "Expectancy")}</p><p className="mt-2 text-sm font-semibold text-[#B098FF]">+0,18 R</p></div>
+        <div className="rounded-xl border border-white/[0.07] bg-[#090B12] p-3"><p className="text-[9px] uppercase tracking-[.12em] text-[#636C7C]">{t("Pertes max.", "Max losses")}</p><p className="mt-2 text-sm font-semibold text-[#72A5FF]">5</p></div>
+      </div>
+      <p className="relative mt-4 text-center text-[10px] leading-4 text-[#596170]">{t("Hypothèse illustrative — aucune donnée historique de marché.", "Illustrative assumption — no historical market data.")}</p>
+    </div>
+  );
+}
+
+function RulesSimulatorSection({ t }) {
+  return (
+    <section className="relative overflow-hidden px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28">
+      <div className="pointer-events-none absolute left-[10%] top-[12%] h-72 w-72 rounded-full bg-[#7657FF]/[0.06] blur-[100px]" />
+      <div className="mx-auto max-w-[1200px] space-y-20 lg:space-y-28">
+        <div className="grid items-center gap-10 lg:grid-cols-12 lg:gap-16">
+          <Reveal className="lg:col-span-7"><RulesResultPanel t={t} /></Reveal>
+          <Reveal delay={0.08} className="lg:col-span-5">
+            <SectionTitle eyebrow={t("Règles", "Rules")} title={t("Tes limites répondent avant ta prochaine décision.", "Your limits answer before your next decision.")} copy={t("PipsEvo rassemble les règles que tu as configurées et montre immédiatement ce qu’il te reste avant chaque seuil.", "PipsEvo brings together the rules you configured and immediately shows what remains before each threshold.")} />
+            <div className="mt-7 space-y-3">
+              <CheckLine>{t("Perte quotidienne et drawdown lisibles ensemble", "Daily loss and drawdown readable together")}</CheckLine>
+              <CheckLine>{t("Nombre de trades et arrêt après pertes suivis", "Trade count and stop-after-loss rules tracked")}</CheckLine>
+              <CheckLine>{t("Écarts au plan visibles sans ouvrir plusieurs écrans", "Plan deviations visible without opening multiple screens")}</CheckLine>
+            </div>
+          </Reveal>
+        </div>
+
+        <div className="grid items-center gap-10 lg:grid-cols-12 lg:gap-16">
+          <Reveal className="lg:col-span-5">
+            <SectionTitle eyebrow={t("Simulateur", "Simulator")} title={t("Teste une hypothèse avant de risquer ton compte.", "Test an assumption before risking your account.")} copy={t("Projette une série de trades avec ton capital, ton risque, ton taux de réussite et ton ratio rendement/risque.", "Project a series of trades using your capital, risk, win rate, and reward-to-risk ratio.")} />
+            <div className="mt-7 space-y-3">
+              <CheckLine>{t("Solde final et rendement simulés", "Simulated final balance and return")}</CheckLine>
+              <CheckLine>{t("Drawdown maximal et série de pertes visibles", "Maximum drawdown and losing streak visible")}</CheckLine>
+              <CheckLine>{t("Projection pédagogique, sans données historiques de marché", "Educational projection, without historical market data")}</CheckLine>
+            </div>
+          </Reveal>
+          <Reveal delay={0.08} className="lg:col-span-7"><SimulatorResultPanel t={t} /></Reveal>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function ComparisonCell({ state = "text", children, featured = false }) {
@@ -650,23 +860,9 @@ export default function LandingV2() {
         </div>
       </section>
 
-      <section className="border-y border-white/[0.06] bg-white/[0.012] px-5 py-7 sm:px-6 lg:px-10">
-        <div className="mx-auto flex max-w-[1280px] flex-col items-center justify-between gap-6 lg:flex-row">
-          <div className="text-center lg:text-left"><div className="text-xs font-semibold text-[#D7DAE1]">{t("Suivi guidé des comptes financés", "Guided funded-account tracking")}</div><div className="mt-1 text-[11px] text-[#727A8A]">{t("Compatibilité de saisie — aucun partenariat officiel sous-entendu", "Entry compatibility — no official partnership implied")}</div></div>
-          <div className="flex max-w-full flex-wrap items-center justify-center gap-x-8 gap-y-5 sm:gap-x-10 lg:justify-end">
-            {propFirmLogos.map(({ name, src, className }) => (
-              <img
-                key={name}
-                src={src}
-                alt={`Logo officiel ${name}`}
-                title={name}
-                decoding="async"
-                className={`${className} w-auto max-w-[132px] object-contain opacity-55 grayscale transition duration-200 hover:opacity-90 hover:grayscale-0`}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
+      <LogoMarqueeSection t={t} />
+
+      <RulesSimulatorSection t={t} />
 
       <section className="px-5 py-24 sm:px-6 sm:py-28 lg:px-10 lg:py-36">
         <div className="mx-auto max-w-[1280px]">
