@@ -38,6 +38,7 @@ class MetaApiConnector(TradingConnector):
             method,
             url,
             provider_authentication=True,
+            provider_name=self.provider_id,
             **kwargs,
         )
 

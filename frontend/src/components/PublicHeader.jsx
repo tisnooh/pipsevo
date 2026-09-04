@@ -118,7 +118,7 @@ function LanguageMenu({ language, setLanguage, t, onSelect }) {
 
 function MegaMenu({ id, label, open, onToggle, children, widthClass = "w-[720px]" }) {
   return <div className="relative">
-    <button type="button" aria-haspopup="menu" aria-expanded={open} aria-controls={id} onClick={onToggle} className="inline-flex items-center gap-1.5 py-3 text-sm text-[#B5BBC9] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">
+    <button type="button" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined} onClick={onToggle} className="inline-flex items-center gap-1.5 py-3 text-sm text-[#B5BBC9] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">
       <span>{label}</span><ChevronDown className={`h-3.5 w-3.5 transition ${open ? "rotate-180 text-white" : ""}`} />
     </button>
     {open && <div id={id} role="menu" className={`absolute left-1/2 top-full z-[70] mt-3 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#090A10]/[0.98] p-3 shadow-[0_28px_80px_rgba(0,0,0,.65)] backdrop-blur-2xl ${widthClass}`}>{children}</div>}
@@ -333,8 +333,8 @@ export default function PublicHeader({ variant = "default" }) {
     : "mx-auto flex h-full max-w-6xl min-w-0 items-center justify-between gap-2 px-5 sm:px-6";
 
   return <>
-    <a href="#main-content" className="fixed left-4 top-2 z-[80] -translate-y-16 rounded-lg bg-[#7C4DFF] px-3 py-2 text-sm font-semibold text-white transition focus:translate-y-0">{t("Aller au contenu", "Skip to content")}</a>
-    {landing && <div className="fixed inset-x-0 top-0 z-[60] flex h-7 items-center justify-center gap-2 border-b border-white/[0.05] bg-[#050505]/95 px-4 text-center text-[10px] font-medium tracking-wide text-[#AEB4C1] backdrop-blur-xl md:h-8 md:text-xs">
+    <nav aria-label={t("Accès rapide", "Quick access")}><a href="#main-content" className="fixed left-4 top-2 z-[80] -translate-y-16 rounded-lg bg-[#7C4DFF] px-3 py-2 text-sm font-semibold text-white transition focus:translate-y-0">{t("Aller au contenu", "Skip to content")}</a></nav>
+    {landing && <div role="region" aria-label={t("Annonce bêta", "Beta announcement")} className="fixed inset-x-0 top-0 z-[60] flex h-7 items-center justify-center gap-2 border-b border-white/[0.05] bg-[#050505]/95 px-4 text-center text-[10px] font-medium tracking-wide text-[#AEB4C1] backdrop-blur-xl md:h-8 md:text-xs">
       <span className="h-1.5 w-1.5 rounded-full bg-[#46C99A]" />
       <span>{t("Bêta publique — accès gratuit sans carte bancaire", "Public beta — free access, no credit card required")}</span>
       <Link to="/register" className="hidden text-[#C7B5FF] transition hover:text-white sm:inline">{t("Rejoindre la bêta →", "Join the beta →")}</Link>

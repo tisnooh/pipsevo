@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { coach, dashboard } from "@/lib/api";
 import { toast } from "sonner";
 import { Sparkles, Send, Brain, AlertTriangle, Target, Clock, Shield, Trophy } from "lucide-react";
@@ -28,6 +28,9 @@ export default function AICoach() {
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState(null);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [askError, setAskError] = useState("");
+  const [lastQuestion, setLastQuestion] = useState("");
+  const conversationRef = useRef(null);
 
   const load = useCallback(() => {
     if (!hasCoachAccess) { setInitialLoading(false); return; }
@@ -51,12 +54,20 @@ export default function AICoach() {
   const ask = async (text) => {
     const question = text || q;
     if (!question.trim()) return;
+    const normalizedQuestion = question.trim();
+    setAskError("");
+    setLastQuestion(normalizedQuestion);
     setLoading(true);
     try {
-      const { data } = await coach.ask(question);
+      const { data } = await coach.ask(normalizedQuestion);
       setHistory(h => [data, ...h]);
       setQ(""); toast.success("Analyse prête");
-    } catch (e) { toast.error(e.response?.data?.detail || "Coach indisponible"); }
+      requestAnimationFrame(()=>conversationRef.current?.scrollIntoView({behavior:"smooth",block:"start"}));
+    } catch (e) {
+      const message=e.response?.data?.detail || "Atlas ne répond pas pour le moment.";
+      setAskError(message);
+      toast.error(message);
+    }
     finally { setLoading(false); }
   };
 
@@ -79,6 +90,7 @@ export default function AICoach() {
         <div className="flex flex-wrap gap-2 mt-4">
           {PRESETS.map(p => { const label=p[language] || p.fr; return <button key={p.fr} onClick={()=>ask(label)} disabled={loading} data-testid={`coach-preset-${p.fr.slice(0,8)}`} className="pe-badge min-h-8 hover:border-[#7C4DFF]/40 hover:text-white">{label}</button> })}
         </div>
+        {askError&&<div role="alert" className="mt-4 flex flex-col gap-3 rounded-xl border border-[#F26A70]/25 bg-[#F26A70]/10 p-3 text-sm text-[#FF9A9E] sm:flex-row sm:items-center sm:justify-between"><span>{askError}</span><button type="button" onClick={()=>ask(lastQuestion)} disabled={loading||!lastQuestion} className="min-h-11 shrink-0 rounded-xl border border-[#F26A70]/30 px-4 text-xs font-semibold text-white transition hover:bg-[#F26A70]/10 disabled:opacity-50">Réessayer</button></div>}
       </div>}
 
       {hasCoachAccess && (initialLoading ? <div className="grid md:grid-cols-5 gap-3">{Array.from({length:5}).map((_,i)=><div key={i} className="h-28 card-flat animate-pulse"/>)}</div> : insights.length ? <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -91,7 +103,8 @@ export default function AICoach() {
         ))}
       </div> : <div className="rounded-2xl border border-dashed border-white/10 p-5 text-center text-xs text-[#7E8798]">Les cartes d’insight apparaîtront après l’ajout de tes premiers trades.</div>)}
 
-      {hasCoachAccess && <div className="space-y-3">
+      {hasCoachAccess && <div ref={conversationRef} className="space-y-3">
+        {loading&&<div className="pe-card pe-card-pad" aria-live="polite"><div className="flex items-center gap-3 text-sm font-semibold"><Sparkles className="h-4 w-4 animate-pulse text-[#B58BFF]"/>Atlas analyse tes données…</div><div className="mt-4 space-y-2"><div className="h-2.5 w-full animate-pulse rounded-full bg-white/[0.06]"/><div className="h-2.5 w-5/6 animate-pulse rounded-full bg-white/[0.06]"/><div className="h-2.5 w-2/3 animate-pulse rounded-full bg-white/[0.06]"/></div></div>}
         {history.length === 0 && !loading && (
           <div className="pe-empty-state">
             <Sparkles className="w-8 h-8 mx-auto text-[#B58BFF] mb-3"/>
@@ -102,11 +115,28 @@ export default function AICoach() {
           <div key={r.id} className="pe-card pe-card-pad" data-testid={`coach-report-${r.id}`}>
             <div className="pe-eyebrow mb-2">{r.tag} · {date(r.created_at,{withTime:true})}</div>
             <div className="font-semibold mb-3">{r.question}</div>
-            <div className="text-sm text-[#B5BBC9] whitespace-pre-wrap leading-relaxed">{r.answer}</div>
+            <AnswerMarkdown text={r.answer}/>
             {r.evidence?.length>0&&<details className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"><summary className="cursor-pointer text-xs font-semibold text-[#B58BFF]">Sources utilisées · {r.evidence.length} trade{r.evidence.length>1?"s":""}</summary><div className="mt-3 grid gap-2 sm:grid-cols-2">{r.evidence.map(source=><div key={`${source.alias}-${source.trade_id}`} className="rounded-lg border border-white/[0.06] bg-[#0A0D17] p-3 text-xs"><div className="flex items-center justify-between gap-3"><span className="font-mono font-bold text-[#B58BFF]">[{source.alias}]</span><span className={Number(source.pnl)>=0?"text-[#46C99A]":"text-[#F26A70]"}>{source.pnl===null||source.pnl===undefined?"P&L non renseigné":`${Number(source.pnl)>=0?"+":""}${Number(source.pnl).toFixed(2)}`}</span></div><div className="mt-1 font-semibold">{source.instrument||"Instrument non renseigné"} · {source.direction||"—"}</div><div className="mt-1 text-[#7E8798]">{source.date||"Date inconnue"}{source.setup?` · ${source.setup}`:""}{source.session?` · ${source.session}`:""}</div></div>)}</div></details>}
           </div>
         ))}
       </div>}
     </div>
   );
+}
+
+function AnswerMarkdown({text=""}) {
+  const lines=String(text).split(/\r?\n/);
+  const blocks=[];
+  let bullets=[];
+  const flushBullets=()=>{if(bullets.length){blocks.push(<ul key={`list-${blocks.length}`} className="my-3 list-disc space-y-1.5 pl-5">{bullets.map((line,index)=><li key={index}>{line}</li>)}</ul>);bullets=[];}};
+  lines.forEach((raw,index)=>{
+    const line=raw.trim();
+    if(/^[-*]\s+/.test(line)){bullets.push(line.replace(/^[-*]\s+/,""));return;}
+    flushBullets();
+    if(!line)return;
+    if(/^#{1,3}\s+/.test(line)||/^\*\*.+\*\*$/.test(line)){blocks.push(<h3 key={index} className="mb-1 mt-4 text-sm font-semibold text-white">{line.replace(/^#{1,3}\s+/,"").replace(/^\*\*|\*\*$/g,"")}</h3>);return;}
+    blocks.push(<p key={index} className="my-2">{line}</p>);
+  });
+  flushBullets();
+  return <div className="text-sm leading-relaxed text-[#B5BBC9]">{blocks}</div>;
 }

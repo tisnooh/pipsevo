@@ -1,22 +1,13 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Check, Clock3, ExternalLink, FileSpreadsheet, Layers3, Link2, ShieldCheck, Upload, WalletCards } from "lucide-react";
+import { ArrowRight, Check, Clock3, ExternalLink, FileSpreadsheet, Layers3, Link2, Search, ShieldCheck, Upload, WalletCards } from "lucide-react";
 import PublicHeader from "@/components/PublicHeader";
 import PublicFooter from "@/components/PublicFooter";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/context/I18nContext";
 import { INTEGRATIONS } from "@/config/integrations";
 import { IMPORT_FORMATS_IN_VALIDATION, IMPORT_PLATFORMS } from "@/config/importPlatforms";
-import { PROP_FIRMS } from "@/lib/journalPreferences";
-
-const firmPresentation = {
-  topstep: { logo: "/brand/prop-firms/topstep.webp", logoClass: "h-6", noteFr: "Comptes Futures", noteEn: "Futures accounts" },
-  apex: { logo: "/brand/prop-firms/apex.svg", logoClass: "h-9", noteFr: "Comptes Futures", noteEn: "Futures accounts" },
-  "take-profit-trader": { logo: "/brand/prop-firms/take-profit-trader.svg", logoClass: "h-8", noteFr: "Comptes Futures", noteEn: "Futures accounts" },
-  ftmo: { logo: "/brand/prop-firms/ftmo.svg", logoClass: "h-7", noteFr: "CFD et Forex", noteEn: "CFDs and Forex" },
-  the5ers: { logo: "/brand/prop-firms/the5ers.svg", logoClass: "h-8", noteFr: "CFD et Forex", noteEn: "CFDs and Forex" },
-  fundednext: { logo: "/brand/prop-firms/fundednext.png", logoClass: "h-7", noteFr: "Futures, CFD et Forex", noteEn: "Futures, CFDs and Forex" },
-};
+import { filterPropFirms, PROP_FIRMS, PROP_FIRM_PLATFORM_FILTERS, PROP_FIRM_PLATFORM_LABELS } from "@/config/propFirms";
 
 const methodIcons = {
   manual: WalletCards,
@@ -35,22 +26,26 @@ function StatusBadge({ status, children }) {
 }
 
 function FirmCard({ firm, tr }) {
-  const presentation = firmPresentation[firm.id];
-  return <article className="group relative min-h-[230px] overflow-hidden rounded-[22px] border border-white/[0.075] bg-[#090B11] p-5 transition duration-300 hover:-translate-y-1 hover:border-[#7657FF]/35 sm:p-6">
+  const initials = firm.name.split(/\s+/).map((word) => word[0]).join("").slice(0, 3).toUpperCase();
+  return <article className="group relative min-h-[280px] overflow-hidden rounded-[22px] border border-white/[0.075] bg-[#090B11] p-5 transition duration-300 hover:-translate-y-1 hover:border-[#7657FF]/35 sm:p-6">
     <span className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[#7657FF]/0 blur-[55px] transition duration-300 group-hover:bg-[#7657FF]/[0.13]" />
     <div className="relative flex items-start justify-between gap-4">
       <div className="flex h-14 min-w-16 items-center rounded-2xl border border-white/[0.07] bg-white/[0.025] px-3">
-        <img src={presentation.logo} alt="" className={`${presentation.logoClass} max-w-[118px] object-contain object-left`} />
+        {firm.logo ? <img src={firm.logo} alt={`${firm.name} logo`} className={`${firm.logoClass} max-w-[118px] object-contain object-left`} /> : <span aria-hidden="true" className="text-sm font-semibold tracking-[.08em] text-[#D6D0F8]">{initials}</span>}
       </div>
-      <StatusBadge status="available">{tr("Suivi compatible", "Tracking supported")}</StatusBadge>
+      <StatusBadge status="available">{tr("Suivi manuel", "Manual tracking")}</StatusBadge>
     </div>
     <div className="relative mt-7">
       <h2 className="text-lg font-semibold tracking-[-0.02em] text-[#ECEEF2]">{firm.name}</h2>
-      <p className="mt-1 text-xs text-[#7C8493]">{tr(presentation.noteFr, presentation.noteEn)}</p>
+      <p className="mt-1 text-xs text-[#7C8493]">{firm.marketTypes.map((market) => market === "futures" ? "Futures" : "CFD / Forex").join(" · ")}</p>
       <div className="mt-5 flex flex-wrap gap-2">
-        {firm.markets.map(market => <span key={market} className="rounded-full border border-white/[0.07] bg-white/[0.025] px-2.5 py-1 text-[10px] text-[#A8AEB9]">{market === "futures" ? "Futures" : "CFD / Forex"}</span>)}
+        {firm.platforms.map(platform => <span key={platform} className="rounded-full border border-white/[0.07] bg-white/[0.025] px-2.5 py-1 text-[10px] text-[#A8AEB9]">{PROP_FIRM_PLATFORM_LABELS[platform]}</span>)}
       </div>
-      <p className="mt-4 flex items-start gap-2 text-[11px] leading-5 text-[#868E9D]"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#8E76F2]" />{tr("Compte, règles, journal et payouts centralisés.", "Account, rules, journal, and payouts centralized.")}</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {firm.importSupported && <StatusBadge status="available">{tr("Import format plateforme", "Platform-format import")}</StatusBadge>}
+        {firm.autoSyncSupported ? <StatusBadge status="available">Auto-sync</StatusBadge> : firm.autoSyncStatus === "preparation" ? <StatusBadge status="preparation">{tr("Auto-sync en préparation", "Auto-sync in preparation")}</StatusBadge> : <span className="inline-flex items-center rounded-full border border-white/[0.07] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[.08em] text-[#8A92A1]">{tr("Auto-sync indisponible", "Auto-sync unavailable")}</span>}
+      </div>
+      <a href={firm.officialSource} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-11 items-center gap-1.5 text-[11px] font-semibold text-[#A994FF] transition hover:text-[#C5B7FF]">{tr("Plateformes officielles", "Official platforms")}<ExternalLink className="h-3 w-3" /></a>
     </div>
   </article>;
 }
@@ -95,6 +90,10 @@ export default function PlatformsPage() {
   const tr = (fr, en) => language === "en" ? en : fr;
   const availableMethods = INTEGRATIONS.filter(item => item.status === "available");
   const upcomingMethods = INTEGRATIONS.filter(item => item.status !== "available");
+  const [firmQuery, setFirmQuery] = useState("");
+  const [firmMarket, setFirmMarket] = useState("all");
+  const [firmPlatform, setFirmPlatform] = useState("all");
+  const filteredFirms = useMemo(() => filterPropFirms(PROP_FIRMS, { query: firmQuery, market: firmMarket, platform: firmPlatform }), [firmQuery, firmMarket, firmPlatform]);
 
   return <div className="min-h-screen overflow-hidden bg-[#050505] text-white">
     <PublicHeader variant="landing" />
@@ -109,10 +108,10 @@ export default function PlatformsPage() {
             <Link to={user ? "/app/accounts" : "/register"} className="btn-primary inline-flex items-center justify-center gap-2 !rounded-xl">{user ? tr("Ajouter un compte", "Add an account") : tr("Commencer gratuitement", "Start for free")}<ArrowRight className="h-4 w-4" /></Link>
             <a href="#imports" className="btn-ghost inline-flex items-center justify-center gap-2 !rounded-xl">{tr("Voir les plateformes", "View platforms")}<ArrowRight className="h-4 w-4" /></a>
           </div>
-          <div className="mx-auto mt-12 grid max-w-3xl grid-cols-3 divide-x divide-white/[0.08] rounded-2xl border border-white/[0.075] bg-[#080A10]/80 py-5">
-            <div><strong className="block text-2xl font-semibold text-white">{PROP_FIRMS.length}</strong><span className="mt-1 block text-[9px] uppercase tracking-[.12em] text-[#69717F]">Prop firms</span></div>
-            <div><strong className="block text-2xl font-semibold text-[#46C99A]">{IMPORT_PLATFORMS.length}</strong><span className="mt-1 block text-[9px] uppercase tracking-[.12em] text-[#69717F]">{tr("Imports testés", "Tested imports")}</span></div>
-            <div><strong className="block text-2xl font-semibold text-[#A994FF]">2</strong><span className="mt-1 block text-[9px] uppercase tracking-[.12em] text-[#69717F]">{tr("Marchés couverts", "Markets covered")}</span></div>
+          <div className="mx-auto mt-12 grid max-w-3xl grid-cols-3 rounded-2xl border border-white/[0.075] bg-[#080A10]/80 py-5 text-center">
+            <div className="min-w-0 px-2"><strong className="block text-2xl font-semibold text-white">{PROP_FIRMS.length}</strong><span className="mt-1 block text-[9px] uppercase leading-4 tracking-[.08em] text-[#8A92A1] sm:tracking-[.12em]">Prop firms</span></div>
+            <div className="min-w-0 border-x border-white/[0.08] px-2"><strong className="block text-2xl font-semibold text-[#46C99A]">{IMPORT_PLATFORMS.length}</strong><span className="mt-1 block text-[9px] uppercase leading-4 tracking-[.08em] text-[#8A92A1] sm:tracking-[.12em]">{tr("Imports testés", "Tested imports")}</span></div>
+            <div className="min-w-0 px-2"><strong className="block text-2xl font-semibold text-[#A994FF]">2</strong><span className="mt-1 block text-[9px] uppercase leading-4 tracking-[.08em] text-[#8A92A1] sm:tracking-[.12em]">{tr("Marchés couverts", "Markets covered")}</span></div>
           </div>
         </div>
       </section>
@@ -152,9 +151,15 @@ export default function PlatformsPage() {
             <h2 className="mt-5 text-balance text-3xl font-semibold tracking-[-0.035em] text-[#F1F2F5] sm:text-4xl lg:text-5xl">{tr("Les comptes que tu peux déjà piloter dans PipsEvo.", "The accounts you can already manage in PipsEvo.")}</h2>
             <p className="mt-5 text-sm leading-7 text-[#8D95A4] sm:text-[15px]">{tr("La compatibilité signifie que tu peux créer le compte, renseigner ses règles et centraliser son suivi. Elle ne signifie pas qu’une synchronisation directe est active.", "Compatibility means you can create the account, enter its rules, and centralize its tracking. It does not mean a direct sync is active.")}</p>
           </div>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {PROP_FIRMS.map(firm => <FirmCard key={firm.id} firm={firm} tr={tr} />)}
+          <div className="mt-8 grid gap-3 rounded-2xl border border-white/[0.075] bg-[#090B11] p-4 md:grid-cols-[1fr_auto_auto]">
+            <label className="relative block"><span className="sr-only">{tr("Rechercher une prop firm", "Search a prop firm")}</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#69717F]" /><input value={firmQuery} onChange={(event) => setFirmQuery(event.target.value)} className="h-11 w-full rounded-xl border border-white/[0.08] bg-[#07080C] pl-10 pr-3 text-sm text-white outline-none transition focus:border-[#7657FF]/60" placeholder={tr("Rechercher une prop firm ou une plateforme…", "Search a prop firm or platform…")} /></label>
+            <label><span className="sr-only">{tr("Filtrer par marché", "Filter by market")}</span><select value={firmMarket} onChange={(event) => setFirmMarket(event.target.value)} className="h-11 w-full rounded-xl border border-white/[0.08] bg-[#07080C] px-3 text-sm text-[#D5D8DF] outline-none focus:border-[#7657FF]/60"><option value="all">{tr("Tous les marchés", "All markets")}</option><option value="futures">Futures</option><option value="cfd">CFD / Forex</option></select></label>
+            <label><span className="sr-only">{tr("Filtrer par plateforme", "Filter by platform")}</span><select value={firmPlatform} onChange={(event) => setFirmPlatform(event.target.value)} className="h-11 w-full rounded-xl border border-white/[0.08] bg-[#07080C] px-3 text-sm text-[#D5D8DF] outline-none focus:border-[#7657FF]/60"><option value="all">{tr("Toutes les plateformes", "All platforms")}</option>{PROP_FIRM_PLATFORM_FILTERS.map((platform) => <option key={platform} value={platform}>{PROP_FIRM_PLATFORM_LABELS[platform]}</option>)}</select></label>
           </div>
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredFirms.map(firm => <FirmCard key={firm.id} firm={firm} tr={tr} />)}
+          </div>
+          {!filteredFirms.length && <p role="status" className="mt-8 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6 text-center text-sm text-[#8D95A4]">{tr("Aucune prop firm ne correspond à ces filtres.", "No prop firm matches these filters.")}</p>}
           <p className="mt-5 rounded-2xl border border-[#FFB855]/15 bg-[#FFB855]/[0.035] px-4 py-3 text-[10px] leading-5 text-[#858D9B]">{tr("Les marques affichées restent la propriété de leurs détenteurs. Leur présence indique une compatibilité de suivi et n’implique aucun partenariat, agrément ou recommandation officielle.", "Displayed brands remain the property of their owners. Their presence indicates tracking compatibility and does not imply any official partnership, endorsement, or recommendation.")}</p>
         </div>
       </section>
@@ -201,7 +206,7 @@ export default function PlatformsPage() {
               ["01", tr("Ajoute le compte", "Add the account"), tr("Choisis la prop firm et renseigne les limites officielles de ton compte.", "Choose the prop firm and enter your account's official limits.")],
               ["02", tr("Journalise ou importe", "Log or import"), tr("Saisis tes trades manuellement ou utilise l’import CSV sécurisé.", "Enter trades manually or use the secure CSV import.")],
               ["03", tr("Analyse le processus", "Analyze the process"), tr("Relie résultats, règles, discipline et payouts dans une seule lecture.", "Connect results, rules, discipline, and payouts in one view.")],
-            ].map(([number, title, copy], index) => <div key={number} className={`grid grid-cols-[40px_1fr] gap-4 p-6 sm:p-8 ${index ? "border-t border-white/[0.08]" : ""}`}><span className="font-mono text-xs text-[#706A82]">{number}</span><div><h3 className="font-semibold text-[#E9EBEF]">{title}</h3><p className="mt-1.5 text-sm leading-6 text-[#818999]">{copy}</p></div></div>)}
+            ].map(([number, title, copy], index) => <div key={number} className={`grid grid-cols-[40px_1fr] gap-4 p-6 sm:p-8 ${index ? "border-t border-white/[0.08]" : ""}`}><span className="font-mono text-xs text-[#918AA4]">{number}</span><div><h3 className="font-semibold text-[#E9EBEF]">{title}</h3><p className="mt-1.5 text-sm leading-6 text-[#818999]">{copy}</p></div></div>)}
           </div>
         </div>
       </section>

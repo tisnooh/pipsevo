@@ -159,7 +159,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
       const detail = error?.response?.data?.detail;
       const code = typeof detail === "object" ? detail?.code : null;
       if (["provider_unavailable", "provider_not_configured", "feature_disabled"].includes(code)) {
-        setProviderIssue("La connexion automatique est temporairement indisponible. Tu peux importer un export CSV ou HTML sans perdre ton historique.");
+        setProviderIssue(`${publicError(error, "La connexion automatique n’est pas configurée côté serveur")} Tu peux importer un export CSV ou HTML sans perdre ton historique.`);
       }
       toast.error(publicError(error, "La connexion n’a pas pu être terminée"));
     } finally { setActionId(null); }

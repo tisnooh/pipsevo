@@ -1,5 +1,8 @@
 const option = (id, label, extra = {}) => ({ id, label, hidden: false, custom: false, ...extra });
 
+export { PROP_FIRMS } from "../config/propFirms";
+import { PROP_FIRMS } from "../config/propFirms";
+
 export const ASSET_GROUPS = {
   cfd: [
     { id: "forex", name: "Forex", description: "Paires de devises", color: "#7C4DFF" },
@@ -15,15 +18,6 @@ export const ASSET_GROUPS = {
     { id: "crypto_futures", name: "Crypto Futures", description: "Micro Bitcoin et Micro Ether", color: "#F7931A" },
   ],
 };
-
-export const PROP_FIRMS = [
-  { id: "topstep", name: "Topstep", markets: ["futures"] },
-  { id: "apex", name: "Apex Trader Funding", markets: ["futures"] },
-  { id: "take-profit-trader", name: "Take Profit Trader", markets: ["futures"] },
-  { id: "ftmo", name: "FTMO", markets: ["cfd"] },
-  { id: "the5ers", name: "The5ers", markets: ["cfd"] },
-  { id: "fundednext", name: "FundedNext", markets: ["futures", "cfd"] },
-];
 
 export const MARKET_INSTRUMENTS = [
   ...["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD"].map(x=>option(`cfd-${x.toLowerCase()}`,x,{market:"cfd",group:"Forex"})),

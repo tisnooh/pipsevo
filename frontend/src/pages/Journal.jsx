@@ -15,6 +15,7 @@ import { useAppSettings } from "@/hooks/useAppSettings"
 import { clearPreTradeChecks, readPreTradeChecks, writePreTradeChecks } from "@/lib/preTradeChecklist"
 import { listenForAppDataChanges } from "@/lib/appDataEvents"
 import { JOURNAL_LIST_PATH, journalTradePath, resolveJournalRoute } from "@/lib/journalNavigation"
+import MobileTradeList from "@/components/MobileTradeList"
 
 const miniChartData = [
   { t: 1, v: 1.0784 }, { t: 2, v: 1.0790 }, { t: 3, v: 1.0785 },
@@ -213,18 +214,21 @@ export function JournalPage() {
         </div>
 
         {/* Filter tabs */}
-        <div className="flex gap-1 mb-5 border-b border-[#1E2430]">
-          {["Tous les trades", "Positions ouvertes", "✩ Favoris"].map((tab) => (
+        <div className="mb-5 grid grid-cols-3 border-b border-[#1E2430]" role="tablist" aria-label="Filtres du journal">
+          {["Tous les trades", "Positions ouvertes", "Favoris"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveFilter(tab)}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
+              role="tab"
+              aria-selected={activeFilter === tab}
+              className={`flex min-h-11 min-w-0 items-center justify-center gap-1.5 border-b-2 px-2 py-2 text-center text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
                 activeFilter === tab
-                  ? "text-[#7C4DFF] border-b-2 border-[#7C4DFF]"
-                  : "text-[#9CA3AF] hover:text-white"
+                  ? "border-[#7C4DFF] text-[#A78BFA]"
+                  : "border-transparent text-[#9CA3AF] hover:text-white"
               }`}
             >
-              {tab}
+              {tab === "Favoris" && <Star className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />}
+              <span className="truncate">{tab}</span>
             </button>
           ))}
         </div>
@@ -255,7 +259,13 @@ export function JournalPage() {
             </button>
           </div>
         ) : (
-          <div className="pe-table-shell">
+          <>
+          <MobileTradeList
+            trades={filtered}
+            onSelect={(trade) => navigate(journalTradePath(trade.id))}
+            onToggleFavorite={toggleFavorite}
+          />
+          <div className="pe-table-shell hidden md:block">
             {/* Header */}
             <div
             className="grid min-w-[780px] border-b border-[#6571CF]/15 bg-[#090E1C] px-4 py-3.5 text-pe-label uppercase tracking-[0.08em] text-[#98A1B5]"
@@ -311,6 +321,7 @@ export function JournalPage() {
               Voir tous les trades →
             </button>
           </div>
+          </>
         )}
       </div>
 

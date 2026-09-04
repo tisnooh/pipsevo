@@ -20,6 +20,8 @@ import anthropic
 import asyncio
 import requests
 
+from atlas import build_atlas_context, build_atlas_prompt
+
 from email_service import (
     EmailConfigurationError,
     EmailDeliveryError,
@@ -51,8 +53,10 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALG = os.environ.get('JWT_ALGORITHM', 'HS256')
 JWT_EXP_HOURS = int(os.environ.get('JWT_EXPIRE_HOURS', '168'))
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
-client_ai = anthropic.Anthropic(api_key=EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
+ATLAS_API_KEY = os.environ.get('ATLAS_ANTHROPIC_API_KEY') or os.environ.get('EMERGENT_LLM_KEY')
+ATLAS_MODEL = os.environ.get('ATLAS_MODEL', 'claude-sonnet-4-6').strip()
+ATLAS_TIMEOUT_SECONDS = max(5, min(int(os.environ.get('ATLAS_TIMEOUT_SECONDS', '45')), 120))
+client_ai = anthropic.Anthropic(api_key=ATLAS_API_KEY) if ATLAS_API_KEY else None
 SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://zwnrmnoutwhazhgoomoi.supabase.co').rstrip('/')
 SUPABASE_PUBLISHABLE_KEY = os.environ.get(
     'SUPABASE_PUBLISHABLE_KEY',
@@ -419,7 +423,7 @@ class PayoutIn(BaseModel):
 
 
 class CoachQuery(BaseModel):
-    question: str
+    question: str = Field(min_length=2, max_length=1000)
     context_tag: Optional[str] = "overall"
 
 
@@ -1125,7 +1129,7 @@ async def delete_payout(pid: str, user=Depends(get_current_user)):
     return {"ok": True}
 
 
-# ============= AI COACH (Claude Sonnet 4.5) =============
+# ============= ATLAS AI COACH =============
 COACH_SYSTEM = (
     "You are PipsEvo's elite trading psychologist and performance coach for FUNDED traders. "
     "You analyze behavior, discipline, and decision-making only. "
@@ -1133,6 +1137,8 @@ COACH_SYSTEM = (
     "Always answer in the same language as the trader's question (French or English). "
     "Every claim about a specific trade must cite its evidence alias such as [T1]. "
     "Never invent a trade, metric, prop-firm rule, or market fact that is not present in the context. "
+    "When the measured sample cannot support the requested conclusion, say 'Je n’ai pas encore assez de données pour conclure.' "
+    "for a French question, or its direct English equivalent for an English question, then name the missing data. "
     "Respond in clear sections: Summary, Discipline & Process, Emotional Patterns, "
     "Risk Management, and Concrete Action Plan. Be direct, specific, and use bullet points. "
     "Keep responses under 600 words."
@@ -1141,15 +1147,16 @@ COACH_SYSTEM = (
 
 @api.post("/coach/ask")
 async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
-    if not EMERGENT_LLM_KEY:
-        raise HTTPException(503, "AI Coach unavailable: missing key")
+    if not ATLAS_API_KEY or client_ai is None:
+        raise HTTPException(503, "Atlas n’est pas configuré côté serveur (ATLAS_ANTHROPIC_API_KEY manquante).")
 
     if user.get("_supabase_token"):
         token = user["_supabase_token"]
         since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-        accounts, trades, recent_reports = await asyncio.gather(
+        accounts, trades, payouts, recent_reports = await asyncio.gather(
             supabase_select("accounts", token, {"user_id": f"eq.{user['id']}", "select": "*", "limit": "50"}),
             supabase_select("trades", token, {"user_id": f"eq.{user['id']}", "select": "*", "order": "date.desc", "limit": "100"}),
+            supabase_select("payouts", token, {"user_id": f"eq.{user['id']}", "select": "*", "order": "date.desc", "limit": "20"}),
             supabase_select("ai_reports", token, {"user_id": f"eq.{user['id']}", "select": "id", "created_at": f"gte.{since}", "limit": "11"}),
         )
         if len(recent_reports) >= 10:
@@ -1157,6 +1164,7 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
     else:
         accounts = await db.accounts.find({"user_id": user["id"]}, {"_id": 0}).to_list(50)
         trades = await db.trades.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(100)
+        payouts = await db.payouts.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(20)
         since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
         if await db.ai_reports.count_documents({"user_id": user["id"], "created_at": {"$gte": since}}) >= 10:
             raise HTTPException(429, "Atlas daily beta limit reached (10 analyses / 24h)")
@@ -1164,51 +1172,45 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
     if not trades:
         raise HTTPException(422, "Ajoute au moins un trade réel avant de demander une analyse à Atlas")
 
-    # Build compact context and explicit evidence aliases.
-    evidence = []
-    ctx_lines = [f"Trader: {user.get('name')} ({user.get('trader_type') or 'unspecified'})"]
-    ctx_lines.append(f"Accounts: {len(accounts)} | Total balance: {sum(a.get('balance',0) for a in accounts):.2f}")
-    if trades:
-        wins = [t for t in trades if (t.get("pnl") or 0) > 0]
-        wr = len(wins) / len(trades) * 100
-        plan_pct = sum(1 for t in trades if t.get("plan_respected")) / len(trades) * 100
-        ctx_lines.append(f"Last {len(trades)} trades — winrate {wr:.1f}%, plan-respect {plan_pct:.1f}%")
-        for index, t in enumerate(trades[:20], start=1):
-            alias = f"T{index}"
-            evidence.append({
-                "alias": alias,
-                "trade_id": t.get("id"),
-                "date": t.get("date"),
-                "instrument": t.get("instrument"),
-                "direction": t.get("direction"),
-                "pnl": t.get("pnl"),
-                "setup": t.get("setup"),
-                "session": t.get("session"),
-                "emotion": t.get("emotion"),
-                "plan_respected": t.get("plan_respected"),
-            })
-            ctx_lines.append(
-                f"[{alias}] {t.get('date')} {t.get('instrument')} {t.get('direction')} pnl={t.get('pnl')} "
-                f"setup={t.get('setup')} session={t.get('session')} emotion={t.get('emotion')} "
-                f"plan={t.get('plan_respected')}"
-            )
-    else:
-        ctx_lines.append("No trades logged yet.")
+    context, evidence = build_atlas_context(user, accounts, trades, payouts)
+    user_prompt = build_atlas_prompt(body.question.strip(), body.context_tag or "overall", context)
 
-    user_prompt = f"Trader question: {body.question}\n\nContext (focus: {body.context_tag}):\n" + "\n".join(ctx_lines)
-
+    started_at = asyncio.get_running_loop().time()
     try:
-        message = await asyncio.to_thread(
-            client_ai.messages.create,
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            system=COACH_SYSTEM,
-            messages=[{"role": "user", "content": user_prompt}],
+        message = await asyncio.wait_for(
+            asyncio.to_thread(
+                client_ai.messages.create,
+                model=ATLAS_MODEL,
+                max_tokens=1200,
+                system=COACH_SYSTEM,
+                messages=[{"role": "user", "content": user_prompt}],
+            ),
+            timeout=ATLAS_TIMEOUT_SECONDS,
         )
-        answer = message.content[0].text
-    except Exception as e:
-        logging.exception("Coach error")
-        raise HTTPException(502, f"AI Coach error: {str(e)[:200]}")
+        answer = next((block.text for block in message.content if getattr(block, "text", None)), "").strip()
+        if not answer:
+            raise HTTPException(502, "Atlas a renvoyé une réponse vide. Réessaie.")
+    except anthropic.AuthenticationError:
+        logging.error("atlas_request_failed code=provider_auth user_id=%s model=%s", user["id"], ATLAS_MODEL)
+        raise HTTPException(503, "Atlas est mal configuré côté serveur. Vérifie ATLAS_ANTHROPIC_API_KEY.")
+    except anthropic.RateLimitError:
+        logging.warning("atlas_request_failed code=rate_limit user_id=%s model=%s", user["id"], ATLAS_MODEL)
+        raise HTTPException(429, "Atlas est momentanément très sollicité. Réessaie dans quelques instants.")
+    except (anthropic.APIConnectionError, asyncio.TimeoutError):
+        logging.warning("atlas_request_failed code=unavailable user_id=%s model=%s", user["id"], ATLAS_MODEL)
+        raise HTTPException(503, "Atlas ne répond pas pour le moment. Réessaie.")
+    except HTTPException:
+        raise
+    except anthropic.APIError:
+        logging.exception("atlas_request_failed code=provider_error user_id=%s model=%s", user["id"], ATLAS_MODEL)
+        raise HTTPException(502, "Atlas n’a pas pu terminer l’analyse. Réessaie.")
+    finally:
+        logging.info(
+            "atlas_request_finished user_id=%s model=%s duration_ms=%d",
+            user["id"],
+            ATLAS_MODEL,
+            round((asyncio.get_running_loop().time() - started_at) * 1000),
+        )
 
     # Persist
     report = {
@@ -1218,11 +1220,11 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
         "answer": answer,
         "tag": body.context_tag,
         "evidence": evidence,
+        "model": ATLAS_MODEL,
         "created_at": now_utc(),
     }
     if user.get("_supabase_token"):
         report.pop("id", None)
-        report["model"] = "claude-sonnet-4-6"
         return await supabase_insert("ai_reports", user["_supabase_token"], report)
     await db.ai_reports.insert_one(report)
     report.pop("_id", None)

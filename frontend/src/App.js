@@ -87,6 +87,9 @@ export default function App() {
           <Route path="/privacy" element={<LegalPage type="privacy" />} />
           <Route path="/terms" element={<LegalPage type="terms" />} />
           <Route path="/security" element={<LegalPage type="security" />} />
+          <Route path="/legal-notice" element={<LegalPage type="notice" />} />
+          <Route path="/cookies" element={<LegalPage type="cookies" />} />
+          <Route path="/data-rights" element={<LegalPage type="data" />} />
           <Route path="/affiliate-terms" element={<LegalPage type="affiliate" />} />
           <Route path="/platforms" element={<PlatformsPage />} />
           <Route path="/blog" element={<BlogPage />} />

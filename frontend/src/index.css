@@ -380,7 +380,10 @@ input[type="time"] {
 }
 .pe-table-shell {
   min-width: 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--pe-border);
   border-radius: var(--pe-radius-xl);
   background: linear-gradient(180deg, rgba(13, 17, 32, 0.98), rgba(9, 14, 28, 0.98));
