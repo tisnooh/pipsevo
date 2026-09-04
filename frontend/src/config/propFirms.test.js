@@ -2,7 +2,7 @@ import { filterPropFirms, PROP_FIRMS } from "./propFirms";
 
 describe("prop firm catalogue", () => {
   test("uses a complete auditable schema", () => {
-    expect(PROP_FIRMS.length).toBeGreaterThanOrEqual(10);
+    expect(PROP_FIRMS.length).toBeGreaterThanOrEqual(18);
     PROP_FIRMS.forEach((firm) => {
       expect(firm).toEqual(expect.objectContaining({
         name: expect.any(String), slug: expect.any(String), marketTypes: expect.any(Array),
@@ -18,5 +18,7 @@ describe("prop firm catalogue", () => {
     expect(filterPropFirms(PROP_FIRMS, { platform: "mt5" }).every((firm) => firm.platforms.includes("mt5"))).toBe(true);
     expect(filterPropFirms(PROP_FIRMS, { query: "FTMO" }).map((firm) => firm.id)).toContain("ftmo");
     expect(filterPropFirms(PROP_FIRMS, { query: "TradeLocker" }).length).toBeGreaterThan(0);
+    expect(filterPropFirms(PROP_FIRMS, { market: "crypto" }).map((firm) => firm.id)).toContain("breakout");
+    expect(filterPropFirms(PROP_FIRMS, { platform: "volumetrica" }).map((firm) => firm.id)).toContain("goat-funded-trader");
   });
 });

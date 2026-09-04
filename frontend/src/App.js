@@ -1,37 +1,54 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { I18nProvider } from "@/context/I18nContext";
-import Landing from "@/pages/LandingV2";
-import Login from "@/pages/Login";
-import Register from "@/pages/Register";
-import VerifyEmail from "@/pages/VerifyEmail";
-import ForgotPassword from "@/pages/ForgotPassword";
-import ResetPassword from "@/pages/ResetPassword";
-import Onboarding from "@/pages/Onboarding";
-import AppShell from "@/pages/AppShell";
-import Dashboard from "@/pages/Dashboard";
-import Accounts from "@/pages/Accounts";
-import { JournalPage } from "@/pages/Journal";
-import Discipline from "@/pages/Discipline";
-import Analytics from "@/pages/Analytics";
-import Payouts from "@/pages/Payouts";
-import AICoach from "@/pages/AICoach";
-import TradingDNA from "@/pages/TradingDNA";
-import Settings from "@/pages/Settings";
-import Backtest from "@/pages/Backtest";
-import MarketTerminal from "@/pages/MarketTerminal";
-import EconomicCalendar from "@/pages/EconomicCalendar";
-import DayView from "@/pages/DayView";
-import NewsletterActionPage from "@/pages/NewsletterActionPage";
-import { FAQPage, ContactPage, PricingPage, LegalPage, BlogPage, GuideArticlePage, HelpPage, AffiliatePage } from "@/pages/SupportPages";
-import PlatformsPage from "@/pages/PlatformsPage";
 import CookieConsent from "@/components/CookieConsent";
 import RouteSEO from "@/components/RouteSEO";
 import { AUTH_CONFIG, hasCompletedOnboarding } from "@/config/auth";
 import { JOURNAL_DETAIL_ROUTE, JOURNAL_LIST_ROUTE } from "@/lib/journalNavigation";
 import "@/index.css";
+
+const Landing = lazy(() => import("@/pages/LandingV2"));
+const Login = lazy(() => import("@/pages/Login"));
+const Register = lazy(() => import("@/pages/Register"));
+const VerifyEmail = lazy(() => import("@/pages/VerifyEmail"));
+const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
+const Onboarding = lazy(() => import("@/pages/Onboarding"));
+const AppShell = lazy(() => import("@/pages/AppShell"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Accounts = lazy(() => import("@/pages/Accounts"));
+const JournalPage = lazy(() => import("@/pages/Journal").then((module) => ({ default: module.JournalPage })));
+const Discipline = lazy(() => import("@/pages/Discipline"));
+const Analytics = lazy(() => import("@/pages/Analytics"));
+const Payouts = lazy(() => import("@/pages/Payouts"));
+const AICoach = lazy(() => import("@/pages/AICoach"));
+const TradingDNA = lazy(() => import("@/pages/TradingDNA"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const Backtest = lazy(() => import("@/pages/Backtest"));
+const MarketTerminal = lazy(() => import("@/pages/MarketTerminal"));
+const EconomicCalendar = lazy(() => import("@/pages/EconomicCalendar"));
+const DayView = lazy(() => import("@/pages/DayView"));
+const NewsletterActionPage = lazy(() => import("@/pages/NewsletterActionPage"));
+const PlatformsPage = lazy(() => import("@/pages/PlatformsPage"));
+
+const loadSupportPages = () => import("@/pages/SupportPages");
+const supportPage = (name) => lazy(() => loadSupportPages().then((module) => ({ default: module[name] })));
+const FAQPage = supportPage("FAQPage");
+const ContactPage = supportPage("ContactPage");
+const PricingPage = supportPage("PricingPage");
+const LegalPage = supportPage("LegalPage");
+const BlogPage = supportPage("BlogPage");
+const GuideArticlePage = supportPage("GuideArticlePage");
+const HelpPage = supportPage("HelpPage");
+const AffiliatePage = supportPage("AffiliatePage");
+
+function RouteLoading() {
+  return <div role="status" aria-live="polite" className="min-h-screen bg-[#050505] text-white">
+    <span className="sr-only">Chargement…</span>
+  </div>;
+}
 
 function Protected() {
   const { user, loading } = useAuth();
@@ -72,6 +89,7 @@ export default function App() {
         <RouteSEO />
         <CookieConsent />
         <Toaster theme="dark" position="top-right" />
+        <Suspense fallback={<RouteLoading />}>
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<AuthEntryGate><Login /></AuthEntryGate>} />
@@ -116,6 +134,7 @@ export default function App() {
           </Route>
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
     </I18nProvider>

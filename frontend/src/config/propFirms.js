@@ -13,6 +13,8 @@ export const PROP_FIRM_PLATFORM_LABELS = Object.freeze({
   tradelocker: "TradeLocker",
   blackarrow: "BlackArrow",
   "e8-terminal": "E8 Terminal",
+  volumetrica: "Volumetrica",
+  "breakout-terminal": "Breakout Terminal",
 });
 
 const firm = (entry) => Object.freeze({
@@ -43,10 +45,17 @@ export const PROP_FIRMS = Object.freeze([
   firm({ id: "alpha-capital-group", name: "Alpha Capital Group", marketTypes: ["cfd"], platforms: ["mt5", "ctrader", "dxtrade", "tradelocker"], importSupported: true, importPlatforms: ["mt5", "ctrader"], autoSyncStatus: "preparation", officialSource: "https://help.alphacapitalgroup.uk/en/articles/6933883-what-trading-platforms-are-available-for-use", lastVerifiedAt: "2026-09-03" }),
   firm({ id: "earn2trade", name: "Earn2Trade", marketTypes: ["futures"], platforms: ["ninjatrader", "tradovate", "tradingview", "rithmic", "quantower"], importSupported: true, importPlatforms: ["ninjatrader", "quantower"], officialSource: "https://help.earn2trade.com/en/articles/2090521-what-platforms-can-i-use-for-the-gauntlet-mini-trader-career-path", lastVerifiedAt: "2026-09-03" }),
   firm({ id: "e8-markets", name: "E8 Markets", marketTypes: ["cfd"], platforms: ["tradelocker", "match-trader", "ctrader", "mt5", "e8-terminal"], importSupported: true, importPlatforms: ["ctrader", "mt5"], autoSyncStatus: "preparation", officialSource: "https://help.e8markets.com/en/articles/9799834-available-trading-platforms", lastVerifiedAt: "2026-09-03" }),
+  firm({ id: "blue-guardian", name: "Blue Guardian", marketTypes: ["cfd"], platforms: ["mt5", "match-trader", "tradelocker"], importSupported: true, importPlatforms: ["mt5"], autoSyncStatus: "preparation", logo: "/brand/prop-firms/blue-guardian.png", logoClass: "h-7", officialSource: "https://help.blueguardian.com/en/articles/9661525-platform-rules", lastVerifiedAt: "2026-09-04" }),
+  firm({ id: "goat-funded-trader", name: "Goat Funded Trader", marketTypes: ["cfd"], platforms: ["ctrader", "tradelocker", "match-trader", "volumetrica", "mt5"], importSupported: true, importPlatforms: ["ctrader", "mt5"], autoSyncStatus: "preparation", logo: "/brand/prop-firms/goat-funded-trader.webp", logoClass: "h-10", officialSource: "https://help.goatfundedtrader.com/en/articles/10741900-which-platforms-can-i-trade-on", lastVerifiedAt: "2026-09-04" }),
+  firm({ id: "city-traders-imperium", name: "City Traders Imperium", marketTypes: ["cfd"], platforms: ["mt5", "match-trader"], importSupported: true, importPlatforms: ["mt5"], autoSyncStatus: "preparation", logo: "/brand/prop-firms/city-traders-imperium.png", logoClass: "h-8", officialSource: "https://citytradersimperium.com/partners/", lastVerifiedAt: "2026-09-04" }),
+  firm({ id: "breakout", name: "Breakout", marketTypes: ["crypto"], platforms: ["breakout-terminal"], logo: "/brand/prop-firms/breakout.ico", logoClass: "h-8", officialSource: "https://www.breakoutprop.com/guides/breakout-terminal-walkthrough/", lastVerifiedAt: "2026-09-04" }),
+  firm({ id: "instant-funding", name: "Instant Funding", marketTypes: ["cfd", "crypto"], platforms: ["mt5", "ctrader", "match-trader"], importSupported: true, importPlatforms: ["mt5", "ctrader"], autoSyncStatus: "preparation", logo: "/brand/prop-firms/instant-funding.png", logoClass: "h-9", officialSource: "https://instantfunding.com/help/trading-platforms/", lastVerifiedAt: "2026-09-04" }),
+  firm({ id: "funding-traders", name: "Funding Traders", marketTypes: ["cfd", "crypto"], platforms: ["mt5", "tradelocker"], importSupported: true, importPlatforms: ["mt5"], autoSyncStatus: "preparation", logo: "/brand/prop-firms/funding-traders.svg", logoClass: "h-8", officialSource: "https://fundingtraders.com/help/en/articles/12283589-trading-platforms-login-guide", lastVerifiedAt: "2026-09-04" }),
+  firm({ id: "tradeday", name: "TradeDay", marketTypes: ["futures"], platforms: ["rithmic"], logo: "/brand/prop-firms/tradeday.webp", logoClass: "h-8", officialSource: "https://www.tradeday.com/blog-posts/rithmic-is-now-available", lastVerifiedAt: "2026-09-04" }),
 ]);
 
 export const PROP_FIRM_PLATFORM_FILTERS = Object.freeze([
-  "mt5", "mt4", "ctrader", "tradelocker", "tradovate", "ninjatrader", "rithmic", "dxtrade", "match-trader",
+  "mt5", "mt4", "ctrader", "tradelocker", "tradovate", "ninjatrader", "rithmic", "dxtrade", "match-trader", "volumetrica", "breakout-terminal",
 ]);
 
 export function filterPropFirms(firms, { query = "", market = "all", platform = "all" } = {}) {

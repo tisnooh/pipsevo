@@ -37,7 +37,7 @@ function FirmCard({ firm, tr }) {
     </div>
     <div className="relative mt-7">
       <h2 className="text-lg font-semibold tracking-[-0.02em] text-[#ECEEF2]">{firm.name}</h2>
-      <p className="mt-1 text-xs text-[#7C8493]">{firm.marketTypes.map((market) => market === "futures" ? "Futures" : "CFD / Forex").join(" · ")}</p>
+      <p className="mt-1 text-xs text-[#7C8493]">{firm.marketTypes.map((market) => ({ futures: "Futures", cfd: "CFD / Forex", crypto: "Crypto" }[market] || market)).join(" · ")}</p>
       <div className="mt-5 flex flex-wrap gap-2">
         {firm.platforms.map(platform => <span key={platform} className="rounded-full border border-white/[0.07] bg-white/[0.025] px-2.5 py-1 text-[10px] text-[#A8AEB9]">{PROP_FIRM_PLATFORM_LABELS[platform]}</span>)}
       </div>
@@ -94,6 +94,7 @@ export default function PlatformsPage() {
   const [firmMarket, setFirmMarket] = useState("all");
   const [firmPlatform, setFirmPlatform] = useState("all");
   const filteredFirms = useMemo(() => filterPropFirms(PROP_FIRMS, { query: firmQuery, market: firmMarket, platform: firmPlatform }), [firmQuery, firmMarket, firmPlatform]);
+  const coveredMarkets = useMemo(() => new Set(PROP_FIRMS.flatMap((firm) => firm.marketTypes)).size, []);
 
   return <div className="min-h-screen overflow-hidden bg-[#050505] text-white">
     <PublicHeader variant="landing" />
@@ -111,7 +112,7 @@ export default function PlatformsPage() {
           <div className="mx-auto mt-12 grid max-w-3xl grid-cols-3 rounded-2xl border border-white/[0.075] bg-[#080A10]/80 py-5 text-center">
             <div className="min-w-0 px-2"><strong className="block text-2xl font-semibold text-white">{PROP_FIRMS.length}</strong><span className="mt-1 block text-[9px] uppercase leading-4 tracking-[.08em] text-[#8A92A1] sm:tracking-[.12em]">Prop firms</span></div>
             <div className="min-w-0 border-x border-white/[0.08] px-2"><strong className="block text-2xl font-semibold text-[#46C99A]">{IMPORT_PLATFORMS.length}</strong><span className="mt-1 block text-[9px] uppercase leading-4 tracking-[.08em] text-[#8A92A1] sm:tracking-[.12em]">{tr("Imports testés", "Tested imports")}</span></div>
-            <div className="min-w-0 px-2"><strong className="block text-2xl font-semibold text-[#A994FF]">2</strong><span className="mt-1 block text-[9px] uppercase leading-4 tracking-[.08em] text-[#8A92A1] sm:tracking-[.12em]">{tr("Marchés couverts", "Markets covered")}</span></div>
+            <div className="min-w-0 px-2"><strong className="block text-2xl font-semibold text-[#A994FF]">{coveredMarkets}</strong><span className="mt-1 block text-[9px] uppercase leading-4 tracking-[.08em] text-[#8A92A1] sm:tracking-[.12em]">{tr("Marchés couverts", "Markets covered")}</span></div>
           </div>
         </div>
       </section>
@@ -153,7 +154,7 @@ export default function PlatformsPage() {
           </div>
           <div className="mt-8 grid gap-3 rounded-2xl border border-white/[0.075] bg-[#090B11] p-4 md:grid-cols-[1fr_auto_auto]">
             <label className="relative block"><span className="sr-only">{tr("Rechercher une prop firm", "Search a prop firm")}</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#69717F]" /><input value={firmQuery} onChange={(event) => setFirmQuery(event.target.value)} className="h-11 w-full rounded-xl border border-white/[0.08] bg-[#07080C] pl-10 pr-3 text-sm text-white outline-none transition focus:border-[#7657FF]/60" placeholder={tr("Rechercher une prop firm ou une plateforme…", "Search a prop firm or platform…")} /></label>
-            <label><span className="sr-only">{tr("Filtrer par marché", "Filter by market")}</span><select value={firmMarket} onChange={(event) => setFirmMarket(event.target.value)} className="h-11 w-full rounded-xl border border-white/[0.08] bg-[#07080C] px-3 text-sm text-[#D5D8DF] outline-none focus:border-[#7657FF]/60"><option value="all">{tr("Tous les marchés", "All markets")}</option><option value="futures">Futures</option><option value="cfd">CFD / Forex</option></select></label>
+            <label><span className="sr-only">{tr("Filtrer par marché", "Filter by market")}</span><select value={firmMarket} onChange={(event) => setFirmMarket(event.target.value)} className="h-11 w-full rounded-xl border border-white/[0.08] bg-[#07080C] px-3 text-sm text-[#D5D8DF] outline-none focus:border-[#7657FF]/60"><option value="all">{tr("Tous les marchés", "All markets")}</option><option value="futures">Futures</option><option value="cfd">CFD / Forex</option><option value="crypto">Crypto</option></select></label>
             <label><span className="sr-only">{tr("Filtrer par plateforme", "Filter by platform")}</span><select value={firmPlatform} onChange={(event) => setFirmPlatform(event.target.value)} className="h-11 w-full rounded-xl border border-white/[0.08] bg-[#07080C] px-3 text-sm text-[#D5D8DF] outline-none focus:border-[#7657FF]/60"><option value="all">{tr("Toutes les plateformes", "All platforms")}</option>{PROP_FIRM_PLATFORM_FILTERS.map((platform) => <option key={platform} value={platform}>{PROP_FIRM_PLATFORM_LABELS[platform]}</option>)}</select></label>
           </div>
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
