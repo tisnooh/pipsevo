@@ -1,5 +1,5 @@
-import { useCallback, useState, useEffect } from "react"
-import { useLocation, useNavigate } from "react-router-dom"
+import { useCallback, useState, useEffect, useMemo } from "react"
+import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { motion } from "framer-motion"
 import { Star, Edit2, Trash2, Camera, Check, Plus, Upload, BarChart3, Target, TrendingUp, ArrowUpRight, ArrowDownRight, Ruler, CalendarDays, X } from "lucide-react"
 import { AreaChart, Area, ResponsiveContainer } from "recharts"
@@ -27,9 +27,9 @@ export function JournalPage() {
   const { money } = useAppSettings()
   const location = useLocation()
   const navigate = useNavigate()
+  const { tradeId = "" } = useParams()
   const [tradeList, setTradeList] = useState([])
   const [accounts, setAccounts] = useState([])
-  const [selectedTrade, setSelectedTrade] = useState(null)
   const [activeTab, setActiveTab] = useState("Aperçu")
   const [activeFilter, setActiveFilter] = useState("Tous les trades")
   const [loading, setLoading] = useState(true)
@@ -40,7 +40,6 @@ export function JournalPage() {
   const [checklistChecks, setChecklistChecks] = useState({})
   const [accountFilter, setAccountFilter] = useState("")
   const [days, setDays] = useState("30")
-  const [dateFilter, setDateFilter] = useState("")
   const [form, setForm] = useState(()=>createEmptyTradeForm(null))
   const userRules = normalizeTradingRules(user?.rules)
   const activeChecklist = userRules.pre_trade_checklist.filter(item=>item.enabled !== false)
@@ -68,12 +67,17 @@ export function JournalPage() {
       navigate(JOURNAL_LIST_PATH, { replace: true })
       return
     }
+  }, [location.search, navigate])
 
-    const route = resolveJournalRoute(location.search, tradeList)
-    setDateFilter(route.dateFilter)
-    setSelectedTrade(route.selectedTrade)
-    if (route.dateFilter) setDays("3650")
-  }, [location.search, navigate, tradeList])
+  const journalRoute = useMemo(
+    () => resolveJournalRoute(location.search, tradeList, tradeId),
+    [location.search, tradeId, tradeList],
+  )
+  const { dateFilter, selectedTrade } = journalRoute
+
+  useEffect(() => {
+    if (dateFilter) setDays("3650")
+  }, [dateFilter])
 
   useEffect(() => {
     if (openForm && !editingTrade) writePreTradeChecks(checklistChecks, activeChecklist)
@@ -113,7 +117,7 @@ export function JournalPage() {
 
   const toggleFavorite = async (trade, e) => {
     e?.stopPropagation()
-    try { const { data } = await tradesAPI.update(trade.id, { starred: !trade.starred }); setTradeList(list=>list.map(t=>t.id===trade.id?data:t)); if (selectedTrade?.id===trade.id) setSelectedTrade(data) }
+    try { const { data } = await tradesAPI.update(trade.id, { starred: !trade.starred }); setTradeList(list=>list.map(t=>t.id===trade.id?data:t)) }
     catch { toast.error("Impossible de modifier le favori") }
   }
 

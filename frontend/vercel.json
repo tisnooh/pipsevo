@@ -1,4 +1,10 @@
 {
+  "rewrites": [
+    {
+      "source": "/app/:path*",
+      "destination": "/index.html"
+    }
+  ],
   "crons": [
     {
       "path": "/api/sync-due",

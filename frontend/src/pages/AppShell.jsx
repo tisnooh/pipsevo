@@ -10,6 +10,7 @@ import { applyDocumentPreferences, listenForSettingsChanges, readSettings } from
 import { BILLING_CONFIG, COMMERCIAL_PHASES } from "@/config/billing";
 import { evaluateRiskAlerts } from "@/lib/riskEngine";
 import { listenForAppDataChanges, notifyAppDataChanged } from "@/lib/appDataEvents";
+import { JOURNAL_LIST_PATH } from "@/lib/journalNavigation";
 
 const NAV_LINKS = [
   { to: "/app/dashboard", fr: "Aperçu", en: "Overview", icon: Home, testid: "nav-dashboard" },
@@ -178,7 +179,7 @@ export default function AppShell() {
             <NavLink
               key={to}
               to={to}
-              end
+              end={to !== JOURNAL_LIST_PATH}
               onClick={closeMobile}
               data-testid={testid}
               title={sidebarCollapsed ? label : undefined}
@@ -289,7 +290,7 @@ export default function AppShell() {
             <NavLink
               key={to}
               to={to}
-              end
+              end={to !== JOURNAL_LIST_PATH}
               onClick={closeMobile}
               className={({ isActive }) =>
                 `flex min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] transition ${

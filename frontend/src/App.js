@@ -30,6 +30,7 @@ import PlatformsPage from "@/pages/PlatformsPage";
 import CookieConsent from "@/components/CookieConsent";
 import RouteSEO from "@/components/RouteSEO";
 import { AUTH_CONFIG, hasCompletedOnboarding } from "@/config/auth";
+import { JOURNAL_DETAIL_ROUTE, JOURNAL_LIST_ROUTE } from "@/lib/journalNavigation";
 import "@/index.css";
 
 function Protected() {
@@ -97,7 +98,8 @@ export default function App() {
             <Route index element={<Navigate to="/app/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="accounts" element={<Accounts />} />
-            <Route path="journal" element={<JournalPage />} />
+            <Route path={JOURNAL_LIST_ROUTE} element={<JournalPage />} />
+            <Route path={JOURNAL_DETAIL_ROUTE} element={<JournalPage />} />
             <Route path="backtest" element={<Backtest />} />
             <Route path="markets" element={<MarketTerminal />} />
             <Route path="economic-calendar" element={<EconomicCalendar />} />
