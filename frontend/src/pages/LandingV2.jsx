@@ -34,6 +34,7 @@ import { useI18n } from "@/context/I18nContext";
 import { FEATURE_FLAGS } from "@/config/billing";
 import { PROP_FIRMS } from "@/config/propFirms";
 import { FadeIn } from "../components/motion/MotionSystem";
+import { usePipsReducedMotion } from "@/lib/motionPreference";
 
 gsap.registerPlugin(MotionPathPlugin, ScrollTrigger);
 
@@ -409,17 +410,14 @@ function SystemCore({ t }) {
 
 function RiskControlSection({ t }) {
   const sectionRef = useRef(null);
+  const reduceMotion = usePipsReducedMotion();
 
   useEffect(() => {
     const section = sectionRef.current;
     if (!section) return undefined;
 
     const media = gsap.matchMedia();
-    media.add({
-      reduceMotion: "(prefers-reduced-motion: reduce)",
-      fullMotion: "(prefers-reduced-motion: no-preference)",
-    }, context => {
-      const { reduceMotion } = context.conditions;
+    media.add("all", () => {
       const copy = section.querySelector("[data-risk-copy]");
       const panel = section.querySelector("[data-risk-panel]");
       const status = section.querySelector("[data-risk-status]");
@@ -490,7 +488,7 @@ function RiskControlSection({ t }) {
     });
 
     return () => media.revert();
-  }, []);
+  }, [reduceMotion]);
 
   const riskCards = [
     {
@@ -584,6 +582,7 @@ function ProductFeature({ id, reverse, eyebrow, title, copy, bullets, section, a
 }
 
 export default function LandingV2() {
+  const prefersReducedMotion = usePipsReducedMotion();
   const { t } = useI18n();
   const [activeProduct, setActiveProduct] = useState("overview");
   const [mobileComparison, setMobileComparison] = useState("manual");
@@ -612,10 +611,9 @@ export default function LandingV2() {
       {
         desktop: "(min-width: 1024px)",
         mobile: "(max-width: 1023px)",
-        reduceMotion: "(prefers-reduced-motion: reduce)",
       },
       context => {
-        const { desktop, reduceMotion: prefersReducedMotion } = context.conditions;
+        const { desktop } = context.conditions;
         const layout = section.querySelector(`[data-system-layout="${desktop ? "desktop" : "mobile"}"]`);
         const heading = section.querySelector("[data-system-heading]");
         const core = layout?.querySelector("[data-system-core]");
@@ -770,7 +768,7 @@ export default function LandingV2() {
     );
 
     return () => media.revert();
-  }, []);
+  }, [prefersReducedMotion]);
 
   const outcomes = [
     { icon: ShieldCheck, title: t("Protège ton capital", "Protect your capital"), copy: t("Visualise le drawdown restant et les règles critiques avant qu’une mauvaise session ne devienne une violation.", "See remaining drawdown and critical rules before a bad session becomes a violation.") },

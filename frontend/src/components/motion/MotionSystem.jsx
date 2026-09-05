@@ -1,5 +1,6 @@
 import React, { useLayoutEffect, useRef } from "react";
-import { AnimatePresence, MotionConfig, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
+import { usePipsReducedMotion as useReducedMotion } from "../../lib/motionPreference";
 
 const EASE_OUT = [0.22, 1, 0.36, 1];
 const REVEAL_SELECTOR = [
@@ -11,20 +12,14 @@ const REVEAL_SELECTOR = [
   ".card-elev",
 ].join(",");
 
-const isReducedMotionPreferred = () => (
-  typeof window !== "undefined"
-  && typeof window.matchMedia === "function"
-  && window.matchMedia("(prefers-reduced-motion: reduce)").matches
-);
-
 /**
- * Global motion policy. Framer Motion automatically removes transforms when
- * the operating system asks for reduced motion; authored components below
- * additionally skip their entrance transition entirely.
+ * Apply the same resolved site/device preference to Framer Motion and the
+ * authored components below, including changes made while the page is open.
  */
 export function MotionProvider({ children }) {
+  const reducedMotion = useReducedMotion();
   return (
-    <MotionConfig reducedMotion="user" transition={{ duration: 0.48, ease: EASE_OUT }}>
+    <MotionConfig reducedMotion={reducedMotion ? "always" : "never"} transition={{ duration: 0.48, ease: EASE_OUT }}>
       {children}
     </MotionConfig>
   );
@@ -37,13 +32,13 @@ export function MotionProvider({ children }) {
  */
 export function MotionScope({ children, className = "", routeKey = "", as = "div", ...props }) {
   const scopeRef = useRef(null);
+  const reducedMotion = useReducedMotion();
   const Component = as;
 
   useLayoutEffect(() => {
     const root = scopeRef.current;
     if (!root) return undefined;
 
-    const reducedMotion = isReducedMotionPreferred();
     const processed = new Set();
     const groupedIndexes = new Map();
     const frameIds = new Set();
@@ -118,7 +113,7 @@ export function MotionScope({ children, className = "", routeKey = "", as = "div
         node.style.removeProperty("--pe-motion-delay");
       });
     };
-  }, [routeKey]);
+  }, [routeKey, reducedMotion]);
 
   return <Component ref={scopeRef} className={`pe-motion-scope ${className}`.trim()} {...props}>{children}</Component>;
 }

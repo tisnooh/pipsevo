@@ -19,6 +19,7 @@ import { captureCommercialEvent } from "@/lib/commercialAnalytics";
 import { downloadFullDataExport } from "@/lib/dataExport";
 import { passwordValidation } from "@/lib/passwordSecurity";
 import IntegrationConnections from "@/components/IntegrationConnections";
+import MotionPreferenceControl from "@/components/motion/MotionPreferenceControl";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -224,6 +225,7 @@ export default function Settings() {
         {active === "connections" && <IntegrationConnections user={user}/>}
 
         {active === "preferences" && <section className="card-elev overflow-hidden">
+          <div className="border-b border-white/5 p-6"><MotionPreferenceControl /></div>
           <div className="border-b border-white/[0.06] p-5 sm:p-6"><h2 className="font-semibold">Préférences de trading</h2><p className="mt-1 text-xs text-[#7E8798]">Adapte les montants, horaires et l’affichage à ta façon de travailler.</p></div>
           <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
             {[{label:"Devise principale",key:"currency",icon:CreditCard,options:[["USD","USD — Dollar"],["EUR","EUR — Euro"],["GBP","GBP — Livre"]]},{label:"Fuseau horaire",key:"timezone",icon:Globe2,options:[["Europe/Paris","Europe / Paris"],["America/New_York","America / New York"],["Europe/London","Europe / London"]]},{label:"Langue",key:"language",icon:Globe2,options:[["fr","Français"],["en","English"]]}].map(item=><SettingsSelect key={item.key} item={item} value={preferences[item.key]} onChange={value=>{setPreferences(current=>({...current,[item.key]:value}));if(item.key==="language")setLanguage(value)}}/>)}

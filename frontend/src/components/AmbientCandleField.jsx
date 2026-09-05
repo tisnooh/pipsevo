@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { Candle } from "@/components/CandleArt";
+import { usePipsReducedMotion } from "@/lib/motionPreference";
 
 const CANDLES = [
   { x: 43, y: 1.4, mobileX: 4, mobileY: 2.2, color: "purple", height: 58, scale: .52, opacity: .58, driftX: 42, driftY: 76, duration: 5.8, mobile: true },
@@ -34,6 +35,7 @@ const CANDLES = [
 
 export default function AmbientCandleField() {
   const fieldRef = useRef(null);
+  const reducedMotion = usePipsReducedMotion();
 
   useEffect(() => {
     const field = fieldRef.current;
@@ -42,7 +44,6 @@ export default function AmbientCandleField() {
     const media = gsap.matchMedia();
     media.add(
       {
-        reducedMotion: "(prefers-reduced-motion: reduce)",
         mobile: "(max-width: 767px)",
         desktop: "(min-width: 768px)",
       },
@@ -50,7 +51,7 @@ export default function AmbientCandleField() {
         const candles = gsap.utils.toArray("[data-ambient-candle]", field)
           .filter((candle) => !conditions.mobile || candle.dataset.mobile === "true");
 
-        if (conditions.reducedMotion) {
+        if (reducedMotion) {
           gsap.set(candles, { autoAlpha: (_, candle) => Number(candle.dataset.opacity) * .72 });
           return undefined;
         }
@@ -103,7 +104,7 @@ export default function AmbientCandleField() {
     );
 
     return () => media.revert();
-  }, []);
+  }, [reducedMotion]);
 
   return (
     <div ref={fieldRef} className="ambient-candle-field" aria-hidden="true">

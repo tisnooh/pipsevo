@@ -446,16 +446,14 @@ input[type="time"] {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html:focus-within { scroll-behavior: auto; }
-  .pe-motion-item,
-  .pe-motion-item.pe-motion-visible,
-  .pe-motion-surface.pe-motion-visible:hover {
-    opacity: 1 !important;
-    transform: none !important;
-    transition: none !important;
-    will-change: auto !important;
-  }
+html[data-motion="reduced"]:focus-within { scroll-behavior: auto; }
+html[data-motion="reduced"] .pe-motion-item,
+html[data-motion="reduced"] .pe-motion-item.pe-motion-visible,
+html[data-motion="reduced"] .pe-motion-surface.pe-motion-visible:hover {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+  will-change: auto !important;
 }
 
 :where(a, button, input, select, textarea, [role="button"], [tabindex]):focus-visible {
@@ -1037,11 +1035,9 @@ html, body, #root {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .product-mockup-stage, .product-mockup-frame, .product-mockup-candle, .product-mockup-floor-glow { animation: none !important; transition: none !important; }
-  .ambient-candle { will-change: auto; }
-  .pipsevo-atmosphere__canvas { display: none; }
-}
+html[data-motion="reduced"] :is(.product-mockup-stage, .product-mockup-frame, .product-mockup-candle, .product-mockup-floor-glow, .product-preview-screen, .floaty, .floaty-slow, .pulse-glow, .scroll-x) { animation: none !important; transition: none !important; }
+html[data-motion="reduced"] .ambient-candle { will-change: auto; }
+html[data-motion="reduced"] .pipsevo-atmosphere__canvas { display: none; }
 
 /* Logo bracket icon */
 .logo-mark {
@@ -1161,14 +1157,12 @@ html, body, #root {
   .logo-marquee-item { min-width: 210px; height: 58px; gap: 13px; }
   .logo-marquee-name { max-width: 150px; font-size: 14px; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .logo-marquee-row {
-    overflow-x: auto;
-    -webkit-mask-image: none;
-    mask-image: none;
-    scrollbar-width: none;
-  }
-  .logo-marquee-row::-webkit-scrollbar { display: none; }
-  .logo-marquee-track { animation: none; transform: none; }
-  .logo-marquee-set[aria-hidden="true"] { display: none; }
+html[data-motion="reduced"] .logo-marquee-row {
+  overflow-x: auto;
+  -webkit-mask-image: none;
+  mask-image: none;
+  scrollbar-width: none;
 }
+html[data-motion="reduced"] .logo-marquee-row::-webkit-scrollbar { display: none; }
+html[data-motion="reduced"] .logo-marquee-track { animation: none; transform: none; }
+html[data-motion="reduced"] .logo-marquee-set[aria-hidden="true"] { display: none; }

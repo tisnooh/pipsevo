@@ -5,6 +5,7 @@ import { CountryFlag } from "@/components/PublicHeader";
 import { openCookieSettings } from "@/components/CookieConsent";
 import { useI18n } from "@/context/I18nContext";
 import { newsletter } from "@/lib/api";
+import MotionPreferenceControl from "@/components/motion/MotionPreferenceControl";
 
 const footerGroups = (t) => [
   [t("Produit", "Product"), [
@@ -81,6 +82,7 @@ export default function PublicFooter() {
         <button type="button" onClick={() => setLanguage("fr")} className={`inline-flex items-center gap-2 transition hover:text-white ${language === "fr" ? "text-[#B6A4FF]" : ""}`}><CountryFlag language="fr" />Français</button>
         <button type="button" onClick={() => setLanguage("en")} className={`inline-flex items-center gap-2 transition hover:text-white ${language === "en" ? "text-[#B6A4FF]" : ""}`}><CountryFlag language="en" />English</button>
         <button type="button" onClick={openCookieSettings} className="transition hover:text-white">{t("Gérer les cookies", "Manage cookies")}</button>
+        <MotionPreferenceControl />
       </div>
     </div>
   </footer>;

@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import gsap from "gsap";
 import ProductDashboardPreview from "@/components/ProductDashboardPreview";
 import { Candle } from "@/components/CandleArt";
+import { usePipsReducedMotion } from "@/lib/motionPreference";
 
 const CANDLES = [
   { color: "purple", height: 96, className: "product-mockup-candle candle-a" },
@@ -16,6 +17,7 @@ const CANDLES = [
 
 export default function ProductDashboardMockup3D({ variant = "hero", activeSection = "overview", className = "" }) {
   const rootRef = useRef(null);
+  const reducedMotion = usePipsReducedMotion();
   const stageRef = useRef(null);
   const frameRef = useRef(null);
   const isPrimaryHeroMockup = variant === "hero" || variant === "mobile";
@@ -26,7 +28,6 @@ export default function ProductDashboardMockup3D({ variant = "hero", activeSecti
     const frame = frameRef.current;
     if (!root || !stage || !frame) return undefined;
 
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const desktopPointer = window.matchMedia("(min-width: 1024px) and (hover: hover) and (pointer: fine)").matches;
     const ambientTweens = [];
     const context = gsap.context(() => {
@@ -100,7 +101,7 @@ export default function ProductDashboardMockup3D({ variant = "hero", activeSecti
       root.removeEventListener("pointerleave", reset);
       cleanupMotion();
     };
-  }, [isPrimaryHeroMockup, variant]);
+  }, [isPrimaryHeroMockup, variant, reducedMotion]);
 
   return (
     <div ref={rootRef} className={`product-dashboard-mockup product-dashboard-mockup--${variant} ${className}`}>

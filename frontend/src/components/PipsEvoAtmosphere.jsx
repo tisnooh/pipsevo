@@ -1,4 +1,5 @@
 import React, { Component, useEffect, useMemo, useRef, useState } from "react";
+import { usePipsReducedMotion } from "@/lib/motionPreference";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
@@ -114,7 +115,7 @@ export default function PipsEvoAtmosphere({ className = "" }) {
   const rootRef = useRef(null);
   const [visible, setVisible] = useState(true);
   const [documentVisible, setDocumentVisible] = useState(!document.hidden);
-  const reducedMotion = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
+  const reducedMotion = usePipsReducedMotion();
   const [quality, setQuality] = useState(() => detectQuality(reducedMotion));
 
   useEffect(() => {
@@ -124,6 +125,7 @@ export default function PipsEvoAtmosphere({ className = "" }) {
     observer.observe(root);
     const handleVisibility = () => setDocumentVisible(!document.hidden);
     const handleResize = () => setQuality(detectQuality(reducedMotion));
+    handleResize();
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("resize", handleResize, { passive: true });
     return () => {
