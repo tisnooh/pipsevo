@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion, useReducedMotion } from "framer-motion";
 import { gsap } from "gsap";
 import { MotionPathPlugin } from "gsap/MotionPathPlugin";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -34,6 +33,7 @@ import AmbientCandleField from "@/components/AmbientCandleField";
 import { useI18n } from "@/context/I18nContext";
 import { FEATURE_FLAGS } from "@/config/billing";
 import { PROP_FIRMS } from "@/config/propFirms";
+import { FadeIn } from "../components/motion/MotionSystem";
 
 gsap.registerPlugin(MotionPathPlugin, ScrollTrigger);
 
@@ -131,7 +131,7 @@ const faqs = [
 ];
 
 function Reveal({ children, className = "", delay = 0 }) {
-  return <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.18 }} transition={{ duration: 0.62, delay, ease: [0.22, 1, 0.36, 1] }} className={className}>{children}</motion.div>;
+  return <FadeIn className={className} delay={delay}>{children}</FadeIn>;
 }
 
 function Eyebrow({ children }) {
@@ -415,7 +415,10 @@ function RiskControlSection({ t }) {
     if (!section) return undefined;
 
     const media = gsap.matchMedia();
-    media.add({ reduceMotion: "(prefers-reduced-motion: reduce)" }, context => {
+    media.add({
+      reduceMotion: "(prefers-reduced-motion: reduce)",
+      fullMotion: "(prefers-reduced-motion: no-preference)",
+    }, context => {
       const { reduceMotion } = context.conditions;
       const copy = section.querySelector("[data-risk-copy]");
       const panel = section.querySelector("[data-risk-panel]");
@@ -430,35 +433,35 @@ function RiskControlSection({ t }) {
         return undefined;
       }
 
-      gsap.set(copy, { autoAlpha: 0, x: -34 });
-      gsap.set(panel, { autoAlpha: 0, y: 48, scale: 0.96, rotationX: 7, transformPerspective: 1000 });
-      gsap.set(status, { autoAlpha: 0, y: 18, scale: 0.96 });
-      gsap.set(cards, { autoAlpha: 0, y: 26 });
+      gsap.set(copy, { autoAlpha: 0, x: -24 });
+      gsap.set(panel, { autoAlpha: 0, y: 24, scale: 0.985 });
+      gsap.set(status, { autoAlpha: 0, y: 14, scale: 0.99 });
+      gsap.set(cards, { autoAlpha: 0, y: 18 });
       gsap.set(bars, { scaleX: 0, transformOrigin: "left center" });
 
       const locale = document.documentElement.lang === "en" ? "en-US" : "fr-FR";
       const formatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
       const timeline = gsap.timeline({
-        defaults: { ease: "power4.out" },
-        scrollTrigger: { trigger: section, start: "top 68%", once: true },
+        defaults: { ease: "power3.out" },
+        scrollTrigger: { trigger: section, start: "top 82%", once: true },
       });
 
       timeline
-        .to(copy, { autoAlpha: 1, x: 0, duration: 0.85 })
-        .to(panel, { autoAlpha: 1, y: 0, scale: 1, rotationX: 0, duration: 1, ease: "back.out(1.3)" }, "-=0.58")
-        .to(status, { autoAlpha: 1, y: 0, scale: 1, duration: 0.68 }, "-=0.55")
-        .to(cards, { autoAlpha: 1, y: 0, duration: 0.66, stagger: 0.14 }, "-=0.45")
-        .to(bars, { scaleX: 1, duration: 1.45, ease: "power3.inOut", stagger: 0.18 }, "-=0.42");
+        .to(copy, { autoAlpha: 1, x: 0, duration: 0.48 })
+        .to(panel, { autoAlpha: 1, y: 0, scale: 1, duration: 0.52 }, "-=0.3")
+        .to(status, { autoAlpha: 1, y: 0, scale: 1, duration: 0.42 }, "-=0.28")
+        .to(cards, { autoAlpha: 1, y: 0, duration: 0.44, stagger: 0.065 }, "-=0.26")
+        .to(bars, { scaleX: 1, duration: 0.7, ease: "power3.inOut", stagger: 0.08 }, "-=0.3");
 
       counts.forEach((element, index) => {
         const target = Number(element.dataset.value || 0);
         const counter = { value: 0 };
         timeline.to(counter, {
           value: target,
-          duration: 1.35,
+          duration: 0.7,
           ease: "power3.out",
           onUpdate: () => { element.textContent = formatter.format(Math.round(counter.value)); },
-        }, index ? "<0.16" : "-=1.42");
+        }, index ? "<0.08" : "-=0.72");
       });
 
       const sheenTween = gsap.to(gsap.utils.toArray("[data-risk-sheen]", section), {
@@ -582,10 +585,22 @@ function ProductFeature({ id, reverse, eyebrow, title, copy, bullets, section, a
 
 export default function LandingV2() {
   const { t } = useI18n();
-  const reduceMotion = useReducedMotion();
   const [activeProduct, setActiveProduct] = useState("overview");
   const [mobileComparison, setMobileComparison] = useState("manual");
   const systemSectionRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => { if (!cancelled) ScrollTrigger.refresh(); };
+    const frameId = window.requestAnimationFrame(refresh);
+    window.addEventListener("load", refresh);
+    document.fonts?.ready?.then(refresh);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener("load", refresh);
+    };
+  }, []);
 
   useEffect(() => {
     const section = systemSectionRef.current;
@@ -628,39 +643,44 @@ export default function LandingV2() {
         }
 
         gsap.set(heading, { autoAlpha: 0, y: 34 });
-        gsap.set(core, { autoAlpha: 0, scale: 0.68, rotationX: -14, transformPerspective: 900 });
-        gsap.set(nodes, { autoAlpha: 0, y: 54, scale: 0.88, rotationX: -12, transformPerspective: 900 });
+        gsap.set(core, { autoAlpha: 0, scale: 0.96 });
+        gsap.set(nodes, { autoAlpha: 0, y: 24, scale: 0.98 });
         gsap.set(meterLines, { scaleX: 0, transformOrigin: "left center" });
         gsap.set(flowPaths, { strokeDasharray: "0 900", strokeDashoffset: 0, opacity: 0 });
         gsap.set(flowDots, { autoAlpha: 0, transformOrigin: "center" });
 
         const intro = gsap.timeline({
-          defaults: { ease: "power4.out" },
+          defaults: { ease: "power3.out" },
           scrollTrigger: {
             trigger: section,
-            start: "top 70%",
+            start: "top 82%",
             once: true,
           },
         });
 
         intro
-          .to(heading, { autoAlpha: 1, y: 0, duration: 0.9 })
-          .to(core, { autoAlpha: 1, scale: 1, rotationX: 0, duration: 1.15, ease: "back.out(1.45)" }, "-=0.52")
-          .to(flowPaths, { strokeDasharray: "12 18", opacity: 0.82, duration: 1.15, stagger: { each: 0.045, from: "center" } }, "-=0.82")
-          .to(nodes, { autoAlpha: 1, y: 0, scale: 1, rotationX: 0, duration: 0.82, stagger: { amount: 0.68, from: "center" } }, "-=0.92")
-          .to(meterLines, { scaleX: 1, duration: 0.72, ease: "expo.out", stagger: { amount: 0.42, from: "random" } }, "-=0.55");
+          .to(heading, { autoAlpha: 1, y: 0, duration: 0.48 })
+          .to(core, { autoAlpha: 1, scale: 1, duration: 0.5 }, "-=0.26");
+        if (flowPaths.length) {
+          intro.to(flowPaths, { strokeDasharray: "12 18", opacity: 0.82, duration: 0.55, stagger: { each: 0.045, from: "center" } }, "-=0.34");
+        }
+        intro
+          .to(nodes, { autoAlpha: 1, y: 0, scale: 1, duration: 0.46, stagger: { amount: 0.36, from: "center" } }, "-=0.42")
+          .to(meterLines, { scaleX: 1, duration: 0.5, ease: "power3.out", stagger: { amount: 0.3, from: "random" } }, "-=0.3");
 
         const ambientTweens = [
-          gsap.to(rings, { rotation: 360, duration: 17, repeat: -1, ease: "none", stagger: 1.8, paused: true }),
-          gsap.to(reverseRings, { rotation: -360, duration: 11, repeat: -1, ease: "none", paused: true }),
-          gsap.to(coreBeams, { rotation: "+=180", duration: 13, repeat: -1, ease: "none", stagger: 0.8, paused: true }),
+          gsap.to(rings, { autoAlpha: 0.42, duration: 2.4, repeat: -1, yoyo: true, ease: "sine.inOut", stagger: 0.3, paused: true }),
+          gsap.to(reverseRings, { autoAlpha: 0.65, duration: 2.1, repeat: -1, yoyo: true, ease: "sine.inOut", paused: true }),
+          gsap.to(coreBeams, { autoAlpha: 0.32, duration: 2.8, repeat: -1, yoyo: true, ease: "sine.inOut", stagger: 0.4, paused: true }),
           gsap.to(halos, { scale: 1.18, autoAlpha: 0.72, duration: 2.4, repeat: -1, yoyo: true, ease: "sine.inOut", paused: true }),
           gsap.to(coreLogos, { scale: 1.08, boxShadow: "0 12px 34px rgba(0,0,0,.35), 0 0 34px rgba(118,87,255,.48)", duration: 1.6, repeat: -1, yoyo: true, ease: "sine.inOut", paused: true }),
           gsap.to(syncDots, { scale: 1.75, autoAlpha: 0.38, duration: 0.85, repeat: -1, yoyo: true, ease: "sine.inOut", paused: true }),
-          gsap.to(icons, { y: -5, rotation: 2.5, duration: 1.9, repeat: -1, yoyo: true, ease: "sine.inOut", stagger: { each: 0.22, from: "random" }, paused: true }),
-          gsap.to(flowPaths, { strokeDashoffset: -120, duration: 3.2, repeat: -1, ease: "none", stagger: 0.07, paused: true }),
+          gsap.to(icons, { y: -3, duration: 2.2, repeat: -1, yoyo: true, ease: "sine.inOut", stagger: { each: 0.22, from: "random" }, paused: true }),
           gsap.to(auroras, { xPercent: (_, element) => Number(element.dataset.direction || 1) * 22, yPercent: (_, element) => Number(element.dataset.direction || 1) * -10, duration: 6.5, repeat: -1, yoyo: true, ease: "sine.inOut", stagger: 0.55, paused: true }),
         ];
+        if (flowPaths.length) {
+          ambientTweens.push(gsap.to(flowPaths, { strokeDashoffset: -120, duration: 3.2, repeat: -1, ease: "none", stagger: 0.07, paused: true }));
+        }
 
         scanLines.forEach((scanLine, index) => {
           ambientTweens.push(gsap.fromTo(scanLine, { xPercent: -30, autoAlpha: 0 }, { xPercent: 330, autoAlpha: 0.7, duration: 2.15, repeat: -1, repeatDelay: 2.2 + index * 0.24, delay: index * 0.34, ease: "power1.inOut", paused: true }));

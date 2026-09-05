@@ -425,7 +425,7 @@ function DayTradeModal({ day, accounts, accent, money, onClose }) {
   ];
 
   return <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#03050C]/80 backdrop-blur-sm sm:items-center sm:p-4" role="presentation" onMouseDown={onClose}>
-    <section role="dialog" aria-modal="true" aria-labelledby="day-trades-title" onMouseDown={(event) => event.stopPropagation()} className="flex max-h-[96dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl border border-[#6571CF]/25 bg-[#090E1C] shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
+    <section data-motion-item data-motion-surface role="dialog" aria-modal="true" aria-labelledby="day-trades-title" onMouseDown={(event) => event.stopPropagation()} className="flex max-h-[96dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl border border-[#6571CF]/25 bg-[#090E1C] shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
       <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[#6571CF]/15 px-4 py-4 sm:px-6">
         <div className="min-w-0"><div className="pe-eyebrow">Détail de la séance</div><h2 id="day-trades-title" className="mt-1 truncate text-lg font-semibold capitalize text-[#F3F5FA] sm:text-xl">{dateLabel}</h2><div className={`mt-1 font-numeric text-sm font-semibold ${day.pnl < 0 ? "text-[#F26A70]" : "text-[#85A9FF]"}`}>P&amp;L net · {money(day.pnl, { signDisplay: "always" })}</div></div>
         <button type="button" onClick={onClose} aria-label="Fermer le détail de la journée" className="pe-icon-button !h-9 !w-9"><X className="h-4 w-4" /></button>

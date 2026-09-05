@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X, PanelLeftClose, PanelLeftOpen, CalendarDays, CalendarRange } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { LogoMark } from "@/components/Logo";
@@ -11,6 +11,7 @@ import { BILLING_CONFIG, COMMERCIAL_PHASES } from "@/config/billing";
 import { evaluateRiskAlerts } from "@/lib/riskEngine";
 import { listenForAppDataChanges, notifyAppDataChanged } from "@/lib/appDataEvents";
 import { JOURNAL_LIST_PATH } from "@/lib/journalNavigation";
+import { MotionOverlay, MotionPopover, MotionScope, Presence } from "../components/motion/MotionSystem";
 
 const NAV_LINKS = [
   { to: "/app/dashboard", fr: "Aperçu", en: "Overview", icon: Home, testid: "nav-dashboard" },
@@ -40,6 +41,7 @@ export default function AppShell() {
   const { user, logout } = useAuth();
   const { t } = useI18n();
   const nav = useNavigate();
+  const location = useLocation();
   const links = useMemo(() => NAV_LINKS.map(link => ({ ...link, label: t(link.fr, link.en) })), [t]);
   const mobileLinks = useMemo(() => links.filter(link => MOBILE_NAV_ROUTES.has(link.to)), [links]);
   const [discipline, setDiscipline] = useState(0);
@@ -126,19 +128,21 @@ export default function AppShell() {
   return (
     <div className="pe-app-shell min-h-screen w-full overflow-x-hidden text-white">
       {/* Backdrop — mobile uniquement, sous la sidebar mais au-dessus du contenu */}
-      {mobileOpen && (
-        <div
+      <Presence show={mobileOpen}>
+        <MotionOverlay
           className="fixed inset-0 bg-black/60 z-40 md:hidden"
           onClick={closeMobile}
           data-testid="sidebar-backdrop"
         />
-      )}
-      {searchOpen && <div className="fixed inset-0 z-[70] bg-black/70 p-4 flex items-start justify-center pt-[12vh]" onClick={()=>setSearchOpen(false)}>
-        <div className="w-full max-w-lg card-elev p-4" onClick={e=>e.stopPropagation()}>
+      </Presence>
+      <Presence show={searchOpen}>
+      <MotionOverlay className="fixed inset-0 z-[70] bg-black/70 p-4 flex items-start justify-center pt-[12vh]" onClick={()=>setSearchOpen(false)}>
+        <MotionPopover className="w-full max-w-lg card-elev p-4" onClick={e=>e.stopPropagation()}>
           <input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Rechercher une page…" className="w-full bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3" />
           <div className="mt-3 space-y-1">{links.filter(l=>l.label.toLowerCase().includes(query.toLowerCase())).map(l=><button key={l.to} onClick={()=>{nav(l.to);setSearchOpen(false);setQuery("")}} className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5">{l.label}</button>)}{!links.some(l=>l.label.toLowerCase().includes(query.toLowerCase()))&&<div className="py-8 text-center text-xs text-[#7E8798]">Aucune page trouvée.</div>}</div>
-        </div>
-      </div>}
+        </MotionPopover>
+      </MotionOverlay>
+      </Presence>
 
       {/* SIDEBAR — fixed sur mobile ET desktop, largeur/translation gérées par breakpoint */}
       <aside
@@ -277,7 +281,9 @@ export default function AppShell() {
           onLogout={async()=>{ await logout(); window.location.href = "/"; }}
         />
         <main className="pe-app-content pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
-          <Outlet />
+          <MotionScope routeKey={location.pathname}>
+            <Outlet />
+          </MotionScope>
         </main>
       </div>
 
@@ -371,7 +377,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
       <div className="relative"><button onClick={onNotifications} aria-label="Ouvrir les notifications" aria-expanded={notificationsOpen} aria-controls="app-notifications-menu" className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70" data-testid="top-notifs">
         <Bell className="w-4 h-4 text-[#9CA3AF]" />
         {!!notifications.length && <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-[#FF4FD8] rounded-full" />}
-      </button>{notificationsOpen && <div id="app-notifications-menu" className="fixed left-3 right-3 top-[68px] z-50 w-auto card-elev p-4 md:absolute md:left-auto md:right-0 md:top-11 md:w-72"><div className="text-sm font-semibold">Notifications</div>{notifications.length?<div className="mt-3 space-y-2">{notifications.map(n=><button key={n.to+n.text} onClick={()=>{onNavigate(n.to);onNotifications()}} className="w-full rounded-xl border border-white/[0.06] p-3 text-left text-xs text-[#B5BBC9] hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70">{n.text}</button>)}</div>:<div className="text-xs text-[#9CA3AF] mt-3">Tout est à jour. Aucune alerte active.</div>}</div>}</div>
+      </button><Presence show={notificationsOpen}><MotionPopover id="app-notifications-menu" className="fixed left-3 right-3 top-[68px] z-50 w-auto card-elev p-4 md:absolute md:left-auto md:right-0 md:top-11 md:w-72"><div className="text-sm font-semibold">Notifications</div>{notifications.length?<div className="mt-3 space-y-2">{notifications.map(n=><button key={n.to+n.text} onClick={()=>{onNavigate(n.to);onNotifications()}} className="w-full rounded-xl border border-white/[0.06] p-3 text-left text-xs text-[#B5BBC9] hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70">{n.text}</button>)}</div>:<div className="text-xs text-[#9CA3AF] mt-3">Tout est à jour. Aucune alerte active.</div>}</MotionPopover></Presence></div>
 
       <div ref={profileRef} className="relative shrink-0">
       <button onClick={()=>setProfileOpen(v=>!v)} aria-expanded={profileOpen} aria-controls="app-profile-menu" aria-label="Ouvrir le menu du profil" className="flex items-center gap-1.5 rounded-xl border border-[#6571CF]/20 bg-[#0C1122] px-1.5 py-1 transition hover:border-[#8075ED]/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:gap-2 md:px-2 md:py-1.5">
@@ -386,7 +392,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
         </span>
         <span className={`text-[#9CA3AF] text-xs transition-transform ${profileOpen ? "rotate-180" : ""}`}>⌄</span>
       </button>
-      {profileOpen && <div id="app-profile-menu" className="absolute right-0 top-11 z-50 w-[min(16rem,calc(100vw-1.5rem))] card-elev p-2 shadow-2xl md:top-12">
+      <Presence show={profileOpen}><MotionPopover id="app-profile-menu" className="absolute right-0 top-11 z-50 w-[min(16rem,calc(100vw-1.5rem))] card-elev p-2 shadow-2xl md:top-12">
         <div className="px-3 py-3 border-b border-white/5">
           <div className="text-sm font-semibold truncate">{user?.name || "Utilisateur"}</div>
           <div className="text-xs text-[#9CA3AF] truncate mt-0.5">{user?.email}</div>
@@ -397,7 +403,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
         <button onClick={()=>{onNavigate("/contact");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><Bell className="w-4 h-4"/>Contacter le support</button>
         <div className="mt-1 flex items-center justify-between border-t border-white/5 px-3 py-2.5"><span className="text-sm text-[#B5BBC9]">Langue</span><LanguageSwitcher/></div>
         <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 border-t border-white/5 mt-1 rounded-lg text-sm text-[#FF7A7A] hover:bg-[#F26A70]/10"><LogOut className="w-4 h-4"/>Se déconnecter</button>
-      </div>}
+      </MotionPopover></Presence>
       </div>
     </header>
   );

@@ -25,6 +25,7 @@ import { Logo, LogoMark } from "@/components/Logo";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/context/I18nContext";
+import { MotionOverlay, MotionPopover, Presence } from "./motion/MotionSystem";
 
 const itemClass = "rounded-xl px-4 py-3 text-[#D4D7DF] transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60";
 
@@ -109,10 +110,10 @@ function LanguageMenu({ language, setLanguage, t, onSelect }) {
       <span>{language.toUpperCase()}</span>
       <ChevronDown className={`h-3.5 w-3.5 text-[#7F8797] transition ${open ? "rotate-180" : ""}`} />
     </button>
-    {open && <div role="menu" className="absolute right-0 top-full z-[80] mt-2 w-44 rounded-2xl border border-white/10 bg-[#0A0B12]/[0.98] p-2 shadow-[0_24px_70px_rgba(0,0,0,.55)] backdrop-blur-xl">
+    <Presence show={open}><MotionPopover role="menu" className="absolute right-0 top-full z-[80] mt-2 w-44 rounded-2xl border border-white/10 bg-[#0A0B12]/[0.98] p-2 shadow-[0_24px_70px_rgba(0,0,0,.55)] backdrop-blur-xl">
       <button role="menuitem" type="button" onClick={() => select("fr")} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition hover:bg-white/[0.06] ${language === "fr" ? "bg-white/[0.05] text-white" : "text-[#B5BBC9]"}`}><CountryFlag language="fr" />{t("Français", "French")}</button>
       <button role="menuitem" type="button" onClick={() => select("en")} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition hover:bg-white/[0.06] ${language === "en" ? "bg-white/[0.05] text-white" : "text-[#B5BBC9]"}`}><CountryFlag language="en" />English</button>
-    </div>}
+    </MotionPopover></Presence>
   </div>;
 }
 
@@ -121,7 +122,9 @@ function MegaMenu({ id, label, open, onToggle, children, widthClass = "w-[720px]
     <button type="button" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined} onClick={onToggle} className="inline-flex items-center gap-1.5 py-3 text-sm text-[#B5BBC9] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/60">
       <span>{label}</span><ChevronDown className={`h-3.5 w-3.5 transition ${open ? "rotate-180 text-white" : ""}`} />
     </button>
-    {open && <div id={id} role="menu" className={`absolute left-1/2 top-full z-[70] mt-3 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#090A10]/[0.98] p-3 shadow-[0_28px_80px_rgba(0,0,0,.65)] backdrop-blur-2xl ${widthClass}`}>{children}</div>}
+    <div className={`absolute left-1/2 top-full z-[70] mt-3 -translate-x-1/2 ${widthClass}`}>
+      <Presence show={open}><MotionPopover id={id} role="menu" className="w-full rounded-2xl border border-white/10 bg-[#090A10]/[0.98] p-3 shadow-[0_28px_80px_rgba(0,0,0,.65)] backdrop-blur-2xl">{children}</MotionPopover></Presence>
+    </div>
   </div>;
 }
 
@@ -232,7 +235,7 @@ function ProfileMenu({ user, logout, t }) {
       <ChevronDown aria-hidden="true" className={`hidden h-4 w-4 text-[#8991A2] transition md:block ${open ? "rotate-180 text-white" : "group-hover:text-white"}`} />
     </button>
 
-    {open && <div
+    <Presence show={open}><MotionPopover
       id="public-profile-menu"
       ref={menuRef}
       role="menu"
@@ -256,7 +259,7 @@ function ProfileMenu({ user, logout, t }) {
         <LogOut aria-hidden="true" className="h-4 w-4" />
         {signingOut ? t("Déconnexion...", "Signing out...") : t("Déconnexion", "Sign out")}
       </button>
-    </div>}
+    </MotionPopover></Presence>
   </div>;
 }
 
@@ -394,9 +397,9 @@ export default function PublicHeader({ variant = "default" }) {
       </div>
     </header>
 
-    {mobileOpen && <div className={`fixed inset-0 z-40 ${landing ? "top-[95px] md:top-[106px] min-[1120px]:hidden" : "top-[66px] md:hidden"}`}>
+    <Presence show={mobileOpen}><MotionOverlay className={`fixed inset-0 z-40 ${landing ? "top-[95px] md:top-[106px] min-[1120px]:hidden" : "top-[66px] md:hidden"}`}>
       <button type="button" aria-label={t("Fermer le menu", "Close menu")} onClick={closeMenu} className="absolute inset-0 h-full w-full bg-black/75 backdrop-blur-sm" />
-      <div id="public-mobile-menu" ref={menuPanelRef} role="dialog" aria-modal="true" aria-label={t("Navigation mobile", "Mobile navigation")} className="relative mx-3 mt-3 max-h-[calc(100dvh-90px)] overflow-y-auto rounded-2xl border border-white/10 bg-[#0A0B12]/95 p-3 shadow-2xl sm:mx-6 sm:ml-auto sm:max-w-sm">
+      <MotionPopover id="public-mobile-menu" ref={menuPanelRef} role="dialog" aria-modal="true" aria-label={t("Navigation mobile", "Mobile navigation")} className="relative mx-3 mt-3 max-h-[calc(100dvh-90px)] overflow-y-auto rounded-2xl border border-white/10 bg-[#0A0B12]/95 p-3 shadow-2xl sm:mx-6 sm:ml-auto sm:max-w-sm">
         <nav className="flex flex-col gap-1 text-sm">
           {!loading && !authenticated && <Link ref={firstItemRef} to="/register" onClick={closeMenu} className="btn-primary mb-2 inline-flex h-12 items-center justify-center whitespace-nowrap !rounded-xl !px-4">{t("Accès gratuit", "Free access")}</Link>}
           <Link ref={loading || authenticated ? firstItemRef : undefined} to="/" onClick={closeMenu} className={itemClass}>{t("Accueil", "Home")}</Link>
@@ -415,7 +418,7 @@ export default function PublicHeader({ variant = "default" }) {
           <div className="mt-2 flex items-center justify-between border-t border-white/10 px-4 pt-3"><span className="text-xs text-[#8E96A7]">{t("Langue", "Language")}</span><LanguageMenu language={language} setLanguage={setLanguage} t={t} onSelect={closeMenu} /></div>
           <span className="sr-only" aria-live="polite">{language === "fr" ? "Menu en français" : "Menu in English"}</span>
         </nav>
-      </div>
-    </div>}
+      </MotionPopover>
+    </MotionOverlay></Presence>
   </>;
 }

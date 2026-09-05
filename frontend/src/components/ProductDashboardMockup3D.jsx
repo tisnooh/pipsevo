@@ -33,22 +33,22 @@ export default function ProductDashboardMockup3D({ variant = "hero", activeSecti
       if (!reducedMotion) {
         gsap.fromTo(
           frame,
-          { autoAlpha: 0, x: isPrimaryHeroMockup ? 30 : 44, y: isPrimaryHeroMockup ? 16 : 24, scale: isPrimaryHeroMockup ? 1 : 0.965 },
-          { autoAlpha: 1, x: 0, y: 0, scale: 1, duration: 1.15, ease: "power3.out" },
+          { autoAlpha: 0, x: isPrimaryHeroMockup ? 20 : 28, y: isPrimaryHeroMockup ? 12 : 18, scale: isPrimaryHeroMockup ? 1 : 0.985 },
+          { autoAlpha: 1, x: 0, y: 0, scale: 1, duration: 0.52, ease: "power3.out" },
         );
       }
 
-      // Les chandeliers restent animes meme si le systeme reduit les animations.
-      // L'amplitude reste assez visible pour que le mouvement ne ressemble jamais
-      // a une image statique, tout en restant plus doux dans ce mode.
-      const motionScale = reducedMotion ? 0.78 : 1;
+      if (reducedMotion) {
+        gsap.set([frame, ...root.querySelectorAll(".product-mockup-candle"), root.querySelector(".product-mockup-floor-glow")], { clearProps: "transform,opacity,visibility" });
+        return;
+      }
+
       root.querySelectorAll(".product-mockup-candle").forEach((candle, index) => {
         const verticalDirection = index % 2 === 0 ? -1 : 1;
         const horizontalDirection = index % 3 === 0 ? 1 : -1;
         ambientTweens.push(gsap.to(candle, {
-          x: horizontalDirection * (12 + (index % 3) * 6) * motionScale,
-          y: verticalDirection * (34 + (index % 4) * 8) * motionScale,
-          rotation: verticalDirection * (1.8 + (index % 4) * 0.55) * motionScale,
+          x: horizontalDirection * (8 + (index % 3) * 4),
+          y: verticalDirection * (22 + (index % 4) * 6),
           duration: 2.05 + index * 0.18,
           delay: index * 0.11,
           repeat: -1,
@@ -59,12 +59,14 @@ export default function ProductDashboardMockup3D({ variant = "hero", activeSecti
       ambientTweens.push(gsap.to(root.querySelector(".product-mockup-floor-glow"), {
         opacity: isPrimaryHeroMockup ? 0.34 : 0.86,
         scaleX: isPrimaryHeroMockup ? 1.04 : 1.08,
-        duration: reducedMotion ? 5.5 : 3.8,
+        duration: 3.8,
         repeat: -1,
         yoyo: true,
         ease: "sine.inOut",
       }));
     }, root);
+
+    if (reducedMotion) return () => context.revert();
 
     const syncAmbientMotion = (isVisible) => ambientTweens.forEach((tween) => tween.paused(!isVisible || document.hidden));
     const observer = new IntersectionObserver(([entry]) => syncAmbientMotion(entry.isIntersecting), { rootMargin: "140px" });
@@ -80,21 +82,17 @@ export default function ProductDashboardMockup3D({ variant = "hero", activeSecti
 
     if (!desktopPointer || reducedMotion || variant !== "hero") return cleanupMotion;
 
-    const rotateX = gsap.quickTo(stage, "rotationX", { duration: 0.85, ease: "power3.out" });
-    const rotateY = gsap.quickTo(stage, "rotationY", { duration: 0.85, ease: "power3.out" });
-    const moveX = gsap.quickTo(stage, "x", { duration: 0.85, ease: "power3.out" });
-    const moveY = gsap.quickTo(stage, "y", { duration: 0.85, ease: "power3.out" });
+    const moveX = gsap.quickTo(stage, "x", { duration: 0.28, ease: "power3.out" });
+    const moveY = gsap.quickTo(stage, "y", { duration: 0.28, ease: "power3.out" });
 
     const handlePointerMove = (event) => {
       const bounds = root.getBoundingClientRect();
       const x = (event.clientX - bounds.left) / bounds.width - 0.5;
       const y = (event.clientY - bounds.top) / bounds.height - 0.5;
-      rotateX(-y * 1.2);
-      rotateY(x * 1.6);
-      moveX(x * 10);
-      moveY(y * 8);
+      moveX(x * 5);
+      moveY(y * 4);
     };
-    const reset = () => { rotateX(0); rotateY(0); moveX(0); moveY(0); };
+    const reset = () => { moveX(0); moveY(0); };
     root.addEventListener("pointermove", handlePointerMove, { passive: true });
     root.addEventListener("pointerleave", reset);
     return () => {

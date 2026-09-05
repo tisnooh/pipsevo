@@ -19,7 +19,7 @@ export function DashboardKpiCard({ label, value, sub, sparkColor = "green", icon
   const color = colors[sparkColor];
   const Wrapper = preview ? "div" : motion.div;
   const motionProps = preview ? {} : { initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0 }, whileHover: { y: -3 }, transition: { duration: 0.25 } };
-  return <Wrapper {...motionProps} className={`card-elev relative overflow-hidden group hover:border-white/15 ${preview ? "h-[116px] p-3" : "h-[160px] p-4 sm:h-[180px] sm:p-5"}`} data-testid={testid}>
+  return <Wrapper {...motionProps} className={`card-elev relative overflow-hidden group hover:border-white/15 ${preview ? "h-[116px] p-3" : "h-[160px] p-4 sm:h-[180px] sm:p-5"}`} data-motion-skip={!preview ? "true" : undefined} data-testid={testid}>
     <div className="absolute -right-16 -top-16 h-36 w-36 rounded-full opacity-10 blur-3xl transition group-hover:opacity-20" style={{ background: color }} />
     <div className="flex items-center justify-between"><div className={preview ? "text-[11px] text-[#9CA3AF]" : "text-xs text-[#9CA3AF] sm:text-sm"}>{label}</div>{Icon && <Icon className={preview ? "h-3.5 w-3.5" : "h-4 w-4"} style={{ color }} />}</div>
     <div className={`${preview ? "mt-2 text-[23px]" : "mt-3 text-[26px] sm:text-[34px]"} font-numeric font-bold leading-none`} style={{ color: sparkColor === "red" || sparkColor === "green" ? color : "white" }}>{value}</div>

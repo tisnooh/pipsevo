@@ -26,7 +26,7 @@ export function FeatureGate({ feature, children, label = "cette fonctionnalité"
       <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-[#7C4DFF]/30 bg-[#090B13]/95 px-2 py-1 text-[9px] text-[#C8AEFF]"><Lock className="h-3 w-3"/>Bientôt disponible</span>
     </button>
     {open && <div className="fixed inset-0 z-[120] grid place-items-center bg-black/75 p-4 backdrop-blur-sm" onMouseDown={(e)=>e.target===e.currentTarget&&setOpen(false)}>
-      <div role="dialog" aria-modal="true" aria-labelledby="locked-feature-title" className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#0B0E18] p-6 shadow-2xl sm:p-7">
+      <div data-motion-item data-motion-surface role="dialog" aria-modal="true" aria-labelledby="locked-feature-title" className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#0B0E18] p-6 shadow-2xl sm:p-7">
         <button ref={closeRef} type="button" onClick={()=>setOpen(false)} aria-label="Fermer" className="absolute right-4 top-4 rounded-lg p-2 text-[#8B93A3] hover:bg-white/5 hover:text-white focus-visible:ring-2 focus-visible:ring-[#7C4DFF]"><X className="h-4 w-4"/></button>
         <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#7C4DFF]/15 text-[#C8AEFF]"><Lock className="h-5 w-5"/></span>
         <h2 id="locked-feature-title" className="mt-5 pr-8 text-xl font-bold">Débloque {label} avec PipsEvo Pro</h2>

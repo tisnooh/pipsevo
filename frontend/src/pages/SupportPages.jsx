@@ -11,6 +11,7 @@ import { captureCommercialEvent } from "@/lib/commercialAnalytics";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/context/I18nContext";
 import { getGuideBySlug, guides } from "@/content/guides";
+import { FadeIn, MotionScope } from "../components/motion/MotionSystem";
 
 const faqs = [
   { category: "start", questionFr: "Comment ajouter mon premier trade ?", questionEn: "How do I add my first trade?", answerFr: "Depuis le Journal, clique sur « Nouveau trade », choisis ton compte puis renseigne le résultat, le contexte et le respect de ton plan. Tu peux compléter les détails plus tard.", answerEn: "From the Journal, select “New trade”, choose your account, then enter the result, context, and plan compliance. You can complete the details later." },
@@ -28,15 +29,15 @@ const faqs = [
 function PublicLayout({ eyebrow = "PipsEvo", title, subtitle, children, wide = false }) {
   return <div className="min-h-screen overflow-hidden bg-[#050505] text-white">
     <PublicHeader variant="landing" />
-    <main id="main-content" className={`relative mx-auto px-5 pb-24 pt-40 sm:px-6 sm:pt-44 lg:px-10 lg:pb-32 lg:pt-48 ${wide ? "max-w-[1280px]" : "max-w-[1120px]"}`}>
+    <MotionScope as="main" routeKey={title} id="main-content" className={`relative mx-auto px-5 pb-24 pt-40 sm:px-6 sm:pt-44 lg:px-10 lg:pb-32 lg:pt-48 ${wide ? "max-w-[1280px]" : "max-w-[1120px]"}`}>
       <div className="pointer-events-none absolute left-1/2 top-24 h-72 w-[720px] max-w-[90vw] -translate-x-1/2 rounded-full bg-[#7657FF]/[0.10] blur-[110px]" />
-      <div className="relative mb-12 text-center sm:mb-14">
+      <FadeIn className="relative mb-12 text-center sm:mb-14">
         <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[#7657FF]/25 bg-[#7657FF]/[0.07] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.18em] text-[#B29FFF]"><Sparkles className="h-3 w-3" />{eyebrow}</div>
         <h1 className="pe-marketing-title mx-auto mt-6 text-[#F2F3F6]">{title}</h1>
         <p className="pe-marketing-copy mx-auto mt-4">{subtitle}</p>
-      </div>
+      </FadeIn>
       <div className="relative">{children}</div>
-    </main>
+    </MotionScope>
     <PublicFooter />
   </div>;
 }

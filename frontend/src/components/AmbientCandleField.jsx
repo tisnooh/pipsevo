@@ -44,6 +44,7 @@ export default function AmbientCandleField() {
       {
         reducedMotion: "(prefers-reduced-motion: reduce)",
         mobile: "(max-width: 767px)",
+        desktop: "(min-width: 768px)",
       },
       ({ conditions }) => {
         const candles = gsap.utils.toArray("[data-ambient-candle]", field)

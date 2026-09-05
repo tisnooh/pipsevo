@@ -71,7 +71,7 @@ export default function TradeCsvImportModal({ accounts, existingTrades, onClose,
   };
 
   return <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget && !importing) onClose(); }}>
-    <section role="dialog" aria-modal="true" aria-labelledby="csv-import-title" className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#090C15] shadow-2xl">
+    <section data-motion-item data-motion-surface role="dialog" aria-modal="true" aria-labelledby="csv-import-title" className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#090C15] shadow-2xl">
       <header className="flex items-start justify-between border-b border-white/[0.07] p-5 sm:p-6">
         <div><h2 id="csv-import-title" className="text-xl font-bold">Importer des trades</h2><p className="mt-1 text-xs text-[#8B93A3]">CSV, TXT tabulé ou rapport HTML MetaTrader, avec validation avant toute écriture.</p></div>
         <button type="button" onClick={onClose} disabled={importing} aria-label="Fermer" className="grid h-9 w-9 place-items-center rounded-xl text-[#8B93A3] hover:bg-white/5 hover:text-white disabled:opacity-40"><X className="h-4 w-4"/></button>

@@ -125,7 +125,7 @@ export default function Payouts() {
 
       {open && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={()=>setOpen(false)}>
-          <form onClick={(e)=>e.stopPropagation()} onSubmit={create} className="pe-card pe-card-pad w-full max-w-md space-y-4 glow-green max-h-[90vh] overflow-y-auto">
+          <form data-motion-item data-motion-surface onClick={(e)=>e.stopPropagation()} onSubmit={create} className="pe-card pe-card-pad w-full max-w-md space-y-4 glow-green max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between"><h2 className="pe-section-title">Enregistrer un payout</h2><button type="button" onClick={()=>setOpen(false)} aria-label="Fermer" className="pe-icon-button"><X className="w-4 h-4"/></button></div>
             <div>
               <label className="pe-field-label">Compte</label>

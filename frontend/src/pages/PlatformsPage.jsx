@@ -8,6 +8,7 @@ import { useI18n } from "@/context/I18nContext";
 import { INTEGRATIONS } from "@/config/integrations";
 import { IMPORT_FORMATS_IN_VALIDATION, IMPORT_PLATFORMS } from "@/config/importPlatforms";
 import { filterPropFirms, PROP_FIRMS, PROP_FIRM_PLATFORM_FILTERS, PROP_FIRM_PLATFORM_LABELS } from "@/config/propFirms";
+import { FadeIn, MotionScope } from "../components/motion/MotionSystem";
 
 const methodIcons = {
   manual: WalletCards,
@@ -27,7 +28,7 @@ function StatusBadge({ status, children }) {
 
 function FirmCard({ firm, tr }) {
   const initials = firm.name.split(/\s+/).map((word) => word[0]).join("").slice(0, 3).toUpperCase();
-  return <article className="group relative min-h-[280px] overflow-hidden rounded-[22px] border border-white/[0.075] bg-[#090B11] p-5 transition duration-300 hover:-translate-y-1 hover:border-[#7657FF]/35 sm:p-6">
+  return <article data-motion-item data-motion-surface className="group relative min-h-[280px] overflow-hidden rounded-[22px] border border-white/[0.075] bg-[#090B11] p-5 transition duration-300 hover:-translate-y-1 hover:border-[#7657FF]/35 sm:p-6">
     <span className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[#7657FF]/0 blur-[55px] transition duration-300 group-hover:bg-[#7657FF]/[0.13]" />
     <div className="relative flex items-start justify-between gap-4">
       <div className="flex h-14 min-w-16 items-center rounded-2xl border border-white/[0.07] bg-white/[0.025] px-3">
@@ -51,7 +52,7 @@ function FirmCard({ firm, tr }) {
 }
 
 function ImportPlatformCard({ platform, tr }) {
-  return <article className="group relative overflow-hidden rounded-[22px] border border-white/[0.075] bg-[#090B11] p-5 transition duration-300 hover:-translate-y-1 hover:border-[#46C99A]/30 sm:p-6">
+  return <article data-motion-item data-motion-surface className="group relative overflow-hidden rounded-[22px] border border-white/[0.075] bg-[#090B11] p-5 transition duration-300 hover:-translate-y-1 hover:border-[#46C99A]/30 sm:p-6">
     <span className="pointer-events-none absolute -right-14 -top-14 h-36 w-36 rounded-full bg-[#46C99A]/0 blur-[55px] transition duration-300 group-hover:bg-[#46C99A]/[0.10]" />
     <div className="relative flex min-h-12 items-start justify-between gap-4">
       <div className={`flex h-12 min-w-16 max-w-[150px] items-center rounded-xl border border-white/[0.07] px-3 ${platform.logoSurface || "bg-white/[0.035]"}`}>
@@ -72,7 +73,7 @@ function ImportPlatformCard({ platform, tr }) {
 }
 
 function ValidationPlatformCard({ platform, tr }) {
-  return <article className="flex items-start gap-4 rounded-2xl border border-white/[0.07] bg-[#090B11] p-4">
+  return <article data-motion-item className="flex items-start gap-4 rounded-2xl border border-white/[0.07] bg-[#090B11] p-4">
     <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.035] p-2">
       <img src={platform.logo} alt={`${platform.name} logo`} className="max-h-full max-w-full object-contain" />
     </div>
@@ -98,10 +99,10 @@ export default function PlatformsPage() {
 
   return <div className="min-h-screen overflow-hidden bg-[#050505] text-white">
     <PublicHeader variant="landing" />
-    <main id="main-content">
+    <MotionScope as="main" routeKey={`platforms-${language}`} id="main-content">
       <section className="relative border-b border-white/[0.06] px-5 pb-20 pt-40 sm:px-6 sm:pb-24 sm:pt-44 lg:px-10 lg:pb-28 lg:pt-48">
         <div className="pointer-events-none absolute left-1/2 top-0 h-[440px] w-[860px] -translate-x-1/2 rounded-full bg-[#5E42D5]/[0.10] blur-[120px]" />
-        <div className="relative mx-auto max-w-[1180px] text-center">
+        <FadeIn className="relative mx-auto max-w-[1180px] text-center">
           <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[#46C99A]/20 bg-[#46C99A]/[0.045] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[.17em] text-[#65D8AE]"><span className="h-1.5 w-1.5 rounded-full bg-[#46C99A]" />{tr("Compatibilité PipsEvo", "PipsEvo compatibility")}</div>
           <h1 className="mx-auto mt-7 max-w-4xl text-balance text-[40px] font-semibold leading-[1.02] tracking-[-0.045em] text-[#F3F4F6] sm:text-5xl lg:text-[68px]">{tr("Toutes tes plateformes. Un seul suivi cohérent.", "All your platforms. One consistent workflow.")}</h1>
           <p className="mx-auto mt-6 max-w-2xl text-[15px] leading-7 text-[#949CAB] sm:text-base">{tr("Ajoute tes comptes financés, structure tes trades et suis les limites de chaque prop firm depuis PipsEvo, sans mélanger compatibilité de suivi et connexion automatique.", "Add your funded accounts, structure your trades, and track each prop firm's limits from PipsEvo—without confusing tracking compatibility with automatic connections.")}</p>
@@ -114,12 +115,12 @@ export default function PlatformsPage() {
             <div className="min-w-0 border-x border-white/[0.08] px-2"><strong className="block text-2xl font-semibold text-[#46C99A]">{IMPORT_PLATFORMS.length}</strong><span className="mt-1 block text-[9px] uppercase leading-4 tracking-[.08em] text-[#8A92A1] sm:tracking-[.12em]">{tr("Imports testés", "Tested imports")}</span></div>
             <div className="min-w-0 px-2"><strong className="block text-2xl font-semibold text-[#A994FF]">{coveredMarkets}</strong><span className="mt-1 block text-[9px] uppercase leading-4 tracking-[.08em] text-[#8A92A1] sm:tracking-[.12em]">{tr("Marchés couverts", "Markets covered")}</span></div>
           </div>
-        </div>
+        </FadeIn>
       </section>
 
       <section id="imports" className="scroll-mt-24 px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28">
         <div className="mx-auto max-w-[1180px]">
-          <div className="grid gap-8 lg:grid-cols-[1fr_.7fr] lg:items-end">
+          <div data-motion-item className="grid gap-8 lg:grid-cols-[1fr_.7fr] lg:items-end">
             <div className="max-w-3xl">
               <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[.21em] text-[#65D8AE]"><span className="h-px w-7 bg-[#46C99A]" />{tr("Import de trades", "Trade import")}</div>
               <h2 className="mt-5 text-balance text-3xl font-semibold tracking-[-0.035em] text-[#F1F2F5] sm:text-4xl lg:text-5xl">{tr("Importe ton historique depuis les plateformes déjà prises en charge.", "Import your history from supported platforms.")}</h2>
@@ -147,7 +148,7 @@ export default function PlatformsPage() {
 
       <section id="compatibility" className="scroll-mt-24 border-t border-white/[0.06] bg-[#07080C] px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28">
         <div className="mx-auto max-w-[1180px]">
-          <div className="max-w-2xl">
+          <div data-motion-item className="max-w-2xl">
             <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[.21em] text-[#9D87FF]"><span className="h-px w-7 bg-[#7657FF]" />Prop firms</div>
             <h2 className="mt-5 text-balance text-3xl font-semibold tracking-[-0.035em] text-[#F1F2F5] sm:text-4xl lg:text-5xl">{tr("Les comptes que tu peux déjà piloter dans PipsEvo.", "The accounts you can already manage in PipsEvo.")}</h2>
             <p className="mt-5 text-sm leading-7 text-[#8D95A4] sm:text-[15px]">{tr("La compatibilité signifie que tu peux créer le compte, renseigner ses règles et centraliser son suivi. Elle ne signifie pas qu’une synchronisation directe est active.", "Compatibility means you can create the account, enter its rules, and centralize its tracking. It does not mean a direct sync is active.")}</p>
@@ -167,7 +168,7 @@ export default function PlatformsPage() {
 
       <section className="border-y border-white/[0.06] px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28">
         <div className="mx-auto max-w-[1180px]">
-          <div className="grid gap-10 lg:grid-cols-[.78fr_1.22fr] lg:items-end">
+          <div data-motion-item className="grid gap-10 lg:grid-cols-[.78fr_1.22fr] lg:items-end">
             <div>
               <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[.21em] text-[#9D87FF]"><span className="h-px w-7 bg-[#7657FF]" />{tr("Entrées de données", "Data input")}</div>
               <h2 className="mt-5 text-3xl font-semibold tracking-[-0.035em] text-[#F1F2F5] sm:text-4xl">{tr("Ce qui fonctionne aujourd’hui. Ce qui arrive ensuite.", "What works today. What comes next.")}</h2>
@@ -196,7 +197,7 @@ export default function PlatformsPage() {
       </section>
 
       <section className="px-5 py-20 sm:px-6 sm:py-24 lg:px-10 lg:py-28">
-        <div className="mx-auto grid max-w-[1180px] overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#090B11] lg:grid-cols-[.85fr_1.15fr]">
+        <div data-motion-item data-motion-surface className="mx-auto grid max-w-[1180px] overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#090B11] lg:grid-cols-[.85fr_1.15fr]">
           <div className="p-7 sm:p-10 lg:p-14">
             <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[.21em] text-[#9D87FF]"><span className="h-px w-7 bg-[#7657FF]" />{tr("Processus", "Workflow")}</div>
             <h2 className="mt-5 text-3xl font-semibold tracking-[-0.035em] text-[#F1F2F5] sm:text-4xl">{tr("Ta plateforme exécute. PipsEvo donne du sens.", "Your platform executes. PipsEvo makes sense of it.")}</h2>
@@ -213,14 +214,14 @@ export default function PlatformsPage() {
       </section>
 
       <section className="px-5 pb-24 sm:px-6 sm:pb-28 lg:px-10 lg:pb-32">
-        <div className="relative mx-auto max-w-[1180px] overflow-hidden rounded-[28px] border border-[#7657FF]/25 bg-[#0B0B14] px-6 py-14 text-center sm:px-10 sm:py-16">
+        <div data-motion-item data-motion-surface className="relative mx-auto max-w-[1180px] overflow-hidden rounded-[28px] border border-[#7657FF]/25 bg-[#0B0B14] px-6 py-14 text-center sm:px-10 sm:py-16">
           <span className="pointer-events-none absolute left-1/2 top-full h-52 w-[620px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7657FF]/20 blur-[100px]" />
           <h2 className="relative text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">{tr("Centralise ton premier compte financé.", "Centralize your first funded account.")}</h2>
           <p className="relative mx-auto mt-4 max-w-xl text-sm leading-6 text-[#929AA9]">{tr("La bêta est gratuite et ne demande aucune carte bancaire.", "The beta is free and requires no credit card.")}</p>
           <Link to={user ? "/app/accounts" : "/register"} className="btn-primary relative mt-7 inline-flex items-center gap-2 !rounded-xl">{user ? tr("Ouvrir mes comptes", "Open my accounts") : tr("Créer mon espace", "Create my workspace")}<ArrowRight className="h-4 w-4" /></Link>
         </div>
       </section>
-    </main>
+    </MotionScope>
 
     <PublicFooter />
   </div>;
