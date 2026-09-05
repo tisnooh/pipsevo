@@ -17,9 +17,9 @@ describe("site motion preference", () => {
     jest.restoreAllMocks();
   });
 
-  test("respects the device by default and only enables full motion after an explicit choice", () => {
-    expect(getMotionPreference()).toBe("system");
-    expect(isMotionReduced()).toBe(true);
+  test("enables animations by default even when the device requests reduced motion", () => {
+    expect(getMotionPreference()).toBe("full");
+    expect(isMotionReduced()).toBe(false);
     setMotionPreference("full");
     expect(isMotionReduced()).toBe(false);
     expect(localStorage.getItem(MOTION_STORAGE_KEY)).toBe("full");
@@ -37,6 +37,7 @@ describe("site motion preference", () => {
   });
 
   test("updates mounted consumers and CSS when the device setting changes", () => {
+    setMotionPreference("system");
     const container = document.createElement("div");
     const root = createRoot(container);
     function Probe() { return <span>{usePipsReducedMotion() ? "reduced" : "full"}</span>; }
@@ -52,6 +53,7 @@ describe("site motion preference", () => {
   });
 
   test("updates mounted consumers when another tab changes the preference", () => {
+    setMotionPreference("reduced");
     const container = document.createElement("div");
     const root = createRoot(container);
     function Probe() { return <span>{usePipsReducedMotion() ? "reduced" : "full"}</span>; }

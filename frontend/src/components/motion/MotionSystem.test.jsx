@@ -1,6 +1,7 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MotionScope } from "./MotionSystem";
+import { MOTION_STORAGE_KEY } from "../../lib/motionPreference";
 
 describe("MotionScope", () => {
   let container;
@@ -8,6 +9,7 @@ describe("MotionScope", () => {
   let intersectionCallback;
 
   beforeEach(() => {
+    localStorage.removeItem(MOTION_STORAGE_KEY);
     global.IS_REACT_ACT_ENVIRONMENT = true;
     window.matchMedia = jest.fn().mockReturnValue({
       matches: false,
@@ -28,6 +30,7 @@ describe("MotionScope", () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    localStorage.removeItem(MOTION_STORAGE_KEY);
     jest.restoreAllMocks();
   });
 
@@ -56,6 +59,7 @@ describe("MotionScope", () => {
   });
 
   test("shows content immediately when reduced motion is requested", () => {
+    localStorage.setItem(MOTION_STORAGE_KEY, "reduced");
     window.matchMedia.mockReturnValue({
       matches: true,
       addEventListener: jest.fn(),

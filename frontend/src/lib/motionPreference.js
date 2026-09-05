@@ -7,8 +7,8 @@ const validPreferences = new Set(["system", "full", "reduced"]);
 export function getMotionPreference() {
   try {
     const value = window.localStorage.getItem(MOTION_STORAGE_KEY);
-    return validPreferences.has(value) ? value : "system";
-  } catch { return "system"; }
+    return validPreferences.has(value) ? value : "full";
+  } catch { return "full"; }
 }
 
 export function isMotionReduced() {
@@ -47,5 +47,5 @@ function subscribe(callback) {
   };
 }
 
-export const useMotionPreference = () => useSyncExternalStore(subscribe, getMotionPreference, () => "system");
-export const usePipsReducedMotion = () => useSyncExternalStore(subscribe, isMotionReduced, () => true);
+export const useMotionPreference = () => useSyncExternalStore(subscribe, getMotionPreference, () => "full");
+export const usePipsReducedMotion = () => useSyncExternalStore(subscribe, isMotionReduced, () => false);
