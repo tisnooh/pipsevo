@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Cookie, X } from "lucide-react";
 import { useI18n } from "@/context/I18nContext";
+import { canLoadAnalytics } from "@/lib/authUrlPrivacy";
 
 const CONSENT_KEY = "pipsevo_analytics_consent";
 
 function loadAnalytics() {
+  if (!canLoadAnalytics(window.location)) return;
   if (document.getElementById("pipsevo-posthog") || window.posthog?.__SV) return;
   const script = document.createElement("script");
   script.id = "pipsevo-posthog";
@@ -16,13 +18,14 @@ function loadAnalytics() {
 
 export default function CookieConsent() {
   const { t } = useI18n();
+  const { pathname, search, hash } = useLocation();
   const [open, setOpen] = useState(() => !localStorage.getItem(CONSENT_KEY));
   useEffect(() => {
     if (localStorage.getItem(CONSENT_KEY) === "accepted") loadAnalytics();
     const reopen = () => setOpen(true);
     window.addEventListener("pipsevo:cookie-settings", reopen);
     return () => window.removeEventListener("pipsevo:cookie-settings", reopen);
-  }, []);
+  }, [pathname, search, hash]);
 
   const choose = (value) => {
     localStorage.setItem(CONSENT_KEY, value);

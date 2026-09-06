@@ -2,10 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowRight, CheckCircle2, MailCheck, RefreshCw } from "lucide-react";
-import { Logo } from "@/components/Logo";
+import AuthLayout from "@/components/auth/AuthLayout";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/context/I18nContext";
-import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 const RESEND_DELAY = 60;
 
@@ -46,14 +45,7 @@ export default function VerifyEmail() {
   };
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white relative overflow-hidden px-4 py-8 flex items-center justify-center">
-      <div className="absolute right-4 top-4 z-20 sm:right-7 sm:top-7"><LanguageSwitcher compact /></div>
-      <div className="absolute inset-0 grid-floor opacity-25" />
-      <div className="absolute -top-48 right-0 h-[620px] w-[620px] rounded-full bg-[#7C4DFF]/20 blur-3xl" />
-      <div className="absolute -bottom-56 left-0 h-[620px] w-[620px] rounded-full bg-[#4F8CFF]/15 blur-3xl" />
-
-      <section className="relative z-10 w-full max-w-xl rounded-[28px] border border-white/10 bg-[#090B14]/95 p-6 shadow-[0_30px_100px_rgba(0,0,0,.65)] backdrop-blur-xl sm:p-10">
-        <Logo />
+    <AuthLayout>
         <div className="mt-9 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#7C4DFF]/30 bg-[#7C4DFF]/10">
           <MailCheck className="h-8 w-8 text-[#B58BFF]" />
         </div>
@@ -86,7 +78,6 @@ export default function VerifyEmail() {
           <Link to="/register" className="text-[#9CA3AF] hover:text-white">Modifier mon adresse</Link>
           <Link to="/login" className="inline-flex items-center gap-2 font-medium text-[#B58BFF] hover:text-white">J'ai déjà confirmé <ArrowRight className="h-4 w-4" /></Link>
         </div>
-      </section>
-    </main>
+    </AuthLayout>
   );
 }

@@ -3,8 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { auth } from "@/lib/api";
-import { Logo } from "@/components/Logo";
-import LanguageSwitcher from "@/components/LanguageSwitcher";
+import AuthLayout from "@/components/auth/AuthLayout";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -25,12 +24,7 @@ export default function ForgotPassword() {
     }
   };
 
-  return <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-16 text-white">
-    <div className="absolute right-4 top-4 z-20 sm:right-7 sm:top-7"><LanguageSwitcher compact /></div>
-    <div className="absolute inset-0 grid-floor opacity-30" />
-    <div className="absolute left-[15%] top-[10%] h-[420px] w-[420px] rounded-full bg-[#7C4DFF]/25 blur-3xl" />
-    <div className="card-elev glow-purple relative z-10 w-full max-w-md p-7 sm:p-9">
-      <Logo />
+  return <AuthLayout>
       {sent ? <div className="mt-8 text-center">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#00E676]/10 text-[#00E676]"><CheckCircle2 className="h-7 w-7" /></span>
         <h1 className="mt-5 text-2xl font-bold">Vérifie ta boîte e-mail</h1>
@@ -47,6 +41,5 @@ export default function ForgotPassword() {
         </form>
       </>}
       <Link to="/login" className="mt-7 flex items-center justify-center gap-2 text-xs text-[#9CA3AF] transition hover:text-white"><ArrowLeft className="h-3.5 w-3.5" />Retour à la connexion</Link>
-    </div>
-  </div>;
+  </AuthLayout>;
 }

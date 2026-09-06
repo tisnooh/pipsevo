@@ -7,8 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { passwordValidation } from "@/lib/passwordSecurity";
 import { useAuth } from "@/context/AuthContext";
 import { AUTH_CONFIG, hasCompletedOnboarding } from "@/config/auth";
-import { Logo } from "@/components/Logo";
-import LanguageSwitcher from "@/components/LanguageSwitcher";
+import AuthLayout from "@/components/auth/AuthLayout";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -54,12 +53,7 @@ export default function ResetPassword() {
     }
   };
 
-  return <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-16 text-white">
-    <div className="absolute right-4 top-4 z-20 sm:right-7 sm:top-7"><LanguageSwitcher compact /></div>
-    <div className="absolute inset-0 grid-floor opacity-30" />
-    <div className="absolute right-[15%] top-[10%] h-[420px] w-[420px] rounded-full bg-[#4F8CFF]/20 blur-3xl" />
-    <div className="card-elev glow-purple relative z-10 w-full max-w-md p-7 sm:p-9">
-      <Logo />
+  return <AuthLayout>
       {status === "checking" && <div className="grid min-h-52 place-items-center text-sm text-[#9CA3AF]"><span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Vérification du lien…</span></div>}
       {status === "invalid" && <div className="mt-8 text-center"><span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#FF4D5E]/10 text-[#FF7A87]"><ShieldAlert className="h-7 w-7" /></span><h1 className="mt-5 text-2xl font-bold">Lien invalide ou expiré</h1><p className="mt-3 text-sm text-[#9CA3AF]">Demande un nouveau lien pour sécuriser ton compte.</p><Link to="/forgot-password" className="btn-primary mt-6 inline-flex w-full items-center justify-center">Recevoir un nouveau lien</Link></div>}
       {status === "ready" && <>
@@ -71,6 +65,5 @@ export default function ResetPassword() {
           <button type="submit" disabled={loading} className="btn-primary inline-flex w-full items-center justify-center gap-2 disabled:opacity-60">{loading && <Loader2 className="h-4 w-4 animate-spin" />}{loading ? "Modification…" : "Modifier le mot de passe"}</button>
         </form>
       </>}
-    </div>
-  </div>;
+  </AuthLayout>;
 }

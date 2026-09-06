@@ -15,6 +15,7 @@ const Register = lazy(() => import("@/pages/Register"));
 const VerifyEmail = lazy(() => import("@/pages/VerifyEmail"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
+const AuthCallback = lazy(() => import("@/pages/AuthCallback"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
 const AppShell = lazy(() => import("@/pages/AppShell"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
@@ -97,6 +98,7 @@ export default function App() {
           <Route path="/verify-email" element={<VerifyEmailGate />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/newsletter/confirm" element={<NewsletterActionPage action="confirm" />} />
           <Route path="/newsletter/unsubscribe" element={<NewsletterActionPage action="unsubscribe" />} />
           <Route path="/faq" element={<FAQPage />} />
