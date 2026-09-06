@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { I18nProvider } from "@/context/I18nContext";
 import CookieConsent from "@/components/CookieConsent";
 import RouteSEO from "@/components/RouteSEO";
+import RouteScrollManager from "@/components/RouteScrollManager";
 import { AUTH_CONFIG, hasCompletedOnboarding } from "@/config/auth";
 import { JOURNAL_DETAIL_ROUTE, JOURNAL_LIST_ROUTE } from "@/lib/journalNavigation";
 import "@/index.css";
@@ -87,6 +88,7 @@ export default function App() {
     <I18nProvider>
     <AuthProvider>
       <BrowserRouter>
+        <RouteScrollManager />
         <RouteSEO />
         <CookieConsent />
         <Toaster theme="dark" position="top-right" />

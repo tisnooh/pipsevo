@@ -6,6 +6,10 @@ import App from "@/App";
 import { MotionProvider } from "@/components/motion/MotionSystem";
 import { syncMotionAttribute } from "@/lib/motionPreference";
 
+if ("scrollRestoration" in window.history) {
+  window.history.scrollRestoration = "manual";
+}
+
 syncMotionAttribute();
 
 const queryClient = new QueryClient({
