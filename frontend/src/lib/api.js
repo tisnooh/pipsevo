@@ -100,14 +100,14 @@ const loadCurrentUser = async ({ retries = 0 } = {}) => {
 };
 
 export const auth = {
-  register: async ({ email, password, name }) => {
+  register: async ({ email, password, name, language = "fr" }) => {
     const cleanEmail = email.trim();
     const displayName = name.trim();
     const options = {
-      data: { display_name: displayName, onboarding_completed: false },
+      data: { display_name: displayName, onboarding_completed: false, language: language === "en" ? "en" : "fr", welcome_email_pending: true },
     };
     if (AUTH_CONFIG.requireEmailConfirmation) {
-      options.emailRedirectTo = `${window.location.origin}${AUTH_CONFIG.postSignUpPath}`;
+      options.emailRedirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(AUTH_CONFIG.postSignUpPath)}`;
     }
     const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
@@ -127,7 +127,7 @@ export const auth = {
     const { error } = await supabase.auth.resend({
       type: "signup",
       email: email.trim(),
-      options: { emailRedirectTo: `${window.location.origin}/onboarding` },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(AUTH_CONFIG.postSignUpPath)}` },
     });
     check(error, "Impossible de renvoyer l'e-mail de confirmation");
     return response({ ok: true });
@@ -168,6 +168,7 @@ export const auth = {
     check(error, "Impossible de modifier le mot de passe");
     return response({ ok: true });
   },
+  sendWelcome: async (locale = "fr") => api.post("/email/welcome", { locale: locale === "en" ? "en" : "fr" }),
   signOutOtherSessions: async () => {
     const { error } = await supabase.auth.signOut({ scope: "others" });
     check(error, "Impossible de déconnecter les autres appareils");
@@ -536,9 +537,7 @@ export const integrationConnections = {
   },
 };
 export const contact = async (values) => {
-  const { error } = await supabase.from("contact_messages").insert({ ...values, status: "new" });
-  check(error, "Impossible d’envoyer le message");
-  return response({ ok: true });
+  return api.post("/support", values);
 };
 
 export const tradeScreenshots = {

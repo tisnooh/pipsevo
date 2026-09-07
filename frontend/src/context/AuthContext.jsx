@@ -1,13 +1,15 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { auth } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { readSettings } from "@/lib/preferences";
 
 const AuthCtx = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const welcomeAttemptedRef = useRef(new Set());
 
   useEffect(() => {
     let active = true;
@@ -39,6 +41,18 @@ export function AuthProvider({ children }) {
         if (!active) return;
         setUser(result.data);
         sessionStorage.removeItem("pipsevo_pending_email");
+        const authUser = sessionResult.data.session.user;
+        if (authUser.user_metadata?.welcome_email_pending && !welcomeAttemptedRef.current.has(authUser.id)) {
+          welcomeAttemptedRef.current.add(authUser.id);
+          const welcomeLanguage = authUser.user_metadata?.language || readSettings().language;
+          auth.sendWelcome(welcomeLanguage).then(async () => {
+            await supabase.auth.updateUser({ data: { welcome_email_pending: false } });
+          }).catch(() => {
+            // The account/session remains valid if the optional welcome message
+            // is temporarily unavailable. The server safely retries next time.
+            welcomeAttemptedRef.current.delete(authUser.id);
+          });
+        }
       } catch (error) {
         // Une session Supabase valide ne doit jamais être transformée en déconnexion
         // simplement parce que le profil met quelques instants à devenir disponible.
@@ -83,8 +97,8 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  const register = async (email, password, name) => {
-    const { data } = await auth.register({ email, password, name });
+  const register = async (email, password, name, language = "fr") => {
+    const { data } = await auth.register({ email, password, name, language });
     if (data.token) localStorage.setItem("pipsevo_token", data.token);
     sessionStorage.removeItem("pipsevo_pending_email");
     setUser(data.user);

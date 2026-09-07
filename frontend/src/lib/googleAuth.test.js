@@ -44,6 +44,8 @@ test("handles OAuth denial and errors without reflecting untrusted provider text
   expect(getOAuthError("?error=access_denied&error_description=secret")).toBe("cancelled");
   expect(getOAuthError("", "#error=server_error&error_description=secret")).toBe("failed");
   expect(getOAuthError("?error_code=unexpected_failure")).toBe("failed");
+  expect(getOAuthError("?error=access_denied&error_code=otp_expired")).toBe("expired");
+  expect(getOAuthError("", "#error=access_denied&error_description=Email+already+confirmed")).toBe("already_confirmed");
   expect(getOAuthError("", "#access_token=test")).toBeNull();
 });
 

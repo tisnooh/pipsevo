@@ -4,7 +4,7 @@ const REQUIRE_EMAIL_CONFIRMATION = process.env.REACT_APP_REQUIRE_EMAIL_CONFIRMAT
 
 export const AUTH_CONFIG = Object.freeze({
   requireEmailConfirmation: REQUIRE_EMAIL_CONFIRMATION,
-  contactEmail: process.env.REACT_APP_CONTACT_EMAIL || "support@pipsevo.com",
+  contactEmail: process.env.REACT_APP_CONTACT_EMAIL || "tyachatfr@gmail.com",
   postSignUpPath: "/onboarding",
   authenticatedHomePath: "/app/dashboard",
 });

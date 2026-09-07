@@ -42,6 +42,14 @@ test("a new Google user follows the existing onboarding flow", () => {
   render();
   expect(container.querySelector('[data-destination]').dataset.destination).toBe("/onboarding");
 });
+test("a confirmed signup gets a branded success screen before onboarding", () => {
+  mockAuth.user = { onboarding_completed: false };
+  mockLocation.search = "?next=%2Fonboarding";
+  render();
+  expect(container.textContent).toContain("Adresse confirmée");
+  expect(container.querySelector('[data-destination]')).toBeNull();
+  expect(container.querySelector('a[href="/onboarding"]')).not.toBeNull();
+});
 test("a cancelled Google return is not mistaken for a successful existing session", () => {
   mockAuth.user = { onboarding_completed: true };
   mockLocation.hash = "#error=access_denied&error_description=private-text";
@@ -49,6 +57,20 @@ test("a cancelled Google return is not mistaken for a successful existing sessio
   expect(container.textContent).toContain("Connexion annulée");
   expect(container.textContent).not.toContain("private-text");
   expect(container.querySelector('[data-destination]')).toBeNull();
+});
+test("an expired email link offers safe recovery actions", () => {
+  mockLocation.hash = "#error=access_denied&error_code=otp_expired&error_description=private-text";
+  render();
+  expect(container.textContent).toContain("Ce lien a expiré");
+  expect(container.textContent).not.toContain("private-text");
+  expect(container.querySelector('a[href="/verify-email"]')).not.toBeNull();
+  expect(container.querySelector('a[href="/forgot-password"]')).not.toBeNull();
+});
+test("an already confirmed link directs the user to sign in", () => {
+  mockLocation.hash = "#error=access_denied&error_description=Email+already+confirmed";
+  render();
+  expect(container.textContent).toContain("Adresse déjà confirmée");
+  expect(container.querySelector('a[href="/login"]')).not.toBeNull();
 });
 test("an empty callback provides a working return to login", () => {
   render();

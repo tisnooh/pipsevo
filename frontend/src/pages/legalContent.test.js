@@ -28,6 +28,6 @@ describe("public legal content", () => {
 
   test("documents the processors actually configured in the repository", () => {
     const privacy = JSON.stringify(legal.privacy);
-    ["Supabase", "MongoDB Atlas", "Vercel", "Render", "Resend", "Anthropic", "MetaApi", "PostHog"].forEach((provider) => expect(privacy).toContain(provider));
+    ["Supabase", "MongoDB Atlas", "Vercel", "Render", "Google", "Anthropic", "MetaApi", "PostHog"].forEach((provider) => expect(privacy).toContain(provider));
   });
 });

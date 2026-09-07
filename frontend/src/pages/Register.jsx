@@ -11,7 +11,7 @@ import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 
 export default function Register() {
   const { register } = useAuth();
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const navigate = useNavigate();
   const terms = useRef(null);
   const [name, setName] = useState("");
@@ -27,7 +27,7 @@ export default function Register() {
     if (!validation.valid) return toast.error(t(validation.message, "Use at least 8 characters, one uppercase letter and one number."));
     setLoading(true);
     try {
-      const result = await register(email, password, name);
+      const result = await register(email, password, name, language);
       if (result.requires_email_confirmation) {
         sessionStorage.setItem("pipsevo_pending_email", email.trim());
         navigate("/verify-email", { state: { email: email.trim() } });

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -13,7 +13,7 @@ import secrets
 import bcrypt
 import jwt as pyjwt
 from pathlib import Path
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime, timezone, timedelta
 import anthropic
@@ -30,6 +30,8 @@ from email_service import (
     decode_email_token,
     newsletter_links,
     send_email,
+    support_notification_email,
+    support_receipt_email,
     welcome_email,
 )
 
@@ -149,6 +151,19 @@ async def ensure_database_indexes():
     await db.contact_messages.create_index(
         [("status", ASCENDING), ("created_at", DESCENDING)],
         name="contact_status_created",
+    )
+    await db.contact_messages.create_index(
+        [("email", ASCENDING), ("created_at", DESCENDING)],
+        name="contact_email_created",
+    )
+    await db.contact_messages.create_index(
+        [("ip_hash", ASCENDING), ("created_at", DESCENDING)],
+        name="contact_ip_created",
+    )
+    await db.email_deliveries.create_index(
+        [("event", ASCENDING), ("user_id", ASCENDING)],
+        unique=True,
+        name="email_delivery_event_user_unique",
     )
     await db.newsletter_subscribers.create_index(
         [("email", ASCENDING)], unique=True, name="newsletter_email_unique"
@@ -432,6 +447,21 @@ class ContactIn(BaseModel):
     email: EmailStr
     subject: str = Field(min_length=3, max_length=120)
     message: str = Field(min_length=10, max_length=3000)
+    category: Literal["account", "login", "sync", "journal", "prop_firms", "atlas", "billing", "bug", "other"] = "other"
+    locale: Literal["fr", "en"] = "fr"
+    website: str = Field(default="", max_length=200)
+
+    @field_validator("name", "subject", "message")
+    @classmethod
+    def clean_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Ce champ ne peut pas être vide")
+        return cleaned
+
+
+class WelcomeEmailIn(BaseModel):
+    locale: Literal["fr", "en"] = "fr"
 
 
 class NewsletterSubscribeIn(BaseModel):
@@ -461,6 +491,12 @@ class NewsletterCampaignIn(BaseModel):
     body: str = Field(min_length=3, max_length=5000)
     cta_label: Optional[str] = Field(default=None, min_length=2, max_length=80)
     cta_url: Optional[str] = Field(default=None, pattern=r"^https://")
+    subject_en: str = Field(min_length=3, max_length=140)
+    preheader_en: str = Field(min_length=3, max_length=180)
+    title_en: str = Field(min_length=3, max_length=140)
+    intro_en: str = Field(min_length=3, max_length=600)
+    body_en: str = Field(min_length=3, max_length=5000)
+    cta_label_en: Optional[str] = Field(default=None, min_length=2, max_length=80)
     audience: Literal["all", "product_updates", "trading_education"] = "all"
     max_recipients: int = Field(default=50, ge=1, le=100)
 
@@ -468,13 +504,147 @@ class NewsletterCampaignIn(BaseModel):
 DEFAULT_EMAIL_PREFERENCES = EmailPreferencesIn().model_dump()
 
 
-# ============= AUTH =============
-@api.post("/contact")
-async def contact(body: ContactIn):
-    doc = body.model_dump()
-    doc.update({"id": str(uuid.uuid4()), "status": "new", "created_at": now_utc()})
+# ============= CONTACT & EMAIL =============
+def _contact_ip_hash(request: Request) -> str:
+    address = request.client.host if request.client else "unknown"
+    secret = (
+        os.environ.get("SUPPORT_RATE_LIMIT_SECRET")
+        or os.environ.get("CONTACT_RATE_LIMIT_SECRET")
+        or os.environ.get("EMAIL_TOKEN_SECRET")
+        or JWT_SECRET
+    )
+    return hashlib.sha256(f"{secret}:{address}".encode("utf-8")).hexdigest()
+
+
+@api.post("/support", status_code=status.HTTP_202_ACCEPTED)
+@api.post("/contact", status_code=status.HTTP_202_ACCEPTED, include_in_schema=False)
+async def contact(body: ContactIn, request: Request):
+    # A filled honeypot is accepted silently so bots do not learn how they were detected.
+    if body.website:
+        return {"ok": True, "message": "Message received"}
+
+    email = str(body.email).strip().lower()
+    ip_hash = _contact_ip_hash(request)
+    now = datetime.now(timezone.utc)
+    window_minutes = max(
+        1,
+        min(
+            int(
+                os.environ.get("SUPPORT_RATE_LIMIT_WINDOW_MINUTES")
+                or os.environ.get("CONTACT_RATE_LIMIT_WINDOW_MINUTES", "15")
+            ),
+            1440,
+        ),
+    )
+    max_requests = max(
+        1,
+        min(
+            int(
+                os.environ.get("SUPPORT_RATE_LIMIT_MAX")
+                or os.environ.get("CONTACT_RATE_LIMIT_MAX", "3")
+            ),
+            20,
+        ),
+    )
+    recent = await db.contact_messages.count_documents({
+        "created_at": {"$gte": now - timedelta(minutes=window_minutes)},
+        "$or": [{"email": email}, {"ip_hash": ip_hash}],
+    })
+    if recent >= max_requests:
+        raise HTTPException(429, "Trop de demandes ont été envoyées. Réessaie dans quelques minutes.")
+
+    request_id = f"PE-{now:%Y%m%d}-{uuid.uuid4().hex[:8].upper()}"
+    doc = body.model_dump(exclude={"website"})
+    doc.update({"id": request_id, "email": email, "ip_hash": ip_hash, "status": "sending", "created_at": now})
     await db.contact_messages.insert_one(doc)
-    return {"ok": True, "message": "Message received"}
+
+    support_email = os.environ.get("SUPPORT_EMAIL", "tyachatfr@gmail.com").strip()
+    notification = support_notification_email(
+        request_id=request_id, name=body.name, email=email, category=body.category,
+        subject=body.subject, message=body.message,
+    )
+    receipt = support_receipt_email(
+        request_id=request_id, name=body.name, subject=body.subject, locale=body.locale,
+    )
+    try:
+        support_message_id = await asyncio.to_thread(
+            send_email, to=support_email, subject=notification["subject"], html=notification["html"],
+            text=notification["text"], category="transactional",
+            idempotency_key=_email_delivery_id("support-team", request_id), reply_to=email,
+        )
+    except (EmailConfigurationError, EmailDeliveryError):
+        logging.exception("Support notification delivery failed request_id=%s", request_id)
+        await db.contact_messages.update_one(
+            {"id": request_id}, {"$set": {"status": "delivery_failed", "delivery_failed_at": now}},
+        )
+        raise HTTPException(503, "Le support est temporairement indisponible. Réessaie dans quelques minutes.")
+
+    receipt_message_id = None
+    try:
+        receipt_message_id = await asyncio.to_thread(
+            send_email, to=email, subject=receipt["subject"], html=receipt["html"], text=receipt["text"],
+            category="transactional", idempotency_key=_email_delivery_id("support-receipt", request_id),
+            reply_to=support_email,
+        )
+    except (EmailConfigurationError, EmailDeliveryError):
+        # The request is already safely delivered to the team; retain the partial status for retry.
+        logging.exception("Support receipt delivery failed request_id=%s", request_id)
+
+    final_status = "delivered" if receipt_message_id else "receipt_pending"
+    await db.contact_messages.update_one(
+        {"id": request_id},
+        {"$set": {"status": final_status, "support_message_id": support_message_id,
+                  "receipt_message_id": receipt_message_id, "delivered_at": datetime.now(timezone.utc)}},
+    )
+    return {"ok": True, "message": "Message received", "request_id": request_id}
+
+
+@api.post("/email/welcome", status_code=status.HTTP_202_ACCEPTED)
+async def send_account_welcome(body: WelcomeEmailIn, user=Depends(get_current_user)):
+    """Send the account welcome once; subsequent calls are idempotent."""
+    event = "account-welcome"
+    existing = await db.email_deliveries.find_one({"event": event, "user_id": user["id"]})
+    if existing and existing.get("status") == "delivered":
+        return {"ok": True, "status": "already_delivered"}
+    now = datetime.now(timezone.utc)
+    if existing:
+        claim = await db.email_deliveries.update_one(
+            {"event": event, "user_id": user["id"], "status": {"$ne": "sending"}},
+            {"$set": {"status": "sending", "updated_at": now, "locale": body.locale}},
+        )
+        if not claim.modified_count:
+            return {"ok": True, "status": "already_sending"}
+    else:
+        try:
+            await db.email_deliveries.insert_one({
+                "event": event,
+                "user_id": user["id"],
+                "status": "sending",
+                "locale": body.locale,
+                "created_at": now,
+                "updated_at": now,
+            })
+        except DuplicateKeyError:
+            return {"ok": True, "status": "already_sending"}
+    message = welcome_email(user["email"], body.locale, marketing=False)
+    try:
+        message_id = await asyncio.to_thread(
+            send_email, to=user["email"], subject=message["subject"], html=message["html"],
+            text=message["text"], category="transactional",
+            idempotency_key=_email_delivery_id("account-welcome", user["id"]),
+        )
+    except (EmailConfigurationError, EmailDeliveryError):
+        await db.email_deliveries.update_one(
+            {"event": event, "user_id": user["id"]},
+            {"$set": {"status": "failed", "updated_at": datetime.now(timezone.utc)}},
+        )
+        logging.exception("Account welcome delivery failed user_id=%s", user["id"])
+        raise HTTPException(503, "L’e-mail de bienvenue est temporairement indisponible.")
+    await db.email_deliveries.update_one(
+        {"event": event, "user_id": user["id"]},
+        {"$set": {"status": "delivered", "message_id": message_id, "delivered_at": datetime.now(timezone.utc)}},
+    )
+    return {"ok": True, "status": "delivered"}
 
 
 def _email_delivery_id(prefix: str, value: str) -> str:
@@ -520,7 +690,7 @@ async def newsletter_subscribe(body: NewsletterSubscribeIn):
         upsert=True,
     )
 
-    message = confirmation_email(email)
+    message = confirmation_email(email, body.locale)
     try:
         message_id = await asyncio.to_thread(
             send_email,
@@ -568,7 +738,8 @@ async def newsletter_confirm(body: NewsletterTokenIn):
     if not result.matched_count:
         raise HTTPException(400, "Cette demande d’inscription n’existe plus.")
 
-    message = welcome_email(email)
+    subscriber = await db.newsletter_subscribers.find_one({"email": email}) or {}
+    message = welcome_email(email, subscriber.get("locale", "fr"), marketing=True)
     try:
         message_id = await asyncio.to_thread(
             send_email,
@@ -691,6 +862,8 @@ async def send_newsletter_campaign(
         raise HTTPException(401, "Invalid newsletter administration key")
     if bool(body.cta_label) != bool(body.cta_url):
         raise HTTPException(422, "cta_label and cta_url must be supplied together")
+    if bool(body.cta_label_en) != bool(body.cta_url):
+        raise HTTPException(422, "cta_label_en and cta_url must be supplied together")
 
     now = datetime.now(timezone.utc)
     content_payload = body.model_dump(exclude={"max_recipients"})
@@ -727,32 +900,42 @@ async def send_newsletter_campaign(
     if sent_addresses:
         subscriber_filter["email"] = {"$nin": sent_addresses}
     recipients = await db.newsletter_subscribers.find(
-        subscriber_filter, {"_id": 0, "email": 1}
+        subscriber_filter, {"_id": 0, "email": 1, "locale": 1}
     ).sort("created_at", ASCENDING).limit(body.max_recipients).to_list(length=body.max_recipients)
 
     sent_count = 0
     failed_count = 0
     for recipient in recipients:
         email = recipient["email"]
+        locale = "en" if recipient.get("locale") == "en" else "fr"
+        campaign_copy = {
+            "subject": body.subject_en if locale == "en" else body.subject,
+            "preheader": body.preheader_en if locale == "en" else body.preheader,
+            "title": body.title_en if locale == "en" else body.title,
+            "intro": body.intro_en if locale == "en" else body.intro,
+            "body": body.body_en if locale == "en" else body.body,
+            "cta_label": body.cta_label_en if locale == "en" else body.cta_label,
+        }
         links = newsletter_links(email)
         rendered_html = brand_email_html(
-            preheader=body.preheader,
-            title=body.title,
-            intro=body.intro,
-            body=body.body,
-            cta_label=body.cta_label,
+            preheader=campaign_copy["preheader"],
+            title=campaign_copy["title"],
+            intro=campaign_copy["intro"],
+            body=campaign_copy["body"],
+            cta_label=campaign_copy["cta_label"],
             cta_url=body.cta_url,
             unsubscribe_url=links["unsubscribe"],
+            locale=locale,
         )
-        rendered_text = f"{body.title}\n\n{body.intro}\n\n{body.body}"
-        if body.cta_label and body.cta_url:
-            rendered_text += f"\n\n{body.cta_label}: {body.cta_url}"
-        rendered_text += f"\n\nSe désinscrire : {links['unsubscribe']}"
+        rendered_text = f"{campaign_copy['title']}\n\n{campaign_copy['intro']}\n\n{campaign_copy['body']}"
+        if campaign_copy["cta_label"] and body.cta_url:
+            rendered_text += f"\n\n{campaign_copy['cta_label']}: {body.cta_url}"
+        rendered_text += f"\n\n{'Unsubscribe' if locale == 'en' else 'Se désinscrire'}: {links['unsubscribe']}"
         try:
             message_id = await asyncio.to_thread(
                 send_email,
                 to=email,
-                subject=body.subject,
+                subject=campaign_copy["subject"],
                 html=rendered_html,
                 text=rendered_text,
                 category="marketing",

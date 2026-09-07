@@ -27,6 +27,9 @@ export function getOAuthError(search = "", hash = "") {
   for (const value of [search, hash]) {
     const params = new URLSearchParams(value.replace(/^[?#]/, ""));
     if (params.has("error") || params.has("error_code") || params.has("error_description")) {
+      const code = `${params.get("error_code") || ""} ${params.get("error_description") || ""}`.toLowerCase();
+      if (code.includes("already confirmed") || code.includes("already been confirmed")) return "already_confirmed";
+      if (code.includes("expired") || code.includes("otp_expired")) return "expired";
       return params.get("error") === "access_denied" ? "cancelled" : "failed";
     }
   }
