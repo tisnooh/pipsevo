@@ -85,12 +85,18 @@ jetons chiffrés sont conservés. Le connecteur charge dynamiquement `/trade/con
 avant de mapper les tableaux de l'API, afin de ne pas dépendre de positions de
 colonnes codées en dur. Les ordres partiels restent des exécutions distinctes et
 les positions clôturées sont reconstruites sans écraser le journal utilisateur.
+TradeLocker distingue l'identifiant `accountId`, utilisé dans les routes, du
+numéro de séquence `accNum`, transmis dans l'en-tête. PipsEvo conserve les deux
+séparément. `TRADELOCKER_DEVELOPER_API_KEY` est facultative pour un test à faible
+volume mais recommandée par TradeLocker pour une application multi-utilisateur.
 
 ### Tradovate
 
 Le flux utilise OAuth, `/v1/account/list`, les fills, fill pairs et snapshots de
-solde. Le connecteur n'est activé que lorsque l'application Tradovate est
-approuvée et que les trois variables OAuth sont présentes.
+solde. Les fills sont rattachés au bon compte par leur `positionId`, les contrats
+sont résolus en symboles lisibles et le P&L réalisé provient du journal de solde.
+Le connecteur n'est activé que lorsque l'application Tradovate est approuvée et
+que les variables OAuth sont présentes.
 
 ### NinjaTrader
 
@@ -110,6 +116,16 @@ Les exemples complets sont dans `backend/.env.example`. Minimum commun :
 - `CRON_SECRET`
 - `PUBLIC_API_URL`
 - `FRONTEND_URL`
+
+Variables propres aux connecteurs :
+
+- cTrader : `CTRADER_CLIENT_ID`, `CTRADER_CLIENT_SECRET`,
+  `CTRADER_REDIRECT_URI`
+- MetaTrader : `METAAPI_TOKEN`, `METAAPI_DOMAIN`
+- TradeLocker : `TRADELOCKER_DEMO_URL`, `TRADELOCKER_LIVE_URL` et, recommandé
+  en production, `TRADELOCKER_DEVELOPER_API_KEY`
+- Tradovate : `TRADOVATE_CLIENT_ID`, `TRADOVATE_CLIENT_SECRET`,
+  `TRADOVATE_REDIRECT_URI`, `TRADOVATE_OAUTH_URL`
 
 Les variables Vercel `BACKEND_INTERNAL_URL` et `CRON_SECRET` doivent être privées
 (jamais préfixées par `REACT_APP_`). Le cron `/api/sync-due` s'exécute toutes les

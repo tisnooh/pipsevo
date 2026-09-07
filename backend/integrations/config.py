@@ -37,12 +37,15 @@ class IntegrationConfig:
         )
         provider = os.environ.get("MT5_PROVIDER", "").strip().lower() or None
         legacy_metaapi_enabled = (
-            _enabled(os.environ.get("MT5_AUTO_SYNC_ENABLED"))
-            and provider == "metaapi"
+            _enabled(os.environ.get("MT5_AUTO_SYNC_ENABLED")) and provider == "metaapi"
         )
-        frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3100").rstrip("/")
-        api_url = os.environ.get("PUBLIC_API_URL", "http://localhost:8000/api").rstrip("/")
-        provider_settings = {
+        frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3100").rstrip(
+            "/"
+        )
+        api_url = os.environ.get("PUBLIC_API_URL", "http://localhost:8000/api").rstrip(
+            "/"
+        )
+        provider_settings: dict[str, dict[str, Any]] = {
             "ctrader": {
                 "client_id": os.environ.get("CTRADER_CLIENT_ID", "").strip(),
                 "client_secret": os.environ.get("CTRADER_CLIENT_SECRET", "").strip(),
@@ -52,7 +55,9 @@ class IntegrationConfig:
             },
             "metaapi": {
                 "token": os.environ.get("METAAPI_TOKEN", "").strip(),
-                "domain": os.environ.get("METAAPI_DOMAIN", "agiliumtrade.agiliumtrade.ai").strip(),
+                "domain": os.environ.get(
+                    "METAAPI_DOMAIN", "agiliumtrade.agiliumtrade.ai"
+                ).strip(),
             },
             "tradelocker": {
                 "demo_url": os.environ.get(
@@ -61,6 +66,10 @@ class IntegrationConfig:
                 "live_url": os.environ.get(
                     "TRADELOCKER_LIVE_URL", "https://live.tradelocker.com/backend-api"
                 ).rstrip("/"),
+                "developer_api_key": os.environ.get(
+                    "TRADELOCKER_DEVELOPER_API_KEY", ""
+                ).strip()
+                or None,
             },
             "tradovate": {
                 "client_id": os.environ.get("TRADOVATE_CLIENT_ID", "").strip(),
@@ -68,13 +77,20 @@ class IntegrationConfig:
                 "redirect_uri": os.environ.get(
                     "TRADOVATE_REDIRECT_URI", f"{api_url}/integrations/oauth/callback"
                 ).strip(),
+                "oauth_url": os.environ.get(
+                    "TRADOVATE_OAUTH_URL",
+                    "https://live.tradovateapi.com/v1/auth/oauthtoken",
+                ).strip(),
             },
         }
         credentials_ready = {
             "ctrader": all(provider_settings["ctrader"].values()),
             "metaapi": bool(provider_settings["metaapi"]["token"]),
             "tradelocker": True,
-            "tradovate": all(provider_settings["tradovate"].values()),
+            "tradovate": all(
+                provider_settings["tradovate"][key]
+                for key in ("client_id", "client_secret", "redirect_uri", "oauth_url")
+            ),
         }
         platform_flags = {
             "ctrader": _enabled(os.environ.get("CTRADER_SYNC_ENABLED")),
@@ -83,8 +99,10 @@ class IntegrationConfig:
             # configuration as enabling both MetaTrader versions supported by
             # the same read-only connector, without requiring another Render
             # environment migration.
-            "mt4": _enabled(os.environ.get("MT4_SYNC_ENABLED")) or legacy_metaapi_enabled,
-            "mt5": _enabled(os.environ.get("MT5_SYNC_ENABLED")) or legacy_metaapi_enabled,
+            "mt4": _enabled(os.environ.get("MT4_SYNC_ENABLED"))
+            or legacy_metaapi_enabled,
+            "mt5": _enabled(os.environ.get("MT5_SYNC_ENABLED"))
+            or legacy_metaapi_enabled,
             "tradelocker": _enabled(
                 os.environ.get("TRADELOCKER_SYNC_ENABLED")
                 or os.environ.get("TRADELOCKER_ENABLED")
@@ -146,7 +164,9 @@ class IntegrationConfig:
             enabled_platforms=tuple(
                 platform for platform, enabled in platform_flags.items() if enabled
             ),
-            sync_lock_minutes=max(1, int(os.environ.get("INTEGRATION_SYNC_LOCK_MINUTES", "10"))),
+            sync_lock_minutes=max(
+                1, int(os.environ.get("INTEGRATION_SYNC_LOCK_MINUTES", "10"))
+            ),
         )
 
     def provider_enabled(self, provider: str) -> bool:
@@ -177,7 +197,9 @@ class IntegrationConfig:
         # Generic providers are deliberately enabled only when their complete
         # credential set is present. This prevents a UI from claiming a source
         # is connected while its server-side adapter cannot authenticate.
-        if self.enabled_providers and (not self.encryption_keys or not has_server_secret):
+        if self.enabled_providers and (
+            not self.encryption_keys or not has_server_secret
+        ):
             generic_missing = []
             if not self.encryption_keys:
                 generic_missing.append("INTEGRATION_ENCRYPTION_KEYS")

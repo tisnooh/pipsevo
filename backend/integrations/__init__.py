@@ -19,10 +19,11 @@ def register_configured_connectors(config, registry) -> None:
         registry.register(MetaApiConnector(settings["token"], settings["domain"]))
     if config.provider_enabled("tradelocker"):
         settings = config.provider_config("tradelocker")
-        registry.register(TradeLockerConnector(settings["demo_url"], settings["live_url"]))
+        registry.register(TradeLockerConnector(**settings))
     if config.provider_enabled("tradovate"):
         settings = config.provider_config("tradovate")
         registry.register(TradovateConnector(**settings))
+
 
 from .config import IntegrationConfig
 from .service import IntegrationService
