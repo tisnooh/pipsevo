@@ -20,7 +20,7 @@ const NAV_LINKS = [
   { to: "/app/day-view", fr: "Vue journalière", en: "Day view", icon: CalendarRange, testid: "nav-day-view" },
   { to: "/app/markets", fr: "Marchés", en: "Markets", icon: BarChart3, testid: "nav-markets" },
   { to: "/app/economic-calendar", fr: "Calendrier éco", en: "Economic calendar", icon: CalendarDays, testid: "nav-economic-calendar" },
-  { to: "/app/backtest", fr: "Simulateur", en: "Simulator", icon: FlaskConical, testid: "nav-backtest" },
+  { to: "/app/backtest", fr: "Backtest Lab", en: "Backtest Lab", icon: FlaskConical, testid: "nav-backtest" },
   { to: "/app/analytics", fr: "Statistiques", en: "Analytics", icon: BarChart3, testid: "nav-analytics" },
   { to: "/app/coach", fr: "Analyse IA", en: "AI Analysis", icon: Brain, testid: "nav-coach" },
   { to: "/app/discipline", fr: "Discipline", en: "Discipline", icon: Shield, testid: "nav-discipline" },

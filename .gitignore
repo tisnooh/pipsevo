@@ -78,6 +78,7 @@ agenthub/agents/youtube/db
 
 # Build caches
 .cache/
+.backtest-preview/
 
 memory/test_credentials.md
 

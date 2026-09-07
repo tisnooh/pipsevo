@@ -21,6 +21,8 @@ import asyncio
 import requests
 
 from atlas import build_atlas_context, build_atlas_prompt
+from backtest.routes import build_backtest_router, ensure_backtest_indexes
+from backtest.body_limit import BacktestBodyLimit
 
 from email_service import (
     EmailConfigurationError,
@@ -1536,7 +1538,9 @@ async def health():
 
 
 api.include_router(build_integration_router(get_current_user, integration_service))
+api.include_router(build_backtest_router(get_current_user, db))
 app.include_router(api)
+app.add_middleware(BacktestBodyLimit)
 
 app.add_middleware(
     CORSMiddleware,
@@ -1557,6 +1561,7 @@ async def startup_db():
     )
     await db.command("ping")
     await ensure_database_indexes()
+    await ensure_backtest_indexes(db)
     logging.info("MongoDB connection and indexes are ready")
 
 

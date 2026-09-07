@@ -175,6 +175,9 @@ export const auth = {
     return response({ ok: true });
   },
   deleteAccount: async (confirmation) => {
+    // Backtest Lab data lives in the private backend database and cannot be
+    // removed by the Supabase cascade after the auth token is invalidated.
+    await api.delete("/backtest/account-data");
     const { data, error } = await supabase.functions.invoke("delete-account", {
       body: { confirmation },
     });

@@ -29,6 +29,8 @@ const AICoach = lazy(() => import("@/pages/AICoach"));
 const TradingDNA = lazy(() => import("@/pages/TradingDNA"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Backtest = lazy(() => import("@/pages/Backtest"));
+const BacktestHome = lazy(() => import("@/features/backtest/BacktestHome"));
+const BacktestSession = lazy(() => import("@/features/backtest/BacktestSession"));
 const MarketTerminal = lazy(() => import("@/pages/MarketTerminal"));
 const EconomicCalendar = lazy(() => import("@/pages/EconomicCalendar"));
 const DayView = lazy(() => import("@/pages/DayView"));
@@ -125,7 +127,9 @@ export default function App() {
             <Route path="accounts" element={<Accounts />} />
             <Route path={JOURNAL_LIST_ROUTE} element={<JournalPage />} />
             <Route path={JOURNAL_DETAIL_ROUTE} element={<JournalPage />} />
-            <Route path="backtest" element={<Backtest />} />
+            <Route path="backtest" element={<BacktestHome />} />
+            <Route path="backtest/projection" element={<Backtest />} />
+            <Route path="backtest/session/:sessionId" element={<BacktestSession />} />
             <Route path="markets" element={<MarketTerminal />} />
             <Route path="economic-calendar" element={<EconomicCalendar />} />
             <Route path="day-view" element={<DayView />} />
