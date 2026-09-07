@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -21,6 +22,10 @@ import asyncio
 import requests
 
 from atlas import build_atlas_context, build_atlas_prompt
+from admin import build_admin_router
+from admin.client import AdminConfigurationError, AdminDataError, SupabaseAdminClient
+from admin.security import normalize_role
+from admin.service import AdminService
 from backtest.routes import build_backtest_router, ensure_backtest_indexes
 from backtest.body_limit import BacktestBodyLimit
 
@@ -94,8 +99,32 @@ integration_service = IntegrationService(
 app = FastAPI(title="PipsEvo API")
 api = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
+admin_service = AdminService(
+    db,
+    SupabaseAdminClient(SUPABASE_URL, SUPABASE_SECRET_KEY, SUPABASE_PUBLISHABLE_KEY),
+    os.environ.get("FRONTEND_URL", "https://pipsevo.vercel.app"),
+)
 economic_calendar_cache: Dict[str, Any] = {"events": [], "fetched_at": None, "expires_at": None}
 economic_calendar_lock = asyncio.Lock()
+
+
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", "").strip()[:100] or str(uuid.uuid4())
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+@app.exception_handler(AdminConfigurationError)
+async def admin_configuration_error(_request: Request, _exc: AdminConfigurationError):
+    return JSONResponse(status_code=503, content={"detail": "Le back-office n’est pas encore configuré côté serveur."})
+
+
+@app.exception_handler(AdminDataError)
+async def admin_data_error(_request: Request, _exc: AdminDataError):
+    return JSONResponse(status_code=502, content={"detail": "Une donnée administrative n’a pas pu être chargée."})
 
 
 async def ensure_database_indexes():
@@ -217,14 +246,18 @@ async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depen
 
     # Compatibilité temporaire : les anciens JWT Mongo restent valides pendant
     # le basculement, puis les nouveaux jetons sont validés par Supabase Auth.
+    legacy_user = None
     try:
         payload = pyjwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
         user_id = payload["sub"]
-        user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
-        if user:
-            return user
+        legacy_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
     except Exception:
         pass
+    if legacy_user:
+        normalized = {**legacy_user, "role": normalize_role(legacy_user.get("role")), "status": legacy_user.get("status", "active")}
+        if normalized["status"] != "active":
+            raise HTTPException(status_code=403, detail="Ce compte est suspendu.")
+        return normalized
 
     if not SUPABASE_URL or not SUPABASE_PUBLISHABLE_KEY:
         raise HTTPException(status_code=401, detail="Invalid token")
@@ -260,12 +293,17 @@ async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depen
 
     if not profiles:
         raise HTTPException(status_code=401, detail="User profile not found")
-    return {
+    result = {
         **profiles[0],
         "id": auth_user["id"],
         "email": auth_user.get("email") or profiles[0].get("email"),
+        "role": normalize_role(profiles[0].get("role")),
+        "status": profiles[0].get("status", "active"),
         "_supabase_token": creds.credentials,
     }
+    if result["status"] != "active":
+        raise HTTPException(status_code=403, detail="Ce compte est suspendu.")
+    return result
 
 
 async def supabase_select(table: str, token: str, params: Dict[str, str]):
@@ -521,6 +559,8 @@ def _contact_ip_hash(request: Request) -> str:
 @api.post("/support", status_code=status.HTTP_202_ACCEPTED)
 @api.post("/contact", status_code=status.HTTP_202_ACCEPTED, include_in_schema=False)
 async def contact(body: ContactIn, request: Request):
+    if not await admin_service.setting("support_enabled", True):
+        raise HTTPException(503, "Le support est temporairement fermé. Réessaie plus tard.")
     # A filled honeypot is accepted silently so bots do not learn how they were detected.
     if body.website:
         return {"ok": True, "message": "Message received"}
@@ -606,8 +646,8 @@ async def send_account_welcome(body: WelcomeEmailIn, user=Depends(get_current_us
     """Send the account welcome once; subsequent calls are idempotent."""
     event = "account-welcome"
     existing = await db.email_deliveries.find_one({"event": event, "user_id": user["id"]})
-    if existing and existing.get("status") == "delivered":
-        return {"ok": True, "status": "already_delivered"}
+    if existing and existing.get("status") in {"sent", "delivered"}:
+        return {"ok": True, "status": "already_sent"}
     now = datetime.now(timezone.utc)
     if existing:
         claim = await db.email_deliveries.update_one(
@@ -644,9 +684,13 @@ async def send_account_welcome(body: WelcomeEmailIn, user=Depends(get_current_us
         raise HTTPException(503, "L’e-mail de bienvenue est temporairement indisponible.")
     await db.email_deliveries.update_one(
         {"event": event, "user_id": user["id"]},
-        {"$set": {"status": "delivered", "message_id": message_id, "delivered_at": datetime.now(timezone.utc)}},
+        {"$set": {
+            "status": "sent", "message_id": message_id, "recipient": user["email"],
+            "provider": os.environ.get("EMAIL_PROVIDER", "smtp"),
+            "sent_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc),
+        }},
     )
-    return {"ok": True, "status": "delivered"}
+    return {"ok": True, "status": "sent"}
 
 
 def _email_delivery_id(prefix: str, value: str) -> str:
@@ -984,6 +1028,8 @@ async def send_newsletter_campaign(
 
 @api.post("/auth/register")
 async def register(body: RegisterIn):
+    if not await admin_service.setting("registration_enabled", True):
+        raise HTTPException(503, "Les inscriptions sont temporairement fermées.")
     existing = await db.users.find_one({"email": body.email.lower()})
     if existing:
         raise HTTPException(400, "Email already registered")
@@ -1332,6 +1378,8 @@ COACH_SYSTEM = (
 
 @api.post("/coach/ask")
 async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
+    if not await admin_service.feature_enabled("atlas_v2", user, True):
+        raise HTTPException(403, "Atlas n’est pas activé pour ce compte.")
     if not ATLAS_API_KEY or client_ai is None:
         raise HTTPException(503, "Atlas n’est pas configuré côté serveur (ATLAS_ANTHROPIC_API_KEY manquante).")
 
@@ -1361,6 +1409,8 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
     user_prompt = build_atlas_prompt(body.question.strip(), body.context_tag or "overall", context)
 
     started_at = asyncio.get_running_loop().time()
+    atlas_status = "error"
+    atlas_error_code = "unexpected_error"
     try:
         message = await asyncio.wait_for(
             asyncio.to_thread(
@@ -1374,28 +1424,46 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
         )
         answer = next((block.text for block in message.content if getattr(block, "text", None)), "").strip()
         if not answer:
+            atlas_error_code = "empty_response"
             raise HTTPException(502, "Atlas a renvoyé une réponse vide. Réessaie.")
+        atlas_status = "success"
+        atlas_error_code = None
     except anthropic.AuthenticationError:
+        atlas_error_code = "provider_auth"
         logging.error("atlas_request_failed code=provider_auth user_id=%s model=%s", user["id"], ATLAS_MODEL)
         raise HTTPException(503, "Atlas est mal configuré côté serveur. Vérifie ATLAS_ANTHROPIC_API_KEY.")
     except anthropic.RateLimitError:
+        atlas_error_code = "rate_limit"
         logging.warning("atlas_request_failed code=rate_limit user_id=%s model=%s", user["id"], ATLAS_MODEL)
         raise HTTPException(429, "Atlas est momentanément très sollicité. Réessaie dans quelques instants.")
     except (anthropic.APIConnectionError, asyncio.TimeoutError):
+        atlas_error_code = "unavailable"
         logging.warning("atlas_request_failed code=unavailable user_id=%s model=%s", user["id"], ATLAS_MODEL)
         raise HTTPException(503, "Atlas ne répond pas pour le moment. Réessaie.")
-    except HTTPException:
+    except HTTPException as exc:
+        atlas_error_code = atlas_error_code or f"http_{exc.status_code}"
         raise
     except anthropic.APIError:
+        atlas_error_code = "provider_error"
         logging.exception("atlas_request_failed code=provider_error user_id=%s model=%s", user["id"], ATLAS_MODEL)
         raise HTTPException(502, "Atlas n’a pas pu terminer l’analyse. Réessaie.")
     finally:
+        duration_ms = round((asyncio.get_running_loop().time() - started_at) * 1000)
         logging.info(
             "atlas_request_finished user_id=%s model=%s duration_ms=%d",
             user["id"],
             ATLAS_MODEL,
-            round((asyncio.get_running_loop().time() - started_at) * 1000),
+            duration_ms,
         )
+        try:
+            await db.atlas_events.insert_one({
+                "user_id": user["id"], "model": ATLAS_MODEL,
+                "tag": body.context_tag or "overall", "status": atlas_status,
+                "error_code": atlas_error_code, "duration_ms": duration_ms,
+                "created_at": datetime.now(timezone.utc),
+            })
+        except Exception:
+            logging.exception("atlas_event_write_failed user_id=%s", user["id"])
 
     # Persist
     report = {
@@ -1538,7 +1606,8 @@ async def health():
 
 
 api.include_router(build_integration_router(get_current_user, integration_service))
-api.include_router(build_backtest_router(get_current_user, db))
+api.include_router(build_backtest_router(get_current_user, db, admin_service.feature_enabled))
+api.include_router(build_admin_router(get_current_user, admin_service))
 app.include_router(api)
 app.add_middleware(BacktestBodyLimit)
 
@@ -1562,6 +1631,7 @@ async def startup_db():
     await db.command("ping")
     await ensure_database_indexes()
     await ensure_backtest_indexes(db)
+    await admin_service.ensure_indexes()
     logging.info("MongoDB connection and indexes are ready")
 
 

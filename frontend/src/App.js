@@ -8,6 +8,7 @@ import RouteSEO from "@/components/RouteSEO";
 import RouteScrollManager from "@/components/RouteScrollManager";
 import { AUTH_CONFIG, hasCompletedOnboarding } from "@/config/auth";
 import { JOURNAL_DETAIL_ROUTE, JOURNAL_LIST_ROUTE } from "@/lib/journalNavigation";
+import { ProductTelemetry } from "@/features/admin/ProductOperations";
 import "@/index.css";
 
 const Landing = lazy(() => import("@/pages/LandingV2"));
@@ -36,6 +37,31 @@ const EconomicCalendar = lazy(() => import("@/pages/EconomicCalendar"));
 const DayView = lazy(() => import("@/pages/DayView"));
 const NewsletterActionPage = lazy(() => import("@/pages/NewsletterActionPage"));
 const PlatformsPage = lazy(() => import("@/pages/PlatformsPage"));
+const AdminAccess = lazy(() => import("@/features/admin/AdminAccess"));
+const AdminShell = lazy(() => import("@/features/admin/AdminShell"));
+const AdminOverview = lazy(() => import("@/features/admin/AdminOverview"));
+const loadAdminUsers = () => import("@/features/admin/AdminUsers");
+const AdminUsers = lazy(() => loadAdminUsers().then((module) => ({ default: module.AdminUsers })));
+const AdminUserDetail = lazy(() => loadAdminUsers().then((module) => ({ default: module.AdminUserDetail })));
+const loadAdminSupport = () => import("@/features/admin/AdminSupport");
+const AdminSupport = lazy(() => loadAdminSupport().then((module) => ({ default: module.AdminSupport })));
+const AdminSupportDetail = lazy(() => loadAdminSupport().then((module) => ({ default: module.AdminSupportDetail })));
+const loadAdminOperations = () => import("@/features/admin/AdminOperations");
+const adminOperation = (name) => lazy(() => loadAdminOperations().then((module) => ({ default: module[name] })));
+const AdminSync = adminOperation("AdminSync");
+const AdminPropFirms = adminOperation("AdminPropFirms");
+const AdminEmails = adminOperation("AdminEmails");
+const AdminAtlas = adminOperation("AdminAtlas");
+const AdminBacktesting = adminOperation("AdminBacktesting");
+const AdminAnalytics = adminOperation("AdminAnalytics");
+const AdminSubscriptions = adminOperation("AdminSubscriptions");
+const loadAdminControl = () => import("@/features/admin/AdminControl");
+const adminControl = (name) => lazy(() => loadAdminControl().then((module) => ({ default: module[name] })));
+const AdminAnnouncements = adminControl("AdminAnnouncements");
+const AdminFlags = adminControl("AdminFlags");
+const AdminIncidents = adminControl("AdminIncidents");
+const AdminAudit = adminControl("AdminAudit");
+const AdminSettings = adminControl("AdminSettings");
 
 const loadSupportPages = () => import("@/pages/SupportPages");
 const supportPage = (name) => lazy(() => loadSupportPages().then((module) => ({ default: module[name] })));
@@ -90,6 +116,7 @@ export default function App() {
     <I18nProvider>
     <AuthProvider>
       <BrowserRouter>
+        <ProductTelemetry />
         <RouteScrollManager />
         <RouteSEO />
         <CookieConsent />
@@ -139,6 +166,27 @@ export default function App() {
             <Route path="coach" element={<AICoach />} />
             <Route path="dna" element={<TradingDNA />} />
             <Route path="settings" element={<Settings />} />
+          </Route>
+          <Route element={<AdminAccess />}>
+            <Route path="/admin" element={<AdminShell />}>
+              <Route index element={<AdminOverview />} />
+              <Route path="users" element={<AdminUsers />} />
+              <Route path="users/:userId" element={<AdminUserDetail />} />
+              <Route path="support" element={<AdminSupport />} />
+              <Route path="support/:ticketId" element={<AdminSupportDetail />} />
+              <Route path="trading-sync" element={<AdminSync />} />
+              <Route path="prop-firms" element={<AdminPropFirms />} />
+              <Route path="emails" element={<AdminEmails />} />
+              <Route path="atlas" element={<AdminAtlas />} />
+              <Route path="backtesting" element={<AdminBacktesting />} />
+              <Route path="analytics" element={<AdminAnalytics />} />
+              <Route path="subscriptions" element={<AdminSubscriptions />} />
+              <Route path="announcements" element={<AdminAnnouncements />} />
+              <Route path="feature-flags" element={<AdminFlags />} />
+              <Route path="incidents" element={<AdminIncidents />} />
+              <Route path="audit" element={<AdminAudit />} />
+              <Route path="settings" element={<AdminSettings />} />
+            </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

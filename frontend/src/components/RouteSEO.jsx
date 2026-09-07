@@ -71,7 +71,7 @@ export default function RouteSEO() {
     const [title, description] = guide
       ? [`${guide.title[language]} — PipsEvo`, guide.summary[language]]
       : source[pathname] || (language === "en" ? ["PipsEvo — Application", "Your personal PipsEvo workspace."] : ["PipsEvo — Application", "Espace personnel PipsEvo."]);
-    const isPrivate = pathname.startsWith("/app") || pathname.startsWith("/auth/") || pathname === "/reset-password" || pathname === "/onboarding" || pathname === "/verify-email" || pathname.startsWith("/newsletter/");
+    const isPrivate = pathname.startsWith("/app") || pathname.startsWith("/admin") || pathname.startsWith("/auth/") || pathname === "/reset-password" || pathname === "/onboarding" || pathname === "/verify-email" || pathname.startsWith("/newsletter/");
     document.title = title;
     setMeta('meta[name="description"]', "content", description);
     setMeta('meta[name="robots"]', "content", isPrivate ? "noindex,nofollow" : "index,follow");

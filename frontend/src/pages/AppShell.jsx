@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X, PanelLeftClose, PanelLeftOpen, CalendarDays, CalendarRange } from "lucide-react";
+import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X, PanelLeftClose, PanelLeftOpen, CalendarDays, CalendarRange, LockKeyhole } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { LogoMark } from "@/components/Logo";
 import { dashboard, accounts as accountsAPI, trades as tradesAPI } from "@/lib/api";
@@ -12,6 +12,7 @@ import { evaluateRiskAlerts } from "@/lib/riskEngine";
 import { listenForAppDataChanges, notifyAppDataChanged } from "@/lib/appDataEvents";
 import { JOURNAL_LIST_PATH } from "@/lib/journalNavigation";
 import { MotionOverlay, MotionPopover, MotionScope, Presence } from "../components/motion/MotionSystem";
+import { AnnouncementBanner } from "@/features/admin/ProductOperations";
 
 const NAV_LINKS = [
   { to: "/app/dashboard", fr: "Aperçu", en: "Overview", icon: Home, testid: "nav-dashboard" },
@@ -281,6 +282,7 @@ export default function AppShell() {
           onLogout={async()=>{ await logout(); window.location.href = "/"; }}
         />
         <main className="pe-app-content pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
+          <AnnouncementBanner />
           <MotionScope routeKey={location.pathname}>
             <Outlet />
           </MotionScope>
@@ -401,6 +403,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
         <button onClick={()=>{onNavigate("/app/accounts");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><Wallet className="w-4 h-4"/>Mes comptes</button>
         <button onClick={()=>{onNavigate("/faq");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><BookOpen className="w-4 h-4"/>FAQ et centre d'aide</button>
         <button onClick={()=>{onNavigate("/contact");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B5BBC9] hover:text-white hover:bg-white/5"><Bell className="w-4 h-4"/>Contacter le support</button>
+        {["support", "admin", "super_admin"].includes(user?.role) && <button onClick={()=>{onNavigate("/admin");setProfileOpen(false)}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#B58BFF] hover:text-white hover:bg-[#7C4DFF]/10"><LockKeyhole className="w-4 h-4"/>Administration</button>}
         <div className="mt-1 flex items-center justify-between border-t border-white/5 px-3 py-2.5"><span className="text-sm text-[#B5BBC9]">Langue</span><LanguageSwitcher/></div>
         <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 border-t border-white/5 mt-1 rounded-lg text-sm text-[#FF7A7A] hover:bg-[#F26A70]/10"><LogOut className="w-4 h-4"/>Se déconnecter</button>
       </MotionPopover></Presence>

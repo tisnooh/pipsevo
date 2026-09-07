@@ -101,6 +101,15 @@ const loadCurrentUser = async ({ retries = 0 } = {}) => {
 
 export const auth = {
   register: async ({ email, password, name, language = "fr" }) => {
+    try {
+      const settings = await api.get("/settings/public");
+      if (settings.data?.maintenance_mode || settings.data?.registration_enabled === false) {
+        throw fail(settings.data?.maintenance_mode ? "PipsEvo est temporairement en maintenance." : "Les inscriptions sont temporairement fermées.", 503);
+      }
+    } catch (error) {
+      if (error.response?.status === 503) throw error;
+      // Une panne de lecture des réglages ne doit pas inventer une fermeture.
+    }
     const cleanEmail = email.trim();
     const displayName = name.trim();
     const options = {

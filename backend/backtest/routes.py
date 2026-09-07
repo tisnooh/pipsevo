@@ -50,10 +50,12 @@ async def ensure_backtest_indexes(db):
     await db.backtest_usage.create_index("expires_at", expireAfterSeconds=0)
 
 
-def build_backtest_router(get_current_user, db):
+def build_backtest_router(get_current_user, db, feature_checker=None):
     router = APIRouter(prefix="/backtest", tags=["Backtest Lab"])
 
     async def authenticated(user=Depends(get_current_user)):
+        if feature_checker and not await feature_checker("new_backtest_lab", user, True):
+            raise HTTPException(403, "Le Backtest Lab n’est pas activé pour ce compte.")
         # Shared DB counter works across workers, with no raw IP or token stored.
         bucket = int(time.time() // 60)
         key = f"{user['id']}:{bucket}"

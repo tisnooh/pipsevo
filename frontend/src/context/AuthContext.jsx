@@ -20,6 +20,8 @@ export function AuthProvider({ children }) {
       name: session.user.user_metadata?.display_name || session.user.email?.split("@")[0] || "Trader",
       onboarding_completed: false,
       onboarded: false,
+      role: "user",
+      status: "active",
       profile_loading_error: true,
     });
 
