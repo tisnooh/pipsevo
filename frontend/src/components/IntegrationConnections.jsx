@@ -13,7 +13,7 @@ import { localDateKey } from "../lib/tradeCalendar";
 const PROVIDERS = [
   { id: "ctrader", name: "cTrader", mark: "cT", copy: "OAuth officiel et comptes cTrader autorisés en lecture seule." },
   { id: "metaapi", name: "MetaTrader 4 / 5", mark: "M5", copy: "Connexion directe en lecture seule avec import automatique de l’historique." },
-  { id: "tradelocker", name: "TradeLocker", mark: "TL", copy: "Jeton JWT officiel, comptes détectés puis sélectionnés séparément." },
+  { id: "tradelocker", name: "TradeLocker", mark: "TL", copy: "Connexion avec les identifiants broker/prop firm, puis import automatique des comptes et trades." },
   { id: "tradovate", name: "Tradovate", mark: "TV", copy: "OAuth officiel pour comptes Futures, fills et historique de trades." },
   { id: "ninjatrader", name: "NinjaTrader", mark: "NT", copy: "Import de fichier disponible en attendant l’accès développeur officiel." },
 ];
@@ -377,7 +377,16 @@ function ProviderForm({ provider, metaForm, setMetaForm, tlForm, setTlForm, busy
   const setForm = meta ? setMetaForm : setTlForm;
   const field = (key, value) => setForm(current => ({ ...current, [key]: value }));
   return <form onSubmit={onSubmit} className="space-y-4">
-    {meta ? <MetaTraderFields form={form} field={field}/> : <><Field label="Environnement"><select value={form.environment} onChange={e => field("environment", e.target.value)} className="field"><option value="demo">Démo</option><option value="live">Réel</option></select></Field><Field label="Email TradeLocker"><input type="email" autoComplete="username" required value={form.email} onChange={e => field("email", e.target.value)} className="field"/></Field><Field label="Serveur"><input required value={form.server} onChange={e => field("server", e.target.value)} className="field"/></Field><Field label="Mot de passe"><input type="password" autoComplete="current-password" required value={form.password} onChange={e => field("password", e.target.value)} className="field"/></Field></>}
+    {meta ? <MetaTraderFields form={form} field={field}/> : <>
+      <div className="rounded-xl border border-[#FFB855]/20 bg-[#FFB855]/[0.05] p-3 text-[11px] leading-relaxed text-[#C8B98E]">
+        Utilise les trois identifiants reçus de ton broker ou de ta prop firm. Une session TradeLocker Profile ouverte uniquement avec Google ou Apple ne peut pas être transmise à l’API publique.
+        <a href="https://tradelocker.com/how-to/log-in/" target="_blank" rel="noreferrer" className="ml-1 inline-flex items-center gap-1 text-[#D9C8FF] hover:text-white">Voir l’aide officielle <ExternalLink className="h-3 w-3"/></a>
+      </div>
+      <Field label="Environnement"><select value={form.environment} onChange={e => field("environment", e.target.value)} className="field"><option value="demo">Démo broker / prop firm</option><option value="live">Réel broker / prop firm</option></select></Field>
+      <Field label="Email du compte broker / prop firm"><input type="email" autoComplete="username" required value={form.email} onChange={e => field("email", e.target.value)} className="field"/></Field>
+      <Field label="Serveur TradeLocker"><input required placeholder="Nom exact reçu par e-mail" value={form.server} onChange={e => field("server", e.target.value)} className="field"/></Field>
+      <Field label="Mot de passe du compte"><input type="password" autoComplete="current-password" required value={form.password} onChange={e => field("password", e.target.value)} className="field"/></Field>
+    </>}
     <DialogFooter><button disabled={busy} className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin"/> : <Server className="h-4 w-4"/>}{meta ? "Connecter MetaTrader" : "Autoriser TradeLocker"}</button></DialogFooter>
   </form>;
 }

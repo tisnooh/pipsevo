@@ -54,6 +54,11 @@ SAFE_PROVIDER_ERRORS = {
     "account_not_selected": "Sélectionne au moins un compte avant de synchroniser.",
     "sync_already_running": "Une synchronisation est déjà en cours.",
     "provider_invalid_response": "La plateforme a renvoyé une réponse inexploitable.",
+    "tradelocker_credentials_required": (
+        "Utilise les identifiants TradeLocker fournis par ton broker ou ta prop firm : "
+        "email, mot de passe et serveur. La connexion Google ou Apple du profil "
+        "TradeLocker n’est pas un identifiant pour l’API publique."
+    ),
 }
 
 

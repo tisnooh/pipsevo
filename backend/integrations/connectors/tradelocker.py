@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from decimal import Decimal
@@ -37,17 +38,28 @@ class TradeLockerConnector(TradingConnector):
         self, request: TradeLockerCredentials
     ) -> AuthenticationResult:
         base = self.urls[request.environment]
-        data = await request_json(
-            "POST",
-            f"{base}/auth/jwt/token",
-            expected=(200, 201),
-            provider_name=self.provider_id,
-            json={
-                "email": request.email,
-                "password": request.password.get_secret_value(),
-                "server": request.server,
-            },
-        )
+        try:
+            data = await request_json(
+                "POST",
+                f"{base}/auth/jwt/token",
+                expected=(200, 201),
+                provider_name=self.provider_id,
+                json={
+                    "email": request.email,
+                    "password": request.password.get_secret_value(),
+                    "server": request.server,
+                },
+            )
+        except IntegrationError as exc:
+            if exc.code in {"invalid_credentials", "provider_request_rejected"}:
+                raise IntegrationError(
+                    "tradelocker_credentials_required",
+                    "Utilise les identifiants fournis par ton broker ou ta prop firm. "
+                    "La connexion Google ou Apple du profil TradeLocker n’est pas "
+                    "acceptée par l’API publique.",
+                    401,
+                ) from None
+            raise
         access_token = data.get("accessToken") or data.get("access_token")
         refresh_token = data.get("refreshToken") or data.get("refresh_token")
         if not access_token:
@@ -56,9 +68,11 @@ class TradeLockerConnector(TradingConnector):
                 "TradeLocker n’a pas renvoyé de jeton d’accès.",
                 502,
             )
+        expires_at = self._expiry(data)
         access = {
             "access_token": access_token,
             "refresh_token": refresh_token,
+            "expires_at": expires_at.isoformat(),
             "environment": request.environment,
             "server": request.server,
         }
@@ -67,7 +81,7 @@ class TradeLockerConnector(TradingConnector):
             tokens=AuthTokens(
                 access_token=SecretStr(access_token),
                 refresh_token=SecretStr(refresh_token) if refresh_token else None,
-                expires_at=datetime.now(timezone.utc) + timedelta(minutes=14),
+                expires_at=expires_at,
                 scope="read",
             ),
             external_connection_id=f"{request.environment}:{request.server}:{request.email.lower()}",
@@ -80,11 +94,19 @@ class TradeLockerConnector(TradingConnector):
 
     async def refresh_auth(self, access: dict) -> dict:
         base = self.urls[access.get("environment", "demo")]
+        refresh_token = access.get("refresh_token")
+        if not refresh_token:
+            raise IntegrationError(
+                "connection_expired",
+                "Reconnecte TradeLocker pour continuer.",
+                401,
+            )
         data = await request_json(
             "POST",
             f"{base}/auth/jwt/refresh",
+            expected=(200, 201),
             provider_name=self.provider_id,
-            json={"refreshToken": access["refresh_token"]},
+            json={"refreshToken": refresh_token},
         )
         access_token = data.get("accessToken") or data.get("access_token")
         if not access_token:
@@ -99,9 +121,7 @@ class TradeLockerConnector(TradingConnector):
             "refresh_token": data.get("refreshToken")
             or data.get("refresh_token")
             or access.get("refresh_token"),
-            "expires_at": (
-                datetime.now(timezone.utc) + timedelta(minutes=14)
-            ).isoformat(),
+            "expires_at": self._expiry(data).isoformat(),
         }
 
     async def list_accounts(self, access: dict) -> list[DetectedAccount]:
@@ -302,7 +322,10 @@ class TradeLockerConnector(TradingConnector):
             },
         )
         rows = list(self._unwrap(payload, "ordersHistory") or [])
-        if not row_limit or len(rows) < row_limit:
+        root = payload.get("d", payload.get("data", payload)) if isinstance(payload, dict) else {}
+        has_more = bool(root.get("hasMore")) if isinstance(root, dict) else False
+        saturated = has_more or bool(row_limit and len(rows) >= row_limit)
+        if not saturated:
             return rows, False
 
         # TradeLocker caps this endpoint instead of exposing an offset cursor.
@@ -312,6 +335,9 @@ class TradeLockerConnector(TradingConnector):
             return rows, True
         midpoint = start + (end - start) / 2
         right_start = midpoint + timedelta(milliseconds=1)
+        # GET_ORDERS_HISTORY is limited to one request per second by the
+        # provider's current /trade/config response.
+        await asyncio.sleep(1.05)
         left_rows, left_partial = await self._order_history(
             base,
             external_account_id,
@@ -321,6 +347,7 @@ class TradeLockerConnector(TradingConnector):
             row_limit,
             depth=depth + 1,
         )
+        await asyncio.sleep(1.05)
         right_rows, right_partial = await self._order_history(
             base,
             external_account_id,
@@ -413,7 +440,8 @@ class TradeLockerConnector(TradingConnector):
         if acc_num is not None:
             headers["accNum"] = str(acc_num)
         if self.developer_api_key:
-            headers["tl-developer-api-key"] = self.developer_api_key
+            # This is the header used by TradeLocker's official Python client.
+            headers["developer-api-key"] = self.developer_api_key
         return headers
 
     @staticmethod
@@ -433,6 +461,9 @@ class TradeLockerConnector(TradingConnector):
             account_number_masked=f"•••• {account_id[-4:]}",
             account_type="demo" if access.get("environment") == "demo" else "real",
             account_currency=row.get("currency"),
+            balance=TradeLockerConnector._decimal(
+                row.get("accountBalance") or row.get("aaccountBalance")
+            ),
             display_name=row.get("name") or f"TradeLocker {account_id[-4:]}",
             provider_metadata={
                 "environment": access.get("environment"),
@@ -475,8 +506,17 @@ class TradeLockerConnector(TradingConnector):
             for item in limits:
                 if not isinstance(item, dict):
                     continue
-                name = str(item.get("route") or item.get("endpoint") or item.get("name") or "")
-                if "ordershistory" not in name.replace("_", "").replace("-", "").lower():
+                name = str(
+                    item.get("route")
+                    or item.get("endpoint")
+                    or item.get("name")
+                    or item.get("limitType")
+                    or ""
+                )
+                compact_name = name.replace("_", "").replace("-", "").lower()
+                if "ordershistory" not in compact_name and not (
+                    "orders" in compact_name and "history" in compact_name
+                ):
                     continue
                 for limit_key in ("maxRows", "max_rows", "rowLimit", "row_limit", "limit"):
                     limit = item.get(limit_key)
@@ -510,10 +550,31 @@ class TradeLockerConnector(TradingConnector):
                 value / 1000 if value > 10_000_000_000 else value, timezone.utc
             )
         if value:
-            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(
+            raw = str(value).strip()
+            try:
+                numeric = float(raw)
+            except ValueError:
+                numeric = None
+            if numeric is not None:
+                return datetime.fromtimestamp(
+                    numeric / 1000 if numeric > 10_000_000_000 else numeric,
+                    timezone.utc,
+                )
+            return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(
                 timezone.utc
             )
         return datetime.now(timezone.utc)
+
+    @staticmethod
+    def _expiry(payload: dict) -> datetime:
+        value = payload.get("expireDate") or payload.get("expires_at")
+        if value:
+            parsed = TradeLockerConnector._time(value)
+            if parsed > datetime.now(timezone.utc):
+                return parsed
+        # Defensive fallback for legacy TradeLocker responses that omit
+        # expireDate. Access tokens have historically been short lived.
+        return datetime.now(timezone.utc) + timedelta(minutes=14)
 
     @staticmethod
     def _decimal(value):

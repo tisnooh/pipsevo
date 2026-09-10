@@ -59,8 +59,8 @@ def test_tradelocker_keeps_account_id_and_sequence_number_separate(monkeypatch):
 
     assert accounts[0].external_account_id == "123456789"
     assert accounts[0].provider_metadata["acc_num"] == 2
-    assert requests[0][2]["headers"]["tl-developer-api-key"] == "developer-key"
-    assert "developer-api-key" not in requests[0][2]["headers"]
+    assert requests[0][2]["headers"]["developer-api-key"] == "developer-key"
+    assert "tl-developer-api-key" not in requests[0][2]["headers"]
 
 
 def test_tradelocker_auth_accepts_documented_created_response(monkeypatch):
@@ -69,7 +69,11 @@ def test_tradelocker_auth_accepts_documented_created_response(monkeypatch):
     async def fake_request(method, url, **kwargs):
         requests.append((method, url, kwargs))
         if url.endswith("/auth/jwt/token"):
-            return {"accessToken": "access", "refreshToken": "refresh"}
+            return {
+                "accessToken": "access",
+                "refreshToken": "refresh",
+                "expireDate": "2030-01-02T03:04:05.000Z",
+            }
         if url.endswith("/auth/jwt/all-accounts"):
             return {"accounts": [{"id": 123, "accNum": 1, "currency": "USD"}]}
         raise AssertionError(f"Unexpected request: {method} {url}")
@@ -93,6 +97,68 @@ def test_tradelocker_auth_accepts_documented_created_response(monkeypatch):
     assert result.accounts[0].external_account_id == "123"
     assert requests[0][2]["expected"] == (200, 201)
     assert requests[0][2]["provider_name"] == "tradelocker"
+    assert result.tokens.expires_at == datetime(
+        2030, 1, 2, 3, 4, 5, tzinfo=timezone.utc
+    )
+
+
+def test_tradelocker_refresh_accepts_created_and_uses_provider_expiry(monkeypatch):
+    requests = []
+
+    async def fake_request(method, url, **kwargs):
+        requests.append((method, url, kwargs))
+        return {
+            "accessToken": "new-access",
+            "refreshToken": "new-refresh",
+            "expireDate": "2030-01-02T03:04:05.000Z",
+        }
+
+    monkeypatch.setattr(
+        "integrations.connectors.tradelocker.request_json", fake_request
+    )
+    connector = TradeLockerConnector("https://demo.example", "https://live.example")
+
+    refreshed = asyncio.run(
+        connector.refresh_auth(
+            {
+                "environment": "demo",
+                "refresh_token": "old-refresh",
+                "access_token": "old-access",
+            }
+        )
+    )
+
+    assert requests[0][2]["expected"] == (200, 201)
+    assert requests[0][2]["json"] == {"refreshToken": "old-refresh"}
+    assert refreshed["access_token"] == "new-access"
+    assert refreshed["refresh_token"] == "new-refresh"
+    assert refreshed["expires_at"] == "2030-01-02T03:04:05+00:00"
+
+
+def test_tradelocker_translates_profile_login_rejection(monkeypatch):
+    async def fake_request(method, url, **kwargs):
+        raise IntegrationError(
+            "provider_request_rejected", "Provider rejected request", 400
+        )
+
+    monkeypatch.setattr(
+        "integrations.connectors.tradelocker.request_json", fake_request
+    )
+    connector = TradeLockerConnector("https://demo.example", "https://live.example")
+
+    with pytest.raises(IntegrationError) as exc:
+        asyncio.run(
+            connector.authenticate(
+                TradeLockerCredentials(
+                    environment="demo",
+                    email="profile@example.com",
+                    password=SecretStr("password"),
+                    server="TradeLocker Demo",
+                )
+            )
+        )
+
+    assert exc.value.code == "tradelocker_credentials_required"
 
 
 def test_tradelocker_splits_saturated_history_ranges(monkeypatch):
@@ -108,6 +174,11 @@ def test_tradelocker_splits_saturated_history_ranges(monkeypatch):
     monkeypatch.setattr(
         "integrations.connectors.tradelocker.request_json", fake_request
     )
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr("integrations.connectors.tradelocker.asyncio.sleep", no_sleep)
     connector = TradeLockerConnector("https://demo.example", "https://live.example")
     rows, partial = asyncio.run(
         connector._order_history(
@@ -126,6 +197,66 @@ def test_tradelocker_splits_saturated_history_ranges(monkeypatch):
     assert TradeLockerConnector._orders_history_limit(
         {"d": {"limits": {"ordersHistory": {"maxRows": 500}}}}
     ) == 500
+    assert TradeLockerConnector._orders_history_limit(
+        {
+            "d": {
+                "limits": [
+                    {"limitType": "MAX_ORDERS_COUNT_IN_HISTORY", "limit": 10_000}
+                ]
+            }
+        }
+    ) == 10_000
+
+
+def test_tradelocker_splits_when_provider_reports_has_more(monkeypatch):
+    calls = []
+
+    async def fake_request(method, url, **kwargs):
+        calls.append(kwargs["params"])
+        if len(calls) == 1:
+            return {"d": {"ordersHistory": [["truncated"]], "hasMore": True}}
+        return {"d": {"ordersHistory": [[len(calls)]], "hasMore": False}}
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(
+        "integrations.connectors.tradelocker.request_json", fake_request
+    )
+    monkeypatch.setattr("integrations.connectors.tradelocker.asyncio.sleep", no_sleep)
+    connector = TradeLockerConnector("https://demo.example", "https://live.example")
+
+    rows, partial = asyncio.run(
+        connector._order_history(
+            "https://demo.example",
+            "123",
+            {"Authorization": "Bearer token", "accNum": "1"},
+            datetime(2026, 1, 1, tzinfo=timezone.utc),
+            datetime(2026, 1, 1, 0, 0, 4, tzinfo=timezone.utc),
+            None,
+        )
+    )
+
+    assert rows == [[2], [3]]
+    assert partial is False
+    assert len(calls) == 3
+
+
+def test_tradelocker_parses_numeric_timestamp_strings_and_account_balance():
+    timestamp = TradeLockerConnector._time("1767951992000")
+    account = TradeLockerConnector._account(
+        {
+            "id": "7080",
+            "accNum": "1",
+            "name": "Broker demo",
+            "currency": "USD",
+            "aaccountBalance": 2024.75,
+        },
+        {"environment": "demo", "server": "SERVER"},
+    )
+
+    assert timestamp == datetime.fromtimestamp(1767951992, timezone.utc)
+    assert account.balance == Decimal("2024.75")
 
 
 def test_tradelocker_keeps_open_positions_and_aggregates_fills():

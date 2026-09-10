@@ -94,9 +94,16 @@ les positions clôturées sont reconstruites sans écraser le journal utilisateu
 TradeLocker distingue l'identifiant `accountId`, utilisé dans les routes, du
 numéro de séquence `accNum`, transmis dans l'en-tête. PipsEvo conserve les deux
 séparément. L'historique saturé est subdivisé selon la limite publiée par
-`/trade/config`. `TRADELOCKER_DEVELOPER_API_KEY` est facultative pour un test à
+`/trade/config` ou lorsque la réponse indique `hasMore`. L'expiration
+`expireDate` est conservée et le renouvellement accepte la réponse officielle
+HTTP 201. `TRADELOCKER_DEVELOPER_API_KEY` est facultative pour un test à
 faible volume mais recommandée par TradeLocker pour une application
 multi-utilisateur.
+
+L'API publique JWT ne réutilise pas la session Google ou Apple d'un TradeLocker
+Profile. Elle exige les trois identifiants émis par un broker ou une prop firm :
+email, mot de passe et serveur. Le compte ODA gratuit du profil ne constitue donc
+pas à lui seul un compte de validation end-to-end pour cette intégration.
 
 ### Tradovate
 
