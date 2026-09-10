@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from decimal import Decimal
@@ -63,7 +64,6 @@ class MetaApiConnector(TradingConnector):
         body = {
             "name": request.name,
             "type": "cloud-g2",
-            "login": request.login,
             "server": request.server,
             "platform": request.platform,
             "magic": 0,
@@ -71,24 +71,42 @@ class MetaApiConnector(TradingConnector):
         # The optional password is transmitted directly to MetaApi and discarded
         # after this request; it is never returned to the service or persisted.
         if request.password:
+            body["login"] = request.login
             body["password"] = request.password.get_secret_value()
-        headers = {**self.headers, "transaction-id": secrets.token_hex(16)}
-        created = await self._request(
-            "POST",
-            f"{self.provisioning_url}/users/current/accounts",
-            headers=headers,
-            json=body,
-            expected=(200, 201, 202),
-        )
-        account_id = str(created.get("id") or created.get("_id") or "")
+        transaction_id = secrets.token_hex(16)
+        headers = {**self.headers, "transaction-id": transaction_id}
+        created: dict[str, Any] = {}
+        account_id = ""
+        # MetaApi can answer 202 while broker settings are still being resolved.
+        # Repeating the request with the same transaction id polls that exact
+        # provisioning transaction instead of creating duplicate cloud accounts.
+        for attempt in range(4):
+            result = await self._request(
+                "POST",
+                f"{self.provisioning_url}/users/current/accounts",
+                headers=headers,
+                json=body,
+                expected=(200, 201, 202),
+            )
+            created = result if isinstance(result, dict) else {}
+            account_id = str(created.get("id") or created.get("_id") or "")
+            if account_id:
+                break
+            if attempt < 3:
+                await asyncio.sleep(1)
         if not account_id:
             if created.get("message"):
                 raise IntegrationError(
                     "provider_processing",
-                    "MetaApi vérifie le serveur de trading. Réessaie la connexion dans une minute.",
+                    "MetaApi vérifie le serveur de trading. "
+                    "Réessaie la connexion dans une minute.",
                     409,
                 )
-            raise IntegrationError("provider_invalid_response", "MetaApi n’a pas créé le compte.", 502)
+            raise IntegrationError(
+                "provider_invalid_response",
+                "MetaApi n’a pas créé le compte.",
+                502,
+            )
 
         # When the password was supplied, MetaApi already has everything it
         # needs to start the terminal. A configuration link would ask the user
@@ -155,13 +173,14 @@ class MetaApiConnector(TradingConnector):
             f"{client_url}/users/current/accounts/{provider_id}/account-information",
             headers=self.headers,
         )
+        account_type = self._account_type(information, row)
         return [
             DetectedAccount(
                 external_account_id=provider_id,
                 broker_name=row.get("broker") or "MetaTrader",
                 server_name=row.get("server"),
                 account_number_masked=f"•••• {str(row.get('login') or '')[-4:]}",
-                account_type="demo" if "DEMO" in str(row.get("server", "")).upper() else "unknown",
+                account_type=account_type,
                 account_currency=information.get("currency"),
                 balance=self._decimal(information.get("balance")),
                 equity=self._decimal(information.get("equity")),
@@ -171,6 +190,9 @@ class MetaApiConnector(TradingConnector):
                     "state": deployment_state,
                     "connection_status": connection_state,
                     "platform": row.get("platform"),
+                    "investor_mode": information.get("investorMode"),
+                    "margin_mode": information.get("marginMode"),
+                    "leverage": information.get("leverage"),
                 },
             )
         ]
@@ -307,8 +329,9 @@ class MetaApiConnector(TradingConnector):
                 return None
             return sum(
                 (
-                    Decimal(str(item.get("price") or item.get("openPrice") or 0))
-                    * quantity(item)
+                    quantity(item) * Decimal(
+                        str(item.get("price") or item.get("openPrice") or 0)
+                    )
                     for item in items
                 ),
                 Decimal("0"),
@@ -375,3 +398,17 @@ class MetaApiConnector(TradingConnector):
     @staticmethod
     def _decimal(value):
         return Decimal(str(value)) if value is not None else None
+
+    @staticmethod
+    def _account_type(
+        information: dict, provisioning: dict
+    ) -> Literal["real", "demo", "unknown"]:
+        mode = str(information.get("type") or "").upper()
+        if mode == "ACCOUNT_TRADE_MODE_REAL":
+            return "real"
+        if mode in {"ACCOUNT_TRADE_MODE_DEMO", "ACCOUNT_TRADE_MODE_CONTEST"}:
+            return "demo"
+        server = str(
+            information.get("server") or provisioning.get("server") or ""
+        ).upper()
+        return "demo" if "DEMO" in server else "unknown"

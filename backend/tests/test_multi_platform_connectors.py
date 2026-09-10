@@ -90,7 +90,91 @@ def test_metaapi_password_uses_direct_connection_without_configuration_link(monk
     assert len(requests) == 1
     assert len(requests[0][2]["headers"]["transaction-id"]) == 32
     assert requests[0][2]["json"]["type"] == "cloud-g2"
+    assert requests[0][2]["json"]["login"] == "12345678"
     assert requests[0][2]["provider_authentication"] is True
+
+
+def test_metaapi_configuration_link_omits_login_and_password(monkeypatch):
+    requests = []
+
+    async def fake_request(method, url, **kwargs):
+        requests.append((method, url, kwargs))
+        if method == "POST":
+            return {"id": "meta-account", "state": "DRAFT"}
+        return {"configurationLink": "https://metaapi.example/configure"}
+
+    monkeypatch.setattr(
+        "integrations.connectors.metaapi.request_json", fake_request
+    )
+    connector = MetaApiConnector("token")
+
+    result = asyncio.run(
+        connector.create_configuration_link(
+            MetaApiLinkRequest(
+                platform="mt4",
+                name="Compte à configurer",
+                login="12345678",
+                server="Broker-Demo",
+            )
+        )
+    )
+
+    assert result["mode"] == "configuration_link"
+    assert result["configuration_link"] == "https://metaapi.example/configure"
+    assert "login" not in requests[0][2]["json"]
+    assert "password" not in requests[0][2]["json"]
+
+
+def test_metaapi_reuses_transaction_id_while_creation_is_processing(
+    monkeypatch,
+):
+    requests = []
+
+    async def fake_request(method, url, **kwargs):
+        requests.append((method, url, kwargs))
+        if len(requests) == 1:
+            return {"message": "Accepted"}
+        return {"id": "meta-account", "state": "UNDEPLOYED"}
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(
+        "integrations.connectors.metaapi.request_json", fake_request
+    )
+    monkeypatch.setattr(
+        "integrations.connectors.metaapi.asyncio.sleep", no_sleep
+    )
+    connector = MetaApiConnector("token")
+
+    result = asyncio.run(
+        connector.create_configuration_link(
+            MetaApiLinkRequest(
+                platform="mt5",
+                name="Compte principal",
+                login="12345678",
+                server="Broker-Demo",
+                password=SecretStr("investor-password"),
+            )
+        )
+    )
+
+    assert result["provider_account_id"] == "meta-account"
+    assert len(requests) == 2
+    first_transaction = requests[0][2]["headers"]["transaction-id"]
+    second_transaction = requests[1][2]["headers"]["transaction-id"]
+    assert first_transaction == second_transaction
+
+
+def test_metaapi_account_type_uses_account_information_before_server_name():
+    assert MetaApiConnector._account_type(
+        {"type": "ACCOUNT_TRADE_MODE_REAL", "server": "Broker-Demo"},
+        {"server": "Broker-Demo"},
+    ) == "real"
+    assert MetaApiConnector._account_type(
+        {"type": "ACCOUNT_TRADE_MODE_CONTEST"},
+        {"server": "Broker-Live"},
+    ) == "demo"
 
 
 def test_metaapi_server_search_uses_platform_version_and_flattens_brokers(monkeypatch):

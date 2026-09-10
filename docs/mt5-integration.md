@@ -27,6 +27,16 @@ compte et de ses autorisations.
    d'idempotence `(provider, external_account_id, provider_trade_id)`.
 8. La déconnexion supprime définitivement les secrets chiffrés.
 
+MetaApi peut répondre `202 Accepted` pendant la détection du serveur. PipsEvo
+réinterroge alors la même opération avec le même `transaction-id`, conformément
+au contrat fournisseur, afin de ne pas créer plusieurs comptes cloud pour une
+seule tentative utilisateur.
+
+Le formulaire recommande le mot de passe investisseur MetaTrader. Il permet de
+consulter le compte sans autoriser les opérations de trading. Le type réel,
+démo ou concours est ensuite déterminé depuis les informations du compte
+renvoyées par MetaApi, et non uniquement depuis le nom du serveur.
+
 ## Contrat fournisseur
 
 L'adaptateur historique `MT5IntegrationProvider` reste le contrat du flux MT5
