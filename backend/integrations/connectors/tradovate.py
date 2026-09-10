@@ -59,6 +59,7 @@ class TradovateConnector(TradingConnector):
         data = await request_json(
             "POST",
             self.oauth_url,
+            provider_name=self.provider_id,
             headers={"Content-Type": "application/json"},
             json={
                 "grant_type": "authorization_code",
@@ -108,6 +109,7 @@ class TradovateConnector(TradingConnector):
         data = await request_json(
             "POST",
             self.oauth_url,
+            provider_name=self.provider_id,
             headers={"Content-Type": "application/json"},
             json={
                 "grant_type": "refresh_token",
@@ -134,7 +136,10 @@ class TradovateConnector(TradingConnector):
 
     async def list_accounts(self, access: dict) -> list[DetectedAccount]:
         rows = await request_json(
-            "GET", f"{self.live_url}/account/list", headers=self._headers(access)
+            "GET",
+            f"{self.live_url}/account/list",
+            provider_name=self.provider_id,
+            headers=self._headers(access),
         )
         return [
             DetectedAccount(
@@ -171,22 +176,25 @@ class TradovateConnector(TradingConnector):
         self, account: IntegrationAccount, access: dict, start: datetime
     ) -> SyncBatch:
         headers = self._headers(access)
-        fills = await request_json("GET", f"{self.live_url}/fill/list", headers=headers)
+        fills = await request_json(
+            "GET", f"{self.live_url}/fill/list", provider_name=self.provider_id, headers=headers
+        )
         pairs = await request_json(
-            "GET", f"{self.live_url}/fillPair/list", headers=headers
+            "GET", f"{self.live_url}/fillPair/list", provider_name=self.provider_id, headers=headers
         )
         positions = await request_json(
-            "GET", f"{self.live_url}/position/list", headers=headers
+            "GET", f"{self.live_url}/position/list", provider_name=self.provider_id, headers=headers
         )
         contracts = await request_json(
-            "GET", f"{self.live_url}/contract/list", headers=headers
+            "GET", f"{self.live_url}/contract/list", provider_name=self.provider_id, headers=headers
         )
         balance_logs = await request_json(
-            "GET", f"{self.live_url}/cashBalanceLog/list", headers=headers
+            "GET", f"{self.live_url}/cashBalanceLog/list", provider_name=self.provider_id, headers=headers
         )
         snapshots = await request_json(
             "POST",
             f"{self.live_url}/cashBalance/getcashbalancesnapshot",
+            provider_name=self.provider_id,
             headers=headers,
             json={"accountId": int(account.external_account_id)},
         )

@@ -1,11 +1,13 @@
 """Provider-agnostic, read-only trading integration layer for PipsEvo."""
 
+from .config import IntegrationConfig
 from .connectors import (
     CTraderConnector,
     MetaApiConnector,
     TradeLockerConnector,
     TradovateConnector,
 )
+from .service import IntegrationService
 
 
 def register_configured_connectors(config, registry) -> None:
@@ -24,8 +26,5 @@ def register_configured_connectors(config, registry) -> None:
         settings = config.provider_config("tradovate")
         registry.register(TradovateConnector(**settings))
 
-
-from .config import IntegrationConfig
-from .service import IntegrationService
 
 __all__ = ["IntegrationConfig", "IntegrationService"]

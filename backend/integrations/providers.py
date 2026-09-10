@@ -30,17 +30,20 @@ class TradingConnector(ABC):
             "read_only": self.read_only,
         }
 
-    async def start_auth(self, **_kwargs) -> dict[str, Any]:
+    async def start_auth(self, *, state: str, **_kwargs: Any) -> dict[str, Any]:
         raise NotImplementedError
 
-    async def complete_auth(self, **_kwargs) -> AuthenticationResult:
+    async def complete_auth(self, *, code: str, **_kwargs: Any) -> AuthenticationResult:
         raise NotImplementedError
 
     async def refresh_auth(self, access: dict[str, Any]) -> dict[str, Any]:
         return access
 
     @abstractmethod
-    async def list_accounts(self, access: dict[str, Any]) -> list[DetectedAccount]: ...
+    async def list_accounts(
+        self, access: dict[str, Any]
+    ) -> list[DetectedAccount]:
+        ...
 
     async def get_account(
         self, external_account_id: str, access: dict[str, Any]
@@ -61,10 +64,19 @@ class TradingConnector(ABC):
         return []
 
     @abstractmethod
-    async def sync_historical(self, account: IntegrationAccount, access: dict[str, Any]) -> SyncBatch: ...
+    async def sync_historical(
+        self, account: IntegrationAccount, access: dict[str, Any]
+    ) -> SyncBatch:
+        ...
 
     @abstractmethod
-    async def sync_recent(self, account: IntegrationAccount, access: dict[str, Any], cursor: dict[str, Any]) -> SyncBatch: ...
+    async def sync_recent(
+        self,
+        account: IntegrationAccount,
+        access: dict[str, Any],
+        cursor: dict[str, Any],
+    ) -> SyncBatch:
+        ...
 
     async def disconnect(self, _connection: IntegrationConnection, _access: dict[str, Any]) -> None:
         return None
@@ -80,21 +92,57 @@ class BrokerIntegrationProvider(ABC):
     platform: str
 
     @abstractmethod
-    async def test_connection(self, credentials: MT5Credentials) -> DetectedAccount: ...
+    async def test_connection(
+        self, credentials: MT5Credentials
+    ) -> DetectedAccount:
+        ...
+
     @abstractmethod
-    async def connect_account(self, credentials: MT5Credentials) -> ProviderConnectionResult: ...
+    async def connect_account(
+        self, credentials: MT5Credentials
+    ) -> ProviderConnectionResult:
+        ...
+
     @abstractmethod
-    async def disconnect_account(self, connection: IntegrationConnection, access: dict[str, Any]) -> None: ...
+    async def disconnect_account(
+        self, connection: IntegrationConnection, access: dict[str, Any]
+    ) -> None:
+        ...
+
     @abstractmethod
-    async def fetch_account(self, connection: IntegrationConnection, access: dict[str, Any]) -> DetectedAccount: ...
+    async def fetch_account(
+        self, connection: IntegrationConnection, access: dict[str, Any]
+    ) -> DetectedAccount:
+        ...
+
     @abstractmethod
-    async def fetch_historical_trades(self, connection: IntegrationConnection, access: dict[str, Any]) -> SyncBatch: ...
+    async def fetch_historical_trades(
+        self, connection: IntegrationConnection, access: dict[str, Any]
+    ) -> SyncBatch:
+        ...
+
     @abstractmethod
-    async def fetch_recent_trades(self, connection: IntegrationConnection, access: dict[str, Any], cursor: dict[str, Any]) -> SyncBatch: ...
+    async def fetch_recent_trades(
+        self,
+        connection: IntegrationConnection,
+        access: dict[str, Any],
+        cursor: dict[str, Any],
+    ) -> SyncBatch:
+        ...
+
     @abstractmethod
-    async def refresh_connection(self, connection: IntegrationConnection, credentials: MT5Credentials) -> ProviderConnectionResult: ...
+    async def refresh_connection(
+        self,
+        connection: IntegrationConnection,
+        credentials: MT5Credentials,
+    ) -> ProviderConnectionResult:
+        ...
+
     @abstractmethod
-    async def get_connection_status(self, connection: IntegrationConnection, access: dict[str, Any]) -> str: ...
+    async def get_connection_status(
+        self, connection: IntegrationConnection, access: dict[str, Any]
+    ) -> str:
+        ...
 
 
 class MT5IntegrationProvider(BrokerIntegrationProvider, ABC):
@@ -114,7 +162,7 @@ class HostedMT5Provider(MT5IntegrationProvider, ABC):
 
 
 class ProviderRegistry:
-    def __init__(self):
+    def __init__(self) -> None:
         self._providers: dict[str, Any] = {}
 
     def register(self, provider: Any) -> None:

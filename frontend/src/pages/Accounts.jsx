@@ -33,7 +33,7 @@ export default function Accounts() {
     catch (e) { setError(e.response?.data?.detail || "Impossible de charger les comptes."); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); return listenForAppDataChanges(load, ["external"]); }, [load]);
+  useEffect(() => { load(); return listenForAppDataChanges(load, ["accounts", "trades"]); }, [load]);
 
   const showCreate = () => {
     setSetupWelcome(false);

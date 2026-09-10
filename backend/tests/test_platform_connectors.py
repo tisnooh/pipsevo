@@ -3,11 +3,13 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
+from pydantic import SecretStr
 
+from integrations.connectors.ctrader import CTraderConnector
 from integrations.connectors.tradelocker import TradeLockerConnector
 from integrations.connectors.tradovate import TradovateConnector
 from integrations.errors import IntegrationError
-from integrations.models import IntegrationAccount
+from integrations.models import IntegrationAccount, TradeLockerCredentials
 
 
 def integration_account(
@@ -57,7 +59,140 @@ def test_tradelocker_keeps_account_id_and_sequence_number_separate(monkeypatch):
 
     assert accounts[0].external_account_id == "123456789"
     assert accounts[0].provider_metadata["acc_num"] == 2
-    assert requests[0][2]["headers"]["developer-api-key"] == "developer-key"
+    assert requests[0][2]["headers"]["tl-developer-api-key"] == "developer-key"
+    assert "developer-api-key" not in requests[0][2]["headers"]
+
+
+def test_tradelocker_auth_accepts_documented_created_response(monkeypatch):
+    requests = []
+
+    async def fake_request(method, url, **kwargs):
+        requests.append((method, url, kwargs))
+        if url.endswith("/auth/jwt/token"):
+            return {"accessToken": "access", "refreshToken": "refresh"}
+        if url.endswith("/auth/jwt/all-accounts"):
+            return {"accounts": [{"id": 123, "accNum": 1, "currency": "USD"}]}
+        raise AssertionError(f"Unexpected request: {method} {url}")
+
+    monkeypatch.setattr(
+        "integrations.connectors.tradelocker.request_json", fake_request
+    )
+    connector = TradeLockerConnector("https://demo.example", "https://live.example")
+
+    result = asyncio.run(
+        connector.authenticate(
+            TradeLockerCredentials(
+                environment="demo",
+                email="trader@example.com",
+                password=SecretStr("password"),
+                server="TradeLocker Demo",
+            )
+        )
+    )
+
+    assert result.accounts[0].external_account_id == "123"
+    assert requests[0][2]["expected"] == (200, 201)
+    assert requests[0][2]["provider_name"] == "tradelocker"
+
+
+def test_tradelocker_splits_saturated_history_ranges(monkeypatch):
+    calls = []
+
+    async def fake_request(method, url, **kwargs):
+        calls.append(kwargs["params"])
+        if len(calls) == 1:
+            return {"d": {"ordersHistory": [["truncated-1"], ["truncated-2"]]}}
+        marker = "left" if len(calls) == 2 else "right"
+        return {"d": {"ordersHistory": [[marker]]}}
+
+    monkeypatch.setattr(
+        "integrations.connectors.tradelocker.request_json", fake_request
+    )
+    connector = TradeLockerConnector("https://demo.example", "https://live.example")
+    rows, partial = asyncio.run(
+        connector._order_history(
+            "https://demo.example",
+            "123",
+            {"Authorization": "Bearer token", "accNum": "1"},
+            datetime(2026, 1, 1, tzinfo=timezone.utc),
+            datetime(2026, 1, 1, 0, 0, 4, tzinfo=timezone.utc),
+            2,
+        )
+    )
+
+    assert rows == [["left"], ["right"]]
+    assert partial is False
+    assert len(calls) == 3
+    assert TradeLockerConnector._orders_history_limit(
+        {"d": {"limits": {"ordersHistory": {"maxRows": 500}}}}
+    ) == 500
+
+
+def test_tradelocker_keeps_open_positions_and_aggregates_fills():
+    connector = TradeLockerConnector("https://demo.example", "https://live.example")
+    rows = [
+        {
+            "id": 1,
+            "orderId": 10,
+            "tradableInstrumentId": 42,
+            "_executed_at": "2026-09-01T10:00:00+00:00",
+            "_quantity": "1",
+            "_price": "5000",
+            "_direction": "long",
+            "commission": "-1",
+        },
+        {
+            "id": 2,
+            "orderId": 11,
+            "tradableInstrumentId": 42,
+            "_executed_at": "2026-09-01T10:05:00+00:00",
+            "_quantity": "1",
+            "_price": "5010",
+            "_direction": "long",
+            "commission": "-1",
+        },
+    ]
+
+    trade = connector._group_position("99", rows, {"42": "ES"})
+
+    assert trade is not None
+    assert trade.symbol == "ES"
+    assert trade.volume == Decimal("2")
+    assert trade.open_price == Decimal("5005")
+    assert trade.close_time is None
+    assert trade.close_price is None
+    assert trade.commission == Decimal("-2")
+
+
+def test_ctrader_splits_windows_when_provider_reports_has_more(monkeypatch):
+    connector = CTraderConnector("client", "secret", "https://example.test/callback")
+    recorded = []
+
+    async def fake_session(token, operations, live=True):
+        recorded.append((token, operations, live))
+        return [
+            {"authenticated": True},
+            {"deal": [{"dealId": 1}], "hasMore": False},
+            {"deal": [{"dealId": 2}], "hasMore": False},
+        ]
+
+    monkeypatch.setattr(connector, "_session", fake_session)
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    end = datetime(2026, 1, 3, tzinfo=timezone.utc)
+    rows, partial = asyncio.run(
+        connector._complete_deal_history(
+            "token",
+            42,
+            True,
+            [(start, end)],
+            [{"deal": [{"dealId": 999}], "hasMore": True}],
+        )
+    )
+
+    assert {row["dealId"] for row in rows} == {1, 2}
+    assert partial is False
+    assert len(recorded) == 1
+    assert len(recorded[0][1]) == 3
 
 
 def test_tradelocker_sync_uses_official_response_shapes(monkeypatch):

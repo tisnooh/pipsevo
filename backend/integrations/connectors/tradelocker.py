@@ -40,6 +40,8 @@ class TradeLockerConnector(TradingConnector):
         data = await request_json(
             "POST",
             f"{base}/auth/jwt/token",
+            expected=(200, 201),
+            provider_name=self.provider_id,
             json={
                 "email": request.email,
                 "password": request.password.get_secret_value(),
@@ -81,6 +83,7 @@ class TradeLockerConnector(TradingConnector):
         data = await request_json(
             "POST",
             f"{base}/auth/jwt/refresh",
+            provider_name=self.provider_id,
             json={"refreshToken": access["refresh_token"]},
         )
         access_token = data.get("accessToken") or data.get("access_token")
@@ -106,6 +109,7 @@ class TradeLockerConnector(TradingConnector):
         rows = await request_json(
             "GET",
             f"{base}/auth/jwt/all-accounts",
+            provider_name=self.provider_id,
             headers=self._headers(access),
         )
         rows = self._unwrap(rows, "accounts")
@@ -141,28 +145,35 @@ class TradeLockerConnector(TradingConnector):
                 409,
             )
         headers = self._headers(access, str(acc_num))
-        config = await request_json("GET", f"{base}/trade/config", headers=headers)
-        rows = await request_json(
+        config = await request_json(
             "GET",
-            f"{base}/trade/accounts/{account.external_account_id}/ordersHistory",
+            f"{base}/trade/config",
+            provider_name=self.provider_id,
             headers=headers,
-            params={
-                "from": int(start.timestamp() * 1000),
-                "to": int(datetime.now(timezone.utc).timestamp() * 1000),
-            },
+        )
+        end = datetime.now(timezone.utc)
+        row_limit = self._orders_history_limit(config)
+        raw_rows, history_partial = await self._order_history(
+            base,
+            account.external_account_id,
+            headers,
+            start,
+            end,
+            row_limit,
         )
         state = await request_json(
             "GET",
             f"{base}/trade/accounts/{account.external_account_id}/state",
+            provider_name=self.provider_id,
             headers=headers,
         )
         instruments_payload = await request_json(
             "GET",
             f"{base}/trade/accounts/{account.external_account_id}/instruments",
+            provider_name=self.provider_id,
             headers=headers,
         )
         order_columns = self._columns(config, "ordersHistoryConfig")
-        raw_rows = self._unwrap(rows, "ordersHistory")
         instruments = self._unwrap(instruments_payload, "instruments")
         symbol_by_id = {
             str(row.get("tradableInstrumentId") or row.get("id")): str(
@@ -222,52 +233,16 @@ class TradeLockerConnector(TradingConnector):
                     raw_payload=row,
                 )
             )
-        trades = []
-        for position_id, position_rows in positions.items():
-            position_rows.sort(key=lambda item: item["_executed_at"])
-            first, last = position_rows[0], position_rows[-1]
-            if len(position_rows) < 2 or first["_direction"] == last["_direction"]:
-                continue
-            trades.append(
-                ProviderTradeRecord(
-                    provider_trade_id=position_id,
-                    provider_order_id=str(first.get("orderId") or first.get("id")),
-                    provider_position_id=position_id,
-                    symbol=symbol_by_id.get(
-                        str(first.get("tradableInstrumentId")),
-                        str(
-                            first.get("symbol")
-                            or first.get("tradableInstrumentId")
-                            or "UNKNOWN"
-                        ),
-                    ),
-                    direction=first["_direction"],
-                    volume=Decimal(first["_quantity"]),
-                    open_time=self._time(first["_executed_at"]),
-                    close_time=self._time(last["_executed_at"]),
-                    open_price=Decimal(first["_price"]),
-                    close_price=Decimal(last["_price"]),
-                    gross_profit=Decimal(
-                        str(last.get("profit") or last.get("realizedPnl") or 0)
-                    ),
-                    commission=sum(
-                        (
-                            Decimal(str(item.get("commission") or 0))
-                            for item in position_rows
-                        ),
-                        Decimal("0"),
-                    ),
-                    fees=sum(
-                        (
-                            Decimal(str(item.get("fee") or item.get("fees") or 0))
-                            for item in position_rows
-                        ),
-                        Decimal("0"),
-                    ),
-                    market_type="cfd",
-                    raw_payload={"orders": position_rows},
+        trades = [
+            trade
+            for position_id, position_rows in positions.items()
+            if (
+                trade := self._group_position(
+                    position_id, position_rows, symbol_by_id
                 )
             )
+            is not None
+        ]
         state_root = (
             state.get("d", state.get("data", state)) if isinstance(state, dict) else {}
         )
@@ -299,6 +274,135 @@ class TradeLockerConnector(TradingConnector):
             executions=executions,
             snapshot=snapshot,
             next_cursor={"last_execution_at": latest.isoformat()},
+            partial_error=history_partial,
+            warning_code=(
+                "history_row_limit" if history_partial else None
+            ),
+        )
+
+    async def _order_history(
+        self,
+        base: str,
+        external_account_id: str,
+        headers: dict[str, str],
+        start: datetime,
+        end: datetime,
+        row_limit: int | None,
+        *,
+        depth: int = 0,
+    ) -> tuple[list, bool]:
+        payload = await request_json(
+            "GET",
+            f"{base}/trade/accounts/{external_account_id}/ordersHistory",
+            provider_name=self.provider_id,
+            headers=headers,
+            params={
+                "from": int(start.timestamp() * 1000),
+                "to": int(end.timestamp() * 1000),
+            },
+        )
+        rows = list(self._unwrap(payload, "ordersHistory") or [])
+        if not row_limit or len(rows) < row_limit:
+            return rows, False
+
+        # TradeLocker caps this endpoint instead of exposing an offset cursor.
+        # Split saturated time ranges until each response is below the limit.
+        span_ms = int((end - start).total_seconds() * 1000)
+        if depth >= 24 or span_ms <= 1:
+            return rows, True
+        midpoint = start + (end - start) / 2
+        right_start = midpoint + timedelta(milliseconds=1)
+        left_rows, left_partial = await self._order_history(
+            base,
+            external_account_id,
+            headers,
+            start,
+            midpoint,
+            row_limit,
+            depth=depth + 1,
+        )
+        right_rows, right_partial = await self._order_history(
+            base,
+            external_account_id,
+            headers,
+            right_start,
+            end,
+            row_limit,
+            depth=depth + 1,
+        )
+        return left_rows + right_rows, left_partial or right_partial
+
+    @classmethod
+    def _group_position(
+        cls,
+        position_id: str,
+        rows: list[dict],
+        symbol_by_id: dict[str, str],
+    ) -> ProviderTradeRecord | None:
+        rows = sorted(rows, key=lambda item: item["_executed_at"])
+        if not rows:
+            return None
+        first = rows[0]
+        open_side = first["_direction"]
+        opening = [row for row in rows if row["_direction"] == open_side]
+        closing = [row for row in rows if row["_direction"] != open_side]
+
+        def quantity(row: dict) -> Decimal:
+            return Decimal(row["_quantity"])
+
+        def weighted_price(items: list[dict]) -> Decimal | None:
+            total = sum((quantity(item) for item in items), Decimal("0"))
+            if total <= 0:
+                return None
+            return sum(
+                (Decimal(item["_price"]) * quantity(item) for item in items),
+                Decimal("0"),
+            ) / total
+
+        open_price = weighted_price(opening)
+        if open_price is None:
+            return None
+        opened_volume = sum((quantity(item) for item in opening), Decimal("0"))
+        closed_volume = sum((quantity(item) for item in closing), Decimal("0"))
+        fully_closed = bool(closing) and closed_volume >= opened_volume
+        return ProviderTradeRecord(
+            provider_trade_id=position_id,
+            provider_order_id=str(first.get("orderId") or first.get("id")),
+            provider_position_id=position_id,
+            symbol=symbol_by_id.get(
+                str(first.get("tradableInstrumentId")),
+                str(
+                    first.get("symbol")
+                    or first.get("tradableInstrumentId")
+                    or "UNKNOWN"
+                ),
+            ),
+            direction=open_side,
+            volume=opened_volume,
+            open_time=cls._time(first["_executed_at"]),
+            close_time=cls._time(closing[-1]["_executed_at"]) if fully_closed else None,
+            open_price=open_price,
+            close_price=weighted_price(closing) if fully_closed else None,
+            gross_profit=sum(
+                (
+                    Decimal(str(item.get("profit") or item.get("realizedPnl") or 0))
+                    for item in closing
+                ),
+                Decimal("0"),
+            ),
+            commission=sum(
+                (Decimal(str(item.get("commission") or 0)) for item in rows),
+                Decimal("0"),
+            ),
+            fees=sum(
+                (
+                    Decimal(str(item.get("fee") or item.get("fees") or 0))
+                    for item in rows
+                ),
+                Decimal("0"),
+            ),
+            market_type="cfd",
+            raw_payload={"orders": rows},
         )
 
     def _headers(self, access: dict, acc_num: str | None = None) -> dict[str, str]:
@@ -309,7 +413,7 @@ class TradeLockerConnector(TradingConnector):
         if acc_num is not None:
             headers["accNum"] = str(acc_num)
         if self.developer_api_key:
-            headers["developer-api-key"] = self.developer_api_key
+            headers["tl-developer-api-key"] = self.developer_api_key
         return headers
 
     @staticmethod
@@ -351,6 +455,34 @@ class TradeLockerConnector(TradingConnector):
             for item in value
             if not isinstance(item, dict) or item.get("id") or item.get("name")
         ]
+
+    @staticmethod
+    def _orders_history_limit(config: dict) -> int | None:
+        root = config.get("d", config.get("data", config)) if isinstance(config, dict) else {}
+        limits = root.get("limits", {}) if isinstance(root, dict) else {}
+        if isinstance(limits, dict):
+            for key, value in limits.items():
+                if str(key).replace("_", "").replace("-", "").lower() != "ordershistory":
+                    continue
+                if isinstance(value, (int, float)) and int(value) > 0:
+                    return int(value)
+                if isinstance(value, dict):
+                    for limit_key in ("maxRows", "max_rows", "rowLimit", "row_limit", "limit"):
+                        limit = value.get(limit_key)
+                        if isinstance(limit, (int, float)) and int(limit) > 0:
+                            return int(limit)
+        if isinstance(limits, list):
+            for item in limits:
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("route") or item.get("endpoint") or item.get("name") or "")
+                if "ordershistory" not in name.replace("_", "").replace("-", "").lower():
+                    continue
+                for limit_key in ("maxRows", "max_rows", "rowLimit", "row_limit", "limit"):
+                    limit = item.get(limit_key)
+                    if isinstance(limit, (int, float)) and int(limit) > 0:
+                        return int(limit)
+        return None
 
     @staticmethod
     def _unwrap(payload, key: str):

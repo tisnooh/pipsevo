@@ -174,6 +174,67 @@ def test_ctrader_partial_fills_are_grouped_as_one_position():
     assert trade.commission == Decimal("-0.02")
 
 
+def test_ctrader_aggregates_scaled_entries_and_partial_closes():
+    rows = [
+        {
+            "dealId": 1,
+            "positionId": 99,
+            "symbolId": 4,
+            "tradeSide": "BUY",
+            "filledVolume": 100,
+            "executionTimestamp": 1_785_500_000_000,
+            "executionPrice": 1.10,
+            "commission": -100,
+            "moneyDigits": 2,
+        },
+        {
+            "dealId": 2,
+            "positionId": 99,
+            "symbolId": 4,
+            "tradeSide": "BUY",
+            "filledVolume": 100,
+            "executionTimestamp": 1_785_500_050_000,
+            "executionPrice": 1.20,
+            "commission": -100,
+            "moneyDigits": 2,
+        },
+        {
+            "dealId": 3,
+            "positionId": 99,
+            "symbolId": 4,
+            "tradeSide": "SELL",
+            "filledVolume": 100,
+            "executionTimestamp": 1_785_500_100_000,
+            "executionPrice": 1.30,
+            "commission": -100,
+            "moneyDigits": 2,
+            "closePositionDetail": {"grossProfit": 2000, "swap": -50, "moneyDigits": 2},
+        },
+        {
+            "dealId": 4,
+            "positionId": 99,
+            "symbolId": 4,
+            "tradeSide": "SELL",
+            "filledVolume": 100,
+            "executionTimestamp": 1_785_500_150_000,
+            "executionPrice": 1.40,
+            "commission": -100,
+            "moneyDigits": 2,
+            "closePositionDetail": {"grossProfit": 3000, "swap": -50, "moneyDigits": 2},
+        },
+    ]
+
+    trade = CTraderConnector._group_trade("99", rows, {"4": "EURUSD"})
+
+    assert trade.volume == Decimal("2")
+    assert trade.open_price == Decimal("1.15")
+    assert trade.close_price == Decimal("1.35")
+    assert trade.gross_profit == Decimal("50")
+    assert trade.commission == Decimal("-4")
+    assert trade.swap == Decimal("-1")
+    assert trade.close_time is not None
+
+
 def test_metaapi_partial_fills_are_grouped_as_one_position():
     rows = [
         {

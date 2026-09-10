@@ -35,7 +35,7 @@ export default function Payouts() {
     } catch (e) { setError(e.response?.data?.detail || "Impossible de charger les payouts."); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); return listenForAppDataChanges(load, ["external"]); }, [load]);
+  useEffect(() => { load(); return listenForAppDataChanges(load, ["accounts", "trades", "payouts", "dashboard"]); }, [load]);
 
   const create = async (e) => {
     e.preventDefault();

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import importlib
 import json
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from time import monotonic
+from typing import Any, Literal
 from urllib.parse import urlencode
 
 from pydantic import SecretStr
@@ -25,7 +28,7 @@ from ..providers import TradingConnector
 from .http import request_json
 
 try:
-    import websockets
+    websockets: Any = importlib.import_module("websockets")
 except ImportError:  # pragma: no cover - startup capability will remain unavailable
     websockets = None
 
@@ -59,6 +62,7 @@ class CTraderConnector(TradingConnector):
         data = await request_json(
             "GET",
             "https://openapi.ctrader.com/apps/token",
+            provider_name=self.provider_id,
             params={
                 "grant_type": "authorization_code",
                 "code": code,
@@ -95,6 +99,7 @@ class CTraderConnector(TradingConnector):
         data = await request_json(
             "GET",
             "https://openapi.ctrader.com/apps/token",
+            provider_name=self.provider_id,
             params={
                 "grant_type": "refresh_token",
                 "refresh_token": refresh,
@@ -141,7 +146,7 @@ class CTraderConnector(TradingConnector):
         token = access["access_token"]
         account_id = int(account.external_account_id)
         end = datetime.now(timezone.utc)
-        windows = []
+        windows: list[tuple[datetime, datetime]] = []
         window_start = start
         while window_start < end and len(windows) < 80:
             window_end = min(window_start + timedelta(days=180), end)
@@ -174,7 +179,13 @@ class CTraderConnector(TradingConnector):
             for row in responses[1].get("symbol", [])
         }
         trader = responses[2].get("trader", {})
-        deals = [deal for response in responses[3:] for deal in response.get("deal", [])]
+        deals, history_partial = await self._complete_deal_history(
+            token,
+            account_id,
+            account.account_type != "demo",
+            windows,
+            responses[3:],
+        )
         executions: list[ProviderExecutionRecord] = []
         grouped: dict[str, list[dict]] = defaultdict(list)
         for deal in deals:
@@ -209,37 +220,185 @@ class CTraderConnector(TradingConnector):
             captured_at=end,
             raw_payload=trader,
         )
+        window_partial = window_start < end
         return SyncBatch(
             trades=trades,
             executions=executions,
             snapshot=snapshot,
             next_cursor={"last_execution_at": latest.isoformat()},
-            partial_error=window_start < end,
-            warning_code="history_window_limit" if window_start < end else None,
+            partial_error=window_partial or history_partial,
+            warning_code=(
+                "history_window_limit"
+                if window_partial
+                else "history_chunk_limit"
+                if history_partial
+                else None
+            ),
         )
+
+    async def _complete_deal_history(
+        self,
+        token: str,
+        account_id: int,
+        live: bool,
+        windows: list[tuple[datetime, datetime]],
+        responses: list[dict],
+    ) -> tuple[list[dict], bool]:
+        pending = [
+            (window_from, window_to, response, 0)
+            for (window_from, window_to), response in zip(windows, responses)
+        ]
+        completed: list[dict] = []
+        partial = len(responses) != len(windows)
+        processed_segments = len(pending)
+
+        while pending:
+            split_windows: list[tuple[datetime, datetime, int]] = []
+            for window_from, window_to, response, depth in pending:
+                rows = list(response.get("deal", []) or [])
+                if not response.get("hasMore"):
+                    completed.extend(rows)
+                    continue
+                span_ms = int((window_to - window_from).total_seconds() * 1000)
+                if depth >= 24 or span_ms <= 1 or processed_segments >= 512:
+                    completed.extend(rows)
+                    partial = True
+                    continue
+                midpoint = window_from + (window_to - window_from) / 2
+                split_windows.extend(
+                    [
+                        (window_from, midpoint, depth + 1),
+                        (midpoint + timedelta(milliseconds=1), window_to, depth + 1),
+                    ]
+                )
+
+            if not split_windows:
+                break
+            processed_segments += len(split_windows)
+            operations = [
+                (2102, {"ctidTraderAccountId": account_id, "accessToken": token}, 2103)
+            ]
+            operations.extend(
+                (
+                    2133,
+                    {
+                        "ctidTraderAccountId": account_id,
+                        "fromTimestamp": int(window_from.timestamp() * 1000),
+                        "toTimestamp": int(window_to.timestamp() * 1000),
+                    },
+                    2134,
+                )
+                for window_from, window_to, _depth in split_windows
+            )
+            split_responses = await self._session(token, operations, live=live)
+            deal_responses = split_responses[1:]
+            if len(deal_responses) != len(split_windows):
+                partial = True
+            pending = [
+                (window_from, window_to, response, depth)
+                for (window_from, window_to, depth), response in zip(
+                    split_windows, deal_responses
+                )
+            ]
+
+        unique = {
+            str(row.get("dealId")): row
+            for row in completed
+            if row.get("dealId") is not None
+        }
+        return list(unique.values()), partial
 
     @staticmethod
     def _group_trade(position_id: str, rows: list[dict], symbols: dict[str, str]):
         rows = sorted(rows, key=lambda row: int(row.get("executionTimestamp", 0)))
         if not rows:
             return None
-        opened, closed = rows[0], rows[-1]
-        open_side = "long" if str(opened.get("tradeSide")).upper() in {"BUY", "1"} else "short"
-        same_fill = len(rows) == 1
+        opened = rows[0]
+        open_side: Literal["long", "short"] = (
+            "long"
+            if str(opened.get("tradeSide")).upper() in {"BUY", "1"}
+            else "short"
+        )
+
+        def direction(row: dict) -> str:
+            return "long" if str(row.get("tradeSide")).upper() in {"BUY", "1"} else "short"
+
+        def quantity(row: dict) -> Decimal:
+            return Decimal(str(abs(row.get("filledVolume") or 0))) / Decimal("100")
+
+        opening = [
+            row
+            for row in rows
+            if not row.get("closePositionDetail") and direction(row) == open_side
+        ] or [opened]
+        closing = [
+            row
+            for row in rows
+            if row.get("closePositionDetail") or direction(row) != open_side
+        ]
+
+        def weighted_price(items: list[dict]) -> Decimal | None:
+            total = sum((quantity(item) for item in items), Decimal("0"))
+            if total <= 0:
+                return None
+            return sum(
+                (
+                    Decimal(str(item.get("executionPrice") or item.get("price") or 0))
+                    * quantity(item)
+                    for item in items
+                ),
+                Decimal("0"),
+            ) / total
+
+        open_price = weighted_price(opening)
+        if open_price is None:
+            return None
+        opened_volume = sum((quantity(item) for item in opening), Decimal("0"))
+        closed_volume = sum((quantity(item) for item in closing), Decimal("0"))
+        fully_closed = bool(closing) and closed_volume >= opened_volume
         return ProviderTradeRecord(
             provider_trade_id=position_id,
             provider_order_id=str(opened.get("orderId")) if opened.get("orderId") is not None else None,
             provider_position_id=position_id,
             symbol=symbols.get(str(opened.get("symbolId")), str(opened.get("symbolId"))),
             direction=open_side,
-            volume=Decimal(str(opened.get("filledVolume", 0))) / Decimal("100"),
+            volume=opened_volume,
             open_time=datetime.fromtimestamp(int(opened.get("executionTimestamp", 0)) / 1000, timezone.utc),
-            close_time=None if same_fill else datetime.fromtimestamp(int(closed.get("executionTimestamp", 0)) / 1000, timezone.utc),
-            open_price=Decimal(str(opened.get("executionPrice") or opened.get("price") or 0)),
-            close_price=None if same_fill else Decimal(str(closed.get("executionPrice") or closed.get("price") or 0)),
-            gross_profit=CTraderConnector._money(closed, (closed.get("closePositionDetail") or {}).get("grossProfit")),
-            commission=sum(CTraderConnector._money(row, row.get("commission")) for row in rows),
-            swap=CTraderConnector._money(closed, (closed.get("closePositionDetail") or {}).get("swap")),
+            close_time=(
+                datetime.fromtimestamp(
+                    int(closing[-1].get("executionTimestamp", 0)) / 1000,
+                    timezone.utc,
+                )
+                if fully_closed
+                else None
+            ),
+            open_price=open_price,
+            close_price=weighted_price(closing) if fully_closed else None,
+            gross_profit=sum(
+                (
+                    CTraderConnector._money(
+                        row, (row.get("closePositionDetail") or {}).get("grossProfit")
+                    )
+                    for row in closing
+                ),
+                Decimal("0"),
+            ),
+            commission=sum(
+                (
+                    CTraderConnector._money(row, row.get("commission"))
+                    for row in rows
+                ),
+                Decimal("0"),
+            ),
+            swap=sum(
+                (
+                    CTraderConnector._money(
+                        row, (row.get("closePositionDetail") or {}).get("swap")
+                    )
+                    for row in closing
+                ),
+                Decimal("0"),
+            ),
             market_type="cfd",
             raw_payload={"deals": rows},
         )
@@ -257,7 +416,13 @@ class CTraderConnector(TradingConnector):
         responses: list[dict] = []
         async with websockets.connect(url, open_timeout=20, close_timeout=5) as socket:
             await self._send(socket, 2100, {"clientId": self.client_id, "clientSecret": self.client_secret}, 2101)
+            last_historical_request = 0.0
             for request_type, payload, response_type in operations:
+                if request_type == 2133:
+                    delay = 0.21 - (monotonic() - last_historical_request)
+                    if delay > 0:
+                        await asyncio.sleep(delay)
+                    last_historical_request = monotonic()
                 responses.append(await self._send(socket, request_type, payload, response_type))
         return responses
 

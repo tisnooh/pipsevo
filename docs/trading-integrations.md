@@ -43,14 +43,13 @@ check-list, setup) ne sont jamais incluses dans les mises à jour fournisseur.
 `plan_respected` vaut `null` sur un import automatique : une API de courtier ne
 peut pas déterminer cette information subjective.
 
-L'application historique lit encore Accounts, Journal, Statistiques et Atlas
-depuis MongoDB. Le repository serveur conserve Supabase comme source sécurisée
-des connexions, exécutions, curseurs et snapshots, puis reflète chaque compte et
-trade normalisé dans MongoDB avec le même UUID. Ce miroir utilise un upsert sur
-l'identité fournisseur et ne met à jour que les champs possédés par le provider.
-Les enrichissements utilisateur restent donc intacts, tandis que le trade devient
-immédiatement visible dans le Dashboard, le Journal et Atlas. L'index Mongo
-`trades_provider_identity_unique` garantit la même déduplication côté lecture.
+Supabase est la source de vérité du Journal et des comptes synchronisés. Le
+repository serveur y conserve les connexions, comptes détectés, exécutions,
+curseurs, snapshots et trades normalisés. Le miroir MongoDB historique reste
+alimenté pour les consommateurs qui n'ont pas encore été migrés. Chaque miroir
+utilise un upsert sur l'identité fournisseur et ne met à jour que les champs
+possédés par le provider, afin de préserver notes, captures, tags, erreurs,
+check-list et setup saisis par l'utilisateur.
 
 ## Parcours par fournisseur
 
@@ -62,16 +61,23 @@ immédiatement visible dans le Dashboard, le Journal et Atlas. L'index Mongo
    comptes autorisés.
 4. Un compte unique est sélectionné automatiquement. Si l'autorisation expose
    plusieurs comptes, PipsEvo les affiche tous et demande un choix explicite.
-5. L'import utilise l'Open API JSON sur le proxy live ou demo, par fenêtres de
-   180 jours, puis les deltas repartent cinq minutes avant le dernier fill pour
-   tolérer les retards fournisseur.
+5. Dès qu'un seul compte est sélectionné, l'import initial est exécuté et son
+   résultat réel est renvoyé à l'interface. L'import utilise l'Open API JSON sur
+   le proxy live ou demo, par fenêtres de 180 jours, puis les deltas repartent
+   cinq minutes avant le dernier fill pour tolérer les retards fournisseur.
+6. Les réponses `hasMore` sont subdivisées en fenêtres plus petites afin de ne
+   pas tronquer silencieusement les historiques denses. Une limite de sécurité
+   produit un état partiel explicite si l'historique ne peut toujours pas être
+   récupéré en entier.
 
 ### MetaTrader 4/5 via MetaApi
 
 1. Le backend crée un compte MetaApi et un lien de configuration temporaire.
 2. L'utilisateur termine l'autorisation chez MetaApi.
 3. PipsEvo déploie le compte, vérifie son état et propose la sélection.
-4. L'historique des deals est paginé par lots de 1 000.
+4. Un compte unique déclenche immédiatement l'import initial.
+5. L'historique des deals est paginé par lots de 1 000 et toute troncature est
+   signalée comme import partiel.
 
 Un mot de passe MetaTrader éventuellement saisi est transmis directement à
 MetaApi pendant la requête de création, puis oublié. Il n'est jamais écrit dans
@@ -87,8 +93,10 @@ colonnes codées en dur. Les ordres partiels restent des exécutions distinctes 
 les positions clôturées sont reconstruites sans écraser le journal utilisateur.
 TradeLocker distingue l'identifiant `accountId`, utilisé dans les routes, du
 numéro de séquence `accNum`, transmis dans l'en-tête. PipsEvo conserve les deux
-séparément. `TRADELOCKER_DEVELOPER_API_KEY` est facultative pour un test à faible
-volume mais recommandée par TradeLocker pour une application multi-utilisateur.
+séparément. L'historique saturé est subdivisé selon la limite publiée par
+`/trade/config`. `TRADELOCKER_DEVELOPER_API_KEY` est facultative pour un test à
+faible volume mais recommandée par TradeLocker pour une application
+multi-utilisateur.
 
 ### Tradovate
 
@@ -128,8 +136,12 @@ Variables propres aux connecteurs :
   `TRADOVATE_REDIRECT_URI`, `TRADOVATE_OAUTH_URL`
 
 Les variables Vercel `BACKEND_INTERNAL_URL` et `CRON_SECRET` doivent être privées
-(jamais préfixées par `REACT_APP_`). Le cron `/api/sync-due` s'exécute toutes les
-dix minutes et appelle le backend avec le secret partagé.
+(jamais préfixées par `REACT_APP_`). Sur le déploiement Hobby actuel, le cron
+`/api/sync-due` s'exécute une fois par jour à 06:00 UTC et appelle le backend avec
+le secret partagé. `MT5_SYNC_INTERVAL_MINUTES` détermine quels comptes sont dus,
+mais ne rend pas le planificateur plus fréquent. Une synchronisation réellement
+proche du temps réel exige donc un planificateur externe fiable, une queue/worker
+ou un plan Vercel autorisant une fréquence supérieure.
 
 Les flags de déploiement sont `CTRADER_SYNC_ENABLED`, `MT5_SYNC_ENABLED`,
 `MT4_SYNC_ENABLED`, `TRADELOCKER_SYNC_ENABLED`, `TRADOVATE_SYNC_ENABLED` et
@@ -158,6 +170,8 @@ et la configuration de credentials pour être proposée comme active.
 5. Exécuter la checklist sandbox avant d'ajouter le fournisseur à
    `INTEGRATION_ENABLED_PROVIDERS` en production.
 
-La migration n'a pas pu être exécutée sur la base locale de cette machine car
-Docker/Podman n'y est pas installé. Elle doit donc obligatoirement être validée
-sur une branche Supabase ou un environnement de staging avant production.
+Les migrations locales et distantes du projet Supabase lié sont alignées. Les
+anciens scripts conservent leur SQL lisible dans Git, avec les mêmes horodatages
+que l'historique effectivement appliqué. La migration du back-office
+`20260907102521_admin_backoffice.sql` a été appliquée et vérifiée le 10 septembre
+2026 avant le déploiement des correctifs d'intégration.

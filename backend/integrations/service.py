@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import secrets
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, cast
 
 from .config import IntegrationConfig
+from .connectors.metaapi import MetaApiConnector
+from .connectors.tradelocker import TradeLockerConnector
 from .errors import (
     ConnectionRateLimitError,
     FeatureDisabledError,
@@ -22,12 +25,16 @@ from .models import (
     IntegrationConnection,
     MetaApiLinkRequest,
     MT5Credentials,
+    SyncBatch,
     SyncResult,
     TradeLockerCredentials,
 )
 from .normalization import json_safe_trade, normalize_batch
-from .providers import ProviderRegistry, TradingConnector
+from .providers import BrokerIntegrationProvider, ProviderRegistry, TradingConnector
 from .security import CredentialVault, mask_account_number
+
+
+logger = logging.getLogger("pipsevo.integrations.sync")
 
 
 class IntegrationService:
@@ -44,6 +51,11 @@ class IntegrationService:
         self.registry = registry
         self.repository = repository
         self.vault = vault
+
+    def _require_vault(self) -> CredentialVault:
+        if self.vault is None:
+            raise ProviderUnavailableError()
+        return self.vault
 
     def capabilities(self, plan: str = "beta") -> dict[str, Any]:
         provider_ready = bool(
@@ -103,11 +115,15 @@ class IntegrationService:
             )
         return {**legacy, "providers": providers, "file_import_available": True}
 
-    def _provider(self):
+    def _provider(self) -> BrokerIntegrationProvider:
         if not self.config.mt5_auto_sync_enabled:
             raise FeatureDisabledError()
         provider = self.registry.get(self.config.provider)
-        if not provider or not self.repository.secret_key or not self.vault:
+        if (
+            not isinstance(provider, BrokerIntegrationProvider)
+            or not self.repository.secret_key
+            or not self.vault
+        ):
             raise ProviderUnavailableError()
         return provider
 
@@ -161,9 +177,9 @@ class IntegrationService:
     async def search_metaapi_servers(
         self, plan: str, platform: str, query: str
     ) -> dict[str, Any]:
-        provider = self._generic_provider("metaapi", plan)
-        if not hasattr(provider, "search_servers"):
-            raise ProviderUnavailableError()
+        provider = cast(
+            MetaApiConnector, self._generic_provider("metaapi", plan)
+        )
         try:
             return {"servers": await provider.search_servers(platform, query)}
         except Exception as exc:
@@ -174,7 +190,7 @@ class IntegrationService:
     ) -> None:
         connection_id = connection["id"] if isinstance(connection, dict) else connection.id
         associated_data = f"{user_id}:{connection_id}:{provider_id}"
-        encrypted = self.vault.encrypt_json(access, associated_data)
+        encrypted = self._require_vault().encrypt_json(access, associated_data)
         await self.repository.store_credentials(
             connection_id,
             user_id,
@@ -230,6 +246,10 @@ class IntegrationService:
         try:
             result = await provider.complete_auth(code=code)
             connection = await self._persist_authentication(user_id, provider, result)
+            initial_sync = await self._initial_sync_for_single_account(
+                user_id, connection["id"]
+            )
+            connection = await self.repository.get_connection(connection["id"], user_id)
             await self.repository.audit(
                 user_id,
                 f"{provider_id}_oauth_completed",
@@ -240,6 +260,7 @@ class IntegrationService:
             return {
                 "connection": connection,
                 "accounts": [item.model_dump(mode="json") for item in result.accounts],
+                "initial_sync": initial_sync,
                 "redirect_after": state_row.get("redirect_after") or "/app/settings",
             }
         except Exception as exc:
@@ -252,13 +273,19 @@ class IntegrationService:
     async def connect_tradelocker(
         self, user_id: str, plan: str, request: TradeLockerCredentials
     ) -> dict:
-        provider = self._generic_provider("tradelocker", plan)
+        provider = cast(
+            TradeLockerConnector, self._generic_provider("tradelocker", plan)
+        )
         await self._ensure_attempt_allowed(user_id)
         try:
             result = await provider.authenticate(request)
             connection = await self._persist_authentication(
                 user_id, provider, result, request.environment
             )
+            initial_sync = await self._initial_sync_for_single_account(
+                user_id, connection["id"]
+            )
+            connection = await self.repository.get_connection(connection["id"], user_id)
             await self.repository.record_attempt(user_id, True, platform="tradelocker")
             await self.repository.audit(
                 user_id,
@@ -270,6 +297,7 @@ class IntegrationService:
             return {
                 "connection": connection,
                 "accounts": [item.model_dump(mode="json") for item in result.accounts],
+                "initial_sync": initial_sync,
             }
         except Exception as exc:
             safe = self._safe_error(exc)
@@ -279,7 +307,9 @@ class IntegrationService:
     async def start_metaapi(
         self, user_id: str, plan: str, request: MetaApiLinkRequest
     ) -> dict:
-        provider = self._generic_provider("metaapi", plan)
+        provider = cast(
+            MetaApiConnector, self._generic_provider("metaapi", plan)
+        )
         await self._ensure_attempt_allowed(user_id)
         try:
             link = await provider.create_configuration_link(request)
@@ -337,7 +367,9 @@ class IntegrationService:
     async def finalize_metaapi(
         self, user_id: str, plan: str, connection_id: str
     ) -> dict:
-        provider = self._generic_provider("metaapi", plan)
+        provider = cast(
+            MetaApiConnector, self._generic_provider("metaapi", plan)
+        )
         row = await self.repository.get_connection(connection_id, user_id)
         if not row or row.get("provider") != "metaapi":
             raise IntegrationError("connection_not_found", "Connexion MetaTrader introuvable.", 404)
@@ -366,7 +398,13 @@ class IntegrationService:
                 user_id,
                 [accounts[0].external_account_id],
             )
-        return {"connection": updated, "accounts": [item.model_dump(mode="json") for item in accounts]}
+        initial_sync = await self._initial_sync_for_single_account(user_id, connection.id)
+        updated = await self.repository.get_connection(connection.id, user_id)
+        return {
+            "connection": updated,
+            "accounts": [item.model_dump(mode="json") for item in accounts],
+            "initial_sync": initial_sync,
+        }
 
     async def _persist_authentication(
         self,
@@ -382,13 +420,13 @@ class IntegrationService:
                 "platform": platform,
                 "provider": provider.provider_id,
                 "external_connection_id": result.external_connection_id,
-                "external_account_id": first.external_account_id if len(result.accounts) == 1 else None,
+                "external_account_id": first.external_account_id if first else None,
                 "broker_name": first.broker_name if first else None,
                 "server_name": first.server_name if first else None,
                 "account_number_masked": first.account_number_masked if first else None,
                 "account_type": first.account_type if first else "unknown",
                 "account_currency": first.account_currency if first else None,
-                "display_name": first.display_name if len(result.accounts) == 1 else None,
+                "display_name": first.display_name if first else None,
                 "auth_type": provider.auth_type,
                 "permission_scope": result.tokens.scope or "read",
                 "token_expires_at": result.tokens.expires_at.isoformat() if result.tokens.expires_at else None,
@@ -505,6 +543,37 @@ class IntegrationService:
                 )
         return selected_rows
 
+    async def _initial_sync_for_single_account(
+        self, user_id: str, connection_id: str
+    ) -> dict | None:
+        """Import immediately when authentication exposes exactly one selected account.
+
+        Authentication remains valid if the provider history endpoint is temporarily
+        unavailable. The failed result is returned to the UI and persisted by the
+        normal sync workflow, so it is never presented as a successful import.
+        """
+
+        rows = await self.repository.list_integration_accounts(connection_id, user_id)
+        selected = [
+            row
+            for row in rows
+            if row.get("account_id")
+            and row.get("status") in {"selected", "connected", "error"}
+        ]
+        if len(selected) != 1:
+            return None
+        try:
+            sync = await self.sync_integration_account(
+                user_id, selected[0]["id"], "initial_import"
+            )
+            return {"status": "success", **sync}
+        except IntegrationError as exc:
+            return {
+                "status": "failed",
+                "error_code": exc.code,
+                "message": exc.public_message,
+            }
+
     async def select_accounts(
         self, user_id: str, plan: str, connection_id: str, external_account_ids: list[str]
     ) -> dict:
@@ -518,7 +587,10 @@ class IntegrationService:
         results = []
         for item in selected_rows:
             try:
-                results.append(await self.sync_integration_account(user_id, item["id"], "initial_import"))
+                sync = await self.sync_integration_account(
+                    user_id, item["id"], "initial_import"
+                )
+                results.append({"status": "success", **sync})
             except IntegrationError as exc:
                 results.append({"status": "failed", "error_code": exc.code, "message": exc.public_message})
         return {"accounts": selected_rows, "initial_sync": results}
@@ -593,13 +665,13 @@ class IntegrationService:
             credential_ciphertext = None
             provider_token_ciphertext = None
             if result.permanent_token:
-                encrypted = self.vault.encrypt_json(
+                encrypted = self._require_vault().encrypt_json(
                     {"token": result.permanent_token.get_secret_value()},
                     associated_data,
                 )
                 provider_token_ciphertext = encrypted.ciphertext
             elif result.requires_credentials_for_sync:
-                encrypted = self.vault.encrypt_json(
+                encrypted = self._require_vault().encrypt_json(
                     {
                         "account_number": credentials.account_number,
                         "server_name": credentials.server_name,
@@ -686,7 +758,7 @@ class IntegrationService:
         ciphertext = stored.get("provider_token_ciphertext") or stored.get(
             "credential_ciphertext"
         )
-        return self.vault.decrypt_json(ciphertext, associated_data)
+        return self._require_vault().decrypt_json(ciphertext, associated_data)
 
     async def _fresh_access(
         self, connection: IntegrationConnection, provider: TradingConnector
@@ -701,7 +773,7 @@ class IntegrationService:
         try:
             refreshed = await provider.refresh_auth(access)
         except IntegrationError as exc:
-            if exc.code == "invalid_credentials":
+            if exc.code in {"invalid_credentials", "connection_expired"}:
                 await self.repository.update_connection(
                     connection.id,
                     connection.user_id,
@@ -782,6 +854,25 @@ class IntegrationService:
                 "cursor_before": account.sync_cursor,
             }
         )
+        logger.info(
+            "trading_sync_started provider=%s connection_id=%s integration_account_id=%s trigger=%s sync_type=%s",
+            connection.provider,
+            connection.id,
+            account.id,
+            trigger,
+            "historical" if initial else "incremental",
+        )
+        await self.repository.audit(
+            user_id,
+            f"{connection.provider}_sync_started",
+            "success",
+            connection.id,
+            {
+                "integration_account_id": account.id,
+                "trigger": trigger,
+                "sync_type": "historical" if initial else "incremental",
+            },
+        )
         try:
             await self.repository.update_integration_account(
                 account.id,
@@ -794,7 +885,7 @@ class IntegrationService:
                 },
             )
             access = await self._fresh_access(connection, provider)
-            batch = None
+            batch: SyncBatch | None = None
             for attempt in range(self.config.sync_retry_attempts):
                 try:
                     batch = (
@@ -811,6 +902,8 @@ class IntegrationService:
                     ):
                         raise safe_retry from None
                     await asyncio.sleep(self._retry_delay(attempt))
+            if batch is None:
+                raise ProviderUnavailableError()
             normalized, skipped = normalize_batch(
                 batch.trades,
                 account_id=account.account_id,
@@ -957,6 +1050,18 @@ class IntegrationService:
                     "updated_count": result.updated_count,
                 },
             )
+            logger.info(
+                "trading_sync_completed provider=%s connection_id=%s integration_account_id=%s status=%s trades_found=%s imported=%s updated=%s skipped=%s duration_ms=%s",
+                connection.provider,
+                connection.id,
+                account.id,
+                status,
+                len(batch.trades),
+                result.imported_count,
+                result.updated_count,
+                result.skipped_count,
+                round((time.monotonic() - started) * 1000),
+            )
             return result.model_dump(mode="json")
         except Exception as exc:
             safe = self._safe_error(exc)
@@ -980,6 +1085,26 @@ class IntegrationService:
                     "completed_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
+            await self.repository.audit(
+                user_id,
+                f"{connection.provider}_sync_failed",
+                "failure",
+                connection.id,
+                {
+                    "integration_account_id": account.id,
+                    "trigger": trigger,
+                    "error_code": safe.code,
+                },
+            )
+            logger.warning(
+                "trading_sync_failed provider=%s connection_id=%s integration_account_id=%s trigger=%s error_code=%s duration_ms=%s",
+                connection.provider,
+                connection.id,
+                account.id,
+                trigger,
+                safe.code,
+                round((time.monotonic() - started) * 1000),
+            )
             raise safe from None
         finally:
             await self.repository.release_sync_lock(account.id, lock_token)
@@ -989,7 +1114,12 @@ class IntegrationService:
             datetime.now(timezone.utc) - timedelta(minutes=self.config.sync_interval_minutes)
         ).isoformat()
         due = await self.repository.list_due_accounts(cutoff, limit)
-        results = {"processed": 0, "succeeded": 0, "failed": 0, "errors": []}
+        results: dict[str, Any] = {
+            "processed": 0,
+            "succeeded": 0,
+            "failed": 0,
+            "errors": [],
+        }
         for account in due:
             results["processed"] += 1
             try:
@@ -1059,7 +1189,7 @@ class IntegrationService:
         )
         try:
             access = await self._access(connection)
-            batch = None
+            batch: SyncBatch | None = None
             for attempt in range(self.config.sync_retry_attempts):
                 try:
                     batch = (
@@ -1078,6 +1208,14 @@ class IntegrationService:
                     ):
                         raise safe_retry from None
                     await asyncio.sleep(self._retry_delay(attempt))
+            if batch is None:
+                raise ProviderUnavailableError()
+            if not connection.account_id or not connection.external_account_id:
+                raise IntegrationError(
+                    "account_not_selected",
+                    "Sélectionne ce compte avant de le synchroniser.",
+                    409,
+                )
             normalized, skipped = normalize_batch(
                 batch.trades,
                 account_id=connection.account_id,
@@ -1237,12 +1375,12 @@ class IntegrationService:
         token_ciphertext = None
         credential_ciphertext = None
         if result.permanent_token:
-            encrypted = self.vault.encrypt_json(
+            encrypted = self._require_vault().encrypt_json(
                 {"token": result.permanent_token.get_secret_value()}, associated_data
             )
             token_ciphertext = encrypted.ciphertext
         else:
-            encrypted = self.vault.encrypt_json(
+            encrypted = self._require_vault().encrypt_json(
                 {
                     "account_number": credentials.account_number,
                     "server_name": credentials.server_name,

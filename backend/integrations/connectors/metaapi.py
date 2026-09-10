@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from decimal import Decimal
 import secrets
+from typing import Any, Literal
 
 from ..errors import IntegrationError
 from ..models import (
@@ -196,7 +197,7 @@ class MetaApiConnector(TradingConnector):
         region = metadata.get("region") or access.get("region") or "new-york"
         client_url = f"https://mt-client-api-v1.{region}.{self.domain}"
         end = datetime.now(timezone.utc)
-        rows = []
+        rows: list[dict[str, Any]] = []
         offset = 0
         page_limit = 1000
         start_value = self._api_time(start)
@@ -281,7 +282,11 @@ class MetaApiConnector(TradingConnector):
         if not rows:
             return None
         first = rows[0]
-        first_side = "long" if "BUY" in str(first.get("type") or "").upper() else "short"
+        first_side: Literal["long", "short"] = (
+            "long"
+            if "BUY" in str(first.get("type") or "").upper()
+            else "short"
+        )
 
         def is_opening(row: dict) -> bool:
             entry_type = str(row.get("entryType") or "").upper()

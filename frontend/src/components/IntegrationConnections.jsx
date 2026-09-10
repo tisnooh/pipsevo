@@ -4,11 +4,11 @@ import {
   FileUp, Link2, Loader2, LockKeyhole, RefreshCw, Server, Unplug,
 } from "lucide-react";
 import { toast } from "sonner";
-import { integrationConnections } from "@/lib/api";
+import { integrationConnections } from "../lib/api";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import { localDateKey } from "@/lib/tradeCalendar";
+} from "./ui/dialog";
+import { localDateKey } from "../lib/tradeCalendar";
 
 const PROVIDERS = [
   { id: "ctrader", name: "cTrader", mark: "cT", copy: "OAuth officiel et comptes cTrader autorisés en lecture seule." },
@@ -40,6 +40,42 @@ const normalizeAccounts = accounts => (accounts || []).map(item => ({
   account_name: item.account_name || item.display_name,
   currency: item.currency || item.account_currency,
 }));
+const initialSyncResults = payload => {
+  if (!payload?.initial_sync) return [];
+  return Array.isArray(payload.initial_sync)
+    ? payload.initial_sync
+    : [payload.initial_sync];
+};
+const notifyInitialSync = (payload, label = "Compte") => {
+  const results = initialSyncResults(payload);
+  if (!results.length) {
+    toast.success(`${label} connecté. Sélectionne le compte à synchroniser.`);
+    return;
+  }
+  const failed = results.filter(result => result?.status === "failed");
+  if (failed.length) {
+    toast.error(
+      failed.length === results.length
+        ? failed[0]?.message || `${label} connecté, mais l’import initial a échoué.`
+        : `${label} connecté, mais ${failed.length} import${failed.length > 1 ? "s ont" : " a"} échoué.`,
+    );
+    return;
+  }
+  const imported = results.reduce(
+    (total, result) => total + Number(result?.imported_count || 0),
+    0,
+  );
+  const updated = results.reduce(
+    (total, result) => total + Number(result?.updated_count || 0),
+    0,
+  );
+  const count = imported + updated;
+  toast.success(
+    count
+      ? `${label} connecté. ${count} trade${count > 1 ? "s" : ""} synchronisé${count > 1 ? "s" : ""}.`
+      : `${label} connecté. Historique vérifié, aucun nouveau trade.`,
+  );
+};
 const clearIntegrationQuery = () => {
   const url = new URL(window.location.href);
   ["integration", "provider", "connection", "reason"].forEach(key => url.searchParams.delete(key));
@@ -65,12 +101,33 @@ export default function IntegrationConnections({ compact = false, returnPath = "
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: caps }, { data: rows }] = await Promise.all([
+      const [capabilitiesResult, connectionsResult] = await Promise.allSettled([
         integrationConnections.capabilities(), integrationConnections.list(),
       ]);
-      setCapabilities(caps || { providers: [] });
-      const currentRows = rows || [];
+
+      if (capabilitiesResult.status === "fulfilled") {
+        setCapabilities(capabilitiesResult.value.data || { providers: [] });
+      } else {
+        setCapabilities({ providers: [] });
+        toast.error(publicError(
+          capabilitiesResult.reason,
+          "Impossible de vérifier la disponibilité des plateformes",
+        ));
+      }
+
+      const currentRows = connectionsResult.status === "fulfilled"
+        ? (connectionsResult.value.data || [])
+        : [];
       setConnections(currentRows);
+
+      if (connectionsResult.status === "rejected") {
+        toast.error(publicError(
+          connectionsResult.reason,
+          "Impossible de charger les connexions existantes",
+        ));
+        return;
+      }
+
       const params = new URLSearchParams(window.location.search);
       if (params.get("integration") === "connected") {
         const connection = currentRows.find(item => item.id === params.get("connection"));
@@ -81,7 +138,14 @@ export default function IntegrationConnections({ compact = false, returnPath = "
             detected.filter(item => ["selected", "connected", "error"].includes(item.status)).map(item => item.external_account_id),
           );
         } else if (connection) {
-          toast.success("Compte connecté. L’historique va être synchronisé en arrière-plan.");
+          const account = detected[0];
+          if (account?.last_error_message || account?.status === "error") {
+            toast.error(account?.last_error_message || "Compte connecté, mais l’import initial a échoué.");
+          } else if (account?.last_successful_sync_at) {
+            toast.success("Compte connecté et historique synchronisé.");
+          } else {
+            toast.success("Compte connecté. Synchronisation initiale en attente.");
+          }
           connectionReadyRef.current?.({ provider: connection.provider, connection });
         }
         clearIntegrationQuery();
@@ -151,7 +215,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
           openSelection(data.connection.id, data.accounts);
           toast.success("TradeLocker autorisé. Choisis les comptes à synchroniser.");
         } else {
-          toast.success("Compte TradeLocker connecté. Synchronisation en arrière-plan lancée.");
+          notifyInitialSync(data, "Compte TradeLocker");
           onConnectionReady?.({ provider: "tradelocker", connection: data.connection });
         }
       }
@@ -177,7 +241,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
       if ((data.accounts || []).length > 1) {
         openSelection(data.connection.id, data.accounts);
       } else {
-        toast.success("Compte MetaTrader connecté. Synchronisation en arrière-plan lancée.");
+        notifyInitialSync(data, "Compte MetaTrader");
         onConnectionReady?.({ provider: "metaapi", connection: data.connection });
       }
     } catch (error) {
@@ -192,7 +256,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
       try {
         const { data } = await integrationConnections.finalizeMetaApi(connection.id);
         await load();
-        toast.success("Compte MetaTrader connecté et synchronisation lancée.");
+        notifyInitialSync(data, "Compte MetaTrader");
         connectionReadyRef.current?.({ provider: "metaapi", connection: data.connection });
         return;
       } catch (error) {
@@ -223,8 +287,8 @@ export default function IntegrationConnections({ compact = false, returnPath = "
     if (!selectedIds.length) return;
     setActionId(selectConnection.id);
     try {
-      await integrationConnections.selectAccounts(selectConnection.id, selectedIds);
-      toast.success("Comptes sélectionnés et import initial lancé");
+      const { data } = await integrationConnections.selectAccounts(selectConnection.id, selectedIds);
+      notifyInitialSync(data, "Comptes");
       onConnectionReady?.({ provider: selectConnection.provider, connection: selectConnection });
       setSelectConnection(null);
       await load();
@@ -269,10 +333,17 @@ export default function IntegrationConnections({ compact = false, returnPath = "
           const capability = capabilityMap[provider.id];
           const available = Boolean(capability?.available);
           const busy = actionId === provider.id;
+          const availabilityLabel = loading
+            ? "Vérification…"
+            : available
+              ? "Disponible"
+              : provider.id === "ninjatrader"
+                ? "Bientôt disponible"
+                : "Indisponible";
           return <article key={provider.id} className="flex min-h-44 flex-col rounded-xl border border-[#6571CF]/20 bg-[#0D1120] p-4 transition-colors hover:border-[#7881E8]/35">
-            <div className="flex items-start justify-between gap-3"><span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-[#7C4DFF]/20 to-[#4F8CFF]/15 font-semibold text-[#C8B9FF]">{provider.mark}</span><span className={`rounded-full border px-2.5 py-1 text-[9px] ${available ? "border-[#46C99A]/15 text-[#46C99A]" : "border-white/[0.08] text-[#737C8D]"}`}>{available ? "Disponible" : provider.id === "ninjatrader" ? "Bientôt disponible" : "Indisponible"}</span></div>
+            <div className="flex items-start justify-between gap-3"><span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-[#7C4DFF]/20 to-[#4F8CFF]/15 font-semibold text-[#C8B9FF]">{provider.mark}</span><span className={`rounded-full border px-2.5 py-1 text-[9px] ${available ? "border-[#46C99A]/15 text-[#46C99A]" : "border-white/[0.08] text-[#737C8D]"}`}>{availabilityLabel}</span></div>
             <h3 className="mt-4 text-sm font-semibold">{provider.name}</h3><p className="mt-1 flex-1 text-xs leading-relaxed text-[#7E8798]">{provider.copy}</p>
-            <button onClick={() => launchProvider(provider)} disabled={!available || busy} className="mt-4 inline-flex items-center gap-2 text-xs font-medium text-[#B69CFF] disabled:cursor-not-allowed disabled:text-[#555D6C]">{busy ? <Loader2 className="h-4 w-4 animate-spin"/> : available ? <Link2 className="h-4 w-4"/> : <Clock3 className="h-4 w-4"/>}{available ? "Connecter" : "Non activé"}<ChevronRight className="ml-auto h-4 w-4"/></button>
+            <button onClick={() => launchProvider(provider)} disabled={loading || !available || busy} className="mt-4 inline-flex items-center gap-2 text-xs font-medium text-[#B69CFF] disabled:cursor-not-allowed disabled:text-[#555D6C]">{busy || loading ? <Loader2 className="h-4 w-4 animate-spin"/> : available ? <Link2 className="h-4 w-4"/> : <Clock3 className="h-4 w-4"/>}{loading ? "Vérification" : available ? "Connecter" : "Non activé"}<ChevronRight className="ml-auto h-4 w-4"/></button>
           </article>;
         })}
         <a href="/app/journal" className="flex min-h-44 flex-col rounded-2xl border border-dashed border-[#4F8CFF]/20 bg-[#4F8CFF]/[0.025] p-4 transition-colors hover:border-[#4F8CFF]/40">

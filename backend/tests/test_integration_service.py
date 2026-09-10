@@ -3,12 +3,15 @@ import base64
 import os
 import uuid
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock
 
 from pydantic import SecretStr
 
 from integrations.config import IntegrationConfig
+from integrations.errors import IntegrationError
 from integrations.models import (
     DetectedAccount,
+    IntegrationConnection,
     MT5Credentials,
     ProviderConnectionResult,
     ProviderTradeRecord,
@@ -267,6 +270,116 @@ def test_user_cannot_read_another_users_connection():
         assert (
             await repository.get_connection(result["connection"]["id"], "intruder")
             is None
+        )
+
+    asyncio.run(scenario())
+
+
+def test_single_account_authentication_runs_initial_import_immediately():
+    async def scenario():
+        service, repository, _ = build_service()
+        repository.list_integration_accounts = AsyncMock(
+            return_value=[
+                {
+                    "id": "integration-account-1",
+                    "account_id": "core-account-1",
+                    "status": "selected",
+                }
+            ]
+        )
+        service.sync_integration_account = AsyncMock(
+            return_value={"imported_count": 4, "updated_count": 0}
+        )
+
+        result = await service._initial_sync_for_single_account(
+            "user-1", "connection-1"
+        )
+
+        assert result == {
+            "status": "success",
+            "imported_count": 4,
+            "updated_count": 0,
+        }
+        service.sync_integration_account.assert_awaited_once_with(
+            "user-1", "integration-account-1", "initial_import"
+        )
+
+    asyncio.run(scenario())
+
+
+def test_single_account_authentication_reports_initial_import_failure():
+    async def scenario():
+        service, repository, _ = build_service()
+        repository.list_integration_accounts = AsyncMock(
+            return_value=[
+                {
+                    "id": "integration-account-1",
+                    "account_id": "core-account-1",
+                    "status": "selected",
+                }
+            ]
+        )
+        service.sync_integration_account = AsyncMock(
+            side_effect=IntegrationError(
+                "provider_unavailable", "Historique indisponible.", 503
+            )
+        )
+
+        result = await service._initial_sync_for_single_account(
+            "user-1", "connection-1"
+        )
+
+        assert result == {
+            "status": "failed",
+            "error_code": "provider_unavailable",
+            "message": "Historique indisponible.",
+        }
+
+    asyncio.run(scenario())
+
+
+def test_expired_refresh_token_persists_reconnection_required_state():
+    async def scenario():
+        service, repository, _ = build_service()
+        connection = await repository.create_connection(
+            {
+                "user_id": "user-1",
+                "platform": "ctrader",
+                "provider": "ctrader",
+                "connection_status": "connected",
+                "sync_status": "success",
+            }
+        )
+        await service._store_access(
+            connection,
+            "user-1",
+            "ctrader",
+            {
+                "access_token": "expired-token",
+                "refresh_token": "expired-refresh-token",
+                "expires_at": "2026-01-01T00:00:00+00:00",
+            },
+        )
+        provider = AsyncMock()
+        provider.refresh_auth.side_effect = IntegrationError(
+            "connection_expired", "Reconnecte cTrader pour continuer.", 401
+        )
+
+        try:
+            await service._fresh_access(
+                IntegrationConnection.model_validate(connection), provider
+            )
+            assert False, "La connexion expirée doit interrompre la synchronisation"
+        except IntegrationError as exc:
+            assert exc.code == "connection_expired"
+
+        persisted = repository.connections[connection["id"]]
+        assert persisted["connection_status"] == "expired"
+        assert persisted["sync_status"] == "failed"
+        assert persisted["last_error_code"] == "connection_expired"
+        assert any(
+            args[1] == "ctrader_connection_expired"
+            for args, _kwargs in repository.audits
         )
 
     asyncio.run(scenario())

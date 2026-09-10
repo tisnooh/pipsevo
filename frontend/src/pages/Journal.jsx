@@ -58,7 +58,7 @@ export function JournalPage() {
 
   useEffect(() => {
     load()
-    return listenForAppDataChanges(load, ["external"])
+    return listenForAppDataChanges(load, ["accounts", "trades"])
   }, [load])
 
   useEffect(() => {
