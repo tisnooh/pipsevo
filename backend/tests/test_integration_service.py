@@ -338,6 +338,61 @@ def test_single_account_authentication_reports_initial_import_failure():
     asyncio.run(scenario())
 
 
+def test_orphaned_selected_account_is_recreated_for_full_history_recovery():
+    async def scenario():
+        service, repository, _ = build_service()
+        repository.create_account = AsyncMock(
+            return_value={"id": "replacement-core-account"}
+        )
+        repository.update_integration_account = AsyncMock(
+            side_effect=lambda _id, _user_id, payload: {
+                "id": "integration-account-1",
+                "connection_id": "connection-1",
+                "user_id": "user-1",
+                "provider": "tradelocker",
+                "platform": "tradelocker",
+                "external_account_id": "2473950",
+                "account_name": "ClickFunded",
+                "broker_name": "click",
+                "status": payload["status"],
+                "account_id": payload["account_id"],
+                "sync_cursor": payload["sync_cursor"],
+                "last_successful_sync_at": payload["last_successful_sync_at"],
+            }
+        )
+        orphan = {
+            "id": "integration-account-1",
+            "connection_id": "connection-1",
+            "user_id": "user-1",
+            "provider": "tradelocker",
+            "platform": "tradelocker",
+            "external_account_id": "2473950",
+            "account_name": "ClickFunded",
+            "broker_name": "click",
+            "status": "connected",
+            "account_id": None,
+            "balance": "97608.84",
+            "sync_cursor": {"last_execution_at": "2026-09-17T06:35:00Z"},
+            "last_successful_sync_at": "2026-09-17T06:35:18Z",
+        }
+
+        repaired = await service._repair_orphaned_selected_account(
+            orphan, "user-1", "tradelocker"
+        )
+
+        assert repaired["account_id"] == "replacement-core-account"
+        assert repaired["sync_cursor"] == {}
+        assert repaired["last_successful_sync_at"] is None
+        repository.create_account.assert_awaited_once()
+        repository.update_integration_account.assert_awaited_once()
+        assert any(
+            args[1] == "tradelocker_orphaned_account_repaired"
+            for args, _kwargs in repository.audits
+        )
+
+    asyncio.run(scenario())
+
+
 def test_expired_refresh_token_persists_reconnection_required_state():
     async def scenario():
         service, repository, _ = build_service()

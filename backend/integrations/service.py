@@ -543,6 +543,63 @@ class IntegrationService:
                 )
         return selected_rows
 
+    async def _repair_orphaned_selected_account(
+        self,
+        account_row: dict,
+        user_id: str,
+        provider_id: str,
+    ) -> dict:
+        """Recreate the PipsEvo account removed behind an active integration.
+
+        Older database constraints used ``ON DELETE SET NULL`` for the link from
+        ``integration_accounts`` to ``accounts``. Deleting the PipsEvo account
+        consequently removed its imported trades while leaving the provider
+        connection marked as connected. Only accounts that were already selected
+        are repaired; provider accounts that are merely available remain opt-in.
+        Resetting the cursor forces a historical import so deleted trades are
+        restored on the same synchronization attempt.
+        """
+        if account_row.get("account_id"):
+            return account_row
+        if account_row.get("status") not in {"selected", "syncing", "connected", "error"}:
+            return account_row
+
+        balance = float(account_row.get("balance") or account_row.get("equity") or 0)
+        market_type = "futures" if provider_id == "tradovate" else "cfd"
+        external_id = str(account_row.get("external_account_id") or "")
+        core = await self.repository.create_account(
+            {
+                "user_id": user_id,
+                "name": account_row.get("account_name")
+                or f"{provider_id} {external_id[-4:]}",
+                "firm": account_row.get("broker_name") or provider_id.title(),
+                "market_type": market_type,
+                "balance": balance,
+                "initial_balance": max(balance, 0),
+                "status": "active",
+            }
+        )
+        repaired = await self.repository.update_integration_account(
+            account_row["id"],
+            user_id,
+            {
+                "account_id": core["id"],
+                "status": "selected",
+                "sync_cursor": {},
+                "last_successful_sync_at": None,
+                "last_error_code": None,
+                "last_error_message": None,
+            },
+        )
+        await self.repository.audit(
+            user_id,
+            f"{provider_id}_orphaned_account_repaired",
+            "success",
+            account_row.get("connection_id"),
+            {"integration_account_id": account_row["id"]},
+        )
+        return repaired
+
     async def _initial_sync_for_single_account(
         self, user_id: str, connection_id: str
     ) -> dict | None:
@@ -829,6 +886,11 @@ class IntegrationService:
         provider = self.registry.get(connection.provider)
         if not isinstance(provider, TradingConnector):
             raise ProviderUnavailableError()
+        if not account.account_id:
+            account_row = await self._repair_orphaned_selected_account(
+                account_row, user_id, connection.provider
+            )
+            account = IntegrationAccount.model_validate(account_row)
         if not account.account_id:
             raise IntegrationError(
                 "account_not_selected", "Sélectionne ce compte avant de le synchroniser.", 409
@@ -1352,7 +1414,9 @@ class IntegrationService:
         if hasattr(self.repository, "list_integration_accounts"):
             for account in await self.repository.list_integration_accounts(connection.id, user_id):
                 await self.repository.update_integration_account(
-                    account["id"], user_id, {"status": "disconnected"}
+                    account["id"],
+                    user_id,
+                    {"status": "disconnected", "account_id": None},
                 )
         await self.repository.audit(
             user_id, f"{connection.provider}_disconnected", "success", connection.id
