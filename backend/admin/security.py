@@ -15,6 +15,7 @@ ROLE_PERMISSIONS = {
     "admin": frozenset({
         "overview.read", "users.read", "users.manage", "subscriptions.read",
         "support.read", "support.write", "analytics.read", "sync.read",
+        "trading_accounts.read", "integrations.read", "system.read",
         "prop_firms.read", "prop_firms.write", "emails.read", "backtest.read",
         "atlas.read", "announcements.read", "announcements.write",
         "incidents.read", "incidents.write",

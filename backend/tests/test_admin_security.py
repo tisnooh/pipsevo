@@ -33,6 +33,19 @@ def test_admin_session_exposes_permissions_but_no_internal_fields():
     assert "_supabase_token" not in response.json()
 
 
+def test_product_admin_endpoints_reject_normal_users_before_data_access():
+    client = client_for({"id": "user-1", "email": "user@example.com", "role": "user", "status": "active"})
+    for path in ("/api/admin/trading-accounts", "/api/admin/integrations", "/api/admin/system"):
+        assert client.get(path).status_code == 403
+
+
+def test_admin_role_contains_consolidated_platform_permissions():
+    user = {"role": "admin"}
+    assert has_permission(user, "trading_accounts.read")
+    assert has_permission(user, "integrations.read")
+    assert has_permission(user, "system.read")
+
+
 def test_suspended_staff_is_rejected():
     response = client_for({"id": "admin-1", "email": "admin@example.com", "role": "super_admin", "status": "suspended"}).get("/api/admin/session")
     assert response.status_code == 403

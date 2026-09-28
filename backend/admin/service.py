@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from email_service import EmailConfigurationError, EmailDeliveryError, brand_email_html, send_email
+from atlas import build_atlas_context
 
 from .client import AdminConfigurationError, AdminDataError, SupabaseAdminClient
 from .security import STAFF_ROLES, normalize_role, sanitize
@@ -150,13 +151,21 @@ class AdminService:
             "select": "created_at", "created_at": f"gte.{start.isoformat()}",
             "order": "created_at.asc", "limit": "10000",
         })
-        signups_by_day: Counter[str] = Counter(str(row.get("created_at", ""))[:10] for row in signup_rows)
+        monthly = days > 365
+        signups_by_day: Counter[str] = Counter(str(row.get("created_at", ""))[:7 if monthly else 10] for row in signup_rows)
         series = []
-        cursor = start.date()
-        while cursor <= now.date():
-            key = cursor.isoformat()
-            series.append({"date": key, "value": signups_by_day[key]})
-            cursor += timedelta(days=1)
+        if monthly:
+            cursor = start.date().replace(day=1)
+            while cursor <= now.date():
+                key = cursor.strftime("%Y-%m")
+                series.append({"date": key, "value": signups_by_day[key]})
+                cursor = cursor.replace(year=cursor.year + (cursor.month // 12), month=(cursor.month % 12) + 1)
+        else:
+            cursor = start.date()
+            while cursor <= now.date():
+                key = cursor.isoformat()
+                series.append({"date": key, "value": signups_by_day[key]})
+                cursor += timedelta(days=1)
 
         support_open, backtest_sessions, backtest_completed, email_errors, atlas_errors = await asyncio.gather(
             self.db.contact_messages.count_documents({"status": {"$nin": ["resolved", "closed"]}}),
@@ -217,15 +226,30 @@ class AdminService:
         )
         if not profile:
             return None
-        accounts, connections = await asyncio.gather(
+        accounts, connections, trades, sync_runs = await asyncio.gather(
             self.supabase.rows("accounts", {"user_id": f"eq.{user_id}", "select": "id,name,firm,market_type,status,created_at", "order": "created_at.desc", "limit": "100"}),
             self.supabase.rows("integration_connections", {"user_id": f"eq.{user_id}", "select": "id,account_id,platform,provider,broker_name,account_number_masked,connection_status,sync_status,last_successful_sync_at,last_sync_attempt_at,last_error_code,last_error_message,created_at", "order": "created_at.desc", "limit": "100"}),
+            self.supabase.rows("trades", {"user_id": f"eq.{user_id}", "select": "id,date,instrument,direction,pnl,r,setup,session,plan_respected,screenshots,created_at", "order": "date.desc", "limit": "10000"}),
+            self.supabase.rows("integration_sync_runs", {"user_id": f"eq.{user_id}", "select": "connection_id,imported_count", "status": "in.(success,partial_error)", "limit": "10000"}),
         )
         trades_count, reports_count, backtest_count = await asyncio.gather(
             self.supabase.count("trades", {"user_id": f"eq.{user_id}"}),
             self.supabase.count("ai_reports", {"user_id": f"eq.{user_id}"}),
             self.db.backtest_sessions.count_documents({"user_id": user_id}),
         )
+        context, _ = build_atlas_context(profile, accounts, trades)
+        day_totals: defaultdict[str, float] = defaultdict(float)
+        for trade in trades:
+            if trade.get("date") and trade.get("pnl") is not None:
+                day_totals[str(trade["date"])[:10]] += float(trade["pnl"])
+        imported_by_connection: defaultdict[str, int] = defaultdict(int)
+        for run in sync_runs:
+            imported_by_connection[str(run.get("connection_id"))] += int(run.get("imported_count") or 0)
+        safe_connections = [
+            {**connection, "trades_imported": imported_by_connection.get(str(connection.get("id")), 0)}
+            for connection in connections
+        ]
+        metrics = context["metrics"]
         base = {
             "identity": {
                 "id": profile["id"], "name": profile.get("name"), "email": profile.get("email"),
@@ -236,8 +260,17 @@ class AdminService:
                 "language": (auth_user or {}).get("user_metadata", {}).get("language"),
                 "onboarding_completed": bool(profile.get("onboarding_completed")),
             },
-            "trading": {"accounts": accounts, "connections": connections, "trades_count": trades_count},
-            "journal": {"trades_count": trades_count},
+            "trading": {"accounts": accounts, "connections": safe_connections, "trades_count": trades_count},
+            "trading_data": {
+                **metrics,
+                "best_day": max(day_totals.items(), key=lambda item: item[1], default=(None, None)),
+                "worst_day": min(day_totals.items(), key=lambda item: item[1], default=(None, None)),
+                "rows_limited": len(trades) == 10000,
+            },
+            "journal": {
+                "trades_count": trades_count,
+                "recent": [{"id": row.get("id"), "date": row.get("date"), "instrument": row.get("instrument"), "pnl": row.get("pnl"), "setup": row.get("setup"), "screenshots_count": len(row.get("screenshots") or [])} for row in trades[:10]],
+            },
             "backtest": {"sessions_count": backtest_count},
             "atlas": {"requests_count": reports_count},
         }
@@ -250,6 +283,27 @@ class AdminService:
         if not updated:
             raise AdminDataError("User profile not found")
         return updated
+
+    async def subscriptions(self, page: int, per_page: int, plan: str | None, status: str | None) -> dict[str, Any]:
+        params: dict[str, Any] = {
+            "select": "user_id,plan,status,provider_customer_id,provider_subscription_id,current_period_end,subscription_started_at,cancel_at_period_end,created_at,updated_at",
+            "order": "created_at.desc",
+        }
+        if plan:
+            params["plan"] = f"eq.{plan[:40]}"
+        if status:
+            params["status"] = f"eq.{status[:40]}"
+        rows, total = await self.supabase.list_rows("subscriptions", params=params, page=page, per_page=per_page)
+        user_ids = sorted({str(row.get("user_id")) for row in rows if row.get("user_id")})
+        profiles = await self.supabase.rows("profiles", {
+            "select": "id,name,email", "id": f"in.({','.join(user_ids)})", "limit": str(len(user_ids)),
+        }) if user_ids else []
+        profile_by_id = {str(item.get("id")): item for item in profiles}
+        items = []
+        for row in rows:
+            profile = profile_by_id.get(str(row.get("user_id")), {})
+            items.append({**row, "name": profile.get("name"), "email": profile.get("email")})
+        return {"items": items, "page": page, "per_page": per_page, "total": total, "pages": max(1, math.ceil(total / per_page))}
 
     async def update_role(self, user_id: str, role: str) -> dict[str, Any]:
         auth_user = await self.supabase.auth_user(user_id)
@@ -360,6 +414,123 @@ class AdminService:
             "order": "started_at.desc", "limit": "100",
         })
         return [sanitize(row) for row in rows]
+
+    async def trading_accounts(
+        self, page: int, per_page: int, search: str, provider: str | None, status: str | None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {
+            "select": "id,connection_id,user_id,account_id,provider,platform,account_name,account_number_masked,broker_name,server_name,currency,account_type,status,last_successful_sync_at,last_sync_attempt_at,last_error_code,last_error_message,created_at,updated_at",
+            "order": "created_at.desc",
+        }
+        if search:
+            clean = re.sub(r"[^\w@.+ -]", "", search).strip()[:100]
+            if clean:
+                params["or"] = f"(account_name.ilike.*{clean}*,account_number_masked.ilike.*{clean}*,broker_name.ilike.*{clean}*,server_name.ilike.*{clean}*)"
+        if provider:
+            params["provider"] = f"eq.{provider[:80]}"
+        if status:
+            params["status"] = f"eq.{status[:40]}"
+        rows, total = await self.supabase.list_rows("integration_accounts", params=params, page=page, per_page=per_page)
+        user_ids = sorted({str(row.get("user_id")) for row in rows if row.get("user_id")})
+        account_ids = sorted({str(row.get("id")) for row in rows if row.get("id")})
+        profiles = []
+        runs = []
+        if user_ids:
+            profiles = await self.supabase.rows("profiles", {
+                "select": "id,name,email", "id": f"in.({','.join(user_ids)})", "limit": str(len(user_ids)),
+            })
+        if account_ids:
+            runs = await self.supabase.rows("integration_sync_runs", {
+                "select": "integration_account_id,imported_count", "integration_account_id": f"in.({','.join(account_ids)})",
+                "status": "in.(success,partial_error)", "limit": "10000",
+            })
+        profile_by_id = {str(item.get("id")): item for item in profiles}
+        imported_by_account: defaultdict[str, int] = defaultdict(int)
+        for run in runs:
+            imported_by_account[str(run.get("integration_account_id"))] += int(run.get("imported_count") or 0)
+        items = []
+        for row in rows:
+            profile = profile_by_id.get(str(row.get("user_id")), {})
+            items.append(sanitize({
+                **row,
+                "user": {"id": row.get("user_id"), "name": profile.get("name"), "email": profile.get("email")},
+                "trades_imported": imported_by_account.get(str(row.get("id")), 0),
+            }))
+        return {
+            "items": items, "page": page, "per_page": per_page, "total": total,
+            "pages": max(1, math.ceil(total / per_page)), "sync_rows_limited": len(runs) == 10000,
+        }
+
+    async def integrations(self, days: int) -> dict[str, Any]:
+        since = utcnow() - timedelta(days=days)
+        connections, accounts, runs = await asyncio.gather(
+            self.supabase.rows("integration_connections", {
+                "select": "provider,platform,connection_status,sync_status,last_successful_sync_at,last_error_code,last_error_message", "limit": "10000",
+            }),
+            self.supabase.rows("integration_accounts", {"select": "provider,platform,status", "limit": "10000"}),
+            self.supabase.rows("integration_sync_runs", {
+                "select": "connection_id,status,error_code,error_message,started_at,completed_at", "started_at": f"gte.{since.isoformat()}",
+                "order": "started_at.desc", "limit": "10000",
+            }),
+        )
+        grouped: dict[str, dict[str, Any]] = {}
+        for row in connections:
+            key = str(row.get("provider") or row.get("platform") or "unknown")
+            item = grouped.setdefault(key, {"provider": key, "platforms": set(), "connections": 0, "connected": 0, "accounts": 0, "sync_success": 0, "sync_errors": 0, "last_successful_sync_at": None})
+            item["platforms"].add(row.get("platform"))
+            item["connections"] += 1
+            if row.get("connection_status") in {"connected", "active", "success"}:
+                item["connected"] += 1
+            last_sync = row.get("last_successful_sync_at")
+            if last_sync and (not item["last_successful_sync_at"] or last_sync > item["last_successful_sync_at"]):
+                item["last_successful_sync_at"] = last_sync
+        for row in accounts:
+            key = str(row.get("provider") or row.get("platform") or "unknown")
+            item = grouped.setdefault(key, {"provider": key, "platforms": set(), "connections": 0, "connected": 0, "accounts": 0, "sync_success": 0, "sync_errors": 0, "last_successful_sync_at": None})
+            item["platforms"].add(row.get("platform"))
+            item["accounts"] += 1
+        connection_provider = {
+            str(row.get("id")): str(row.get("provider") or row.get("platform") or "unknown")
+            for row in await self.supabase.rows("integration_connections", {"select": "id,provider,platform", "limit": "10000"})
+        }
+        for row in runs:
+            key = connection_provider.get(str(row.get("connection_id")), "unknown")
+            item = grouped.setdefault(key, {"provider": key, "platforms": set(), "connections": 0, "connected": 0, "accounts": 0, "sync_success": 0, "sync_errors": 0, "last_successful_sync_at": None})
+            item["platforms"].add(row.get("platform"))
+            if row.get("status") == "success":
+                item["sync_success"] += 1
+            elif row.get("status") in {"failed", "partial_error"}:
+                item["sync_errors"] += 1
+        items = []
+        for item in grouped.values():
+            attempts = item["sync_success"] + item["sync_errors"]
+            item["error_rate"] = round(item["sync_errors"] * 100 / attempts, 1) if attempts else None
+            item["platforms"] = sorted(value for value in item["platforms"] if value)
+            items.append(item)
+        recent_errors = [sanitize(row) for row in runs if row.get("status") in {"failed", "partial_error"}][:50]
+        return {
+            "range_days": days, "items": sorted(items, key=lambda value: value["provider"]), "recent_errors": recent_errors,
+            "tracking_rows_limited": any(len(values) == 10000 for values in (connections, accounts, runs)),
+        }
+
+    async def system_status(self) -> dict[str, Any]:
+        incidents, failed_runs = await asyncio.gather(
+            self.supabase.rows("system_incidents", {"select": "id,source,severity,status,message,error_code,occurrences,last_seen_at", "status": "in.(open,investigating)", "order": "last_seen_at.desc", "limit": "100"}),
+            self.supabase.rows("integration_sync_runs", {"select": "connection_id,status,error_code,error_message,started_at", "status": "in.(failed,partial_error)", "order": "started_at.desc", "limit": "50"}),
+        )
+        email_failures = await self.db.email_deliveries.find(
+            {"status": {"$in": ["failed", "bounced", "rejected"]}}, {"_id": 0, "message_id": 0, "recipient": 0},
+        ).sort("created_at", -1).limit(50).to_list(50)
+        services = [
+            {"name": "Base de données", "status": "operational" if self.supabase.configured else "not_configured", "detail": "Connexion serveur Supabase"},
+            {"name": "Authentification", "status": "operational" if self.supabase.configured else "not_configured", "detail": "Supabase Auth"},
+            {"name": "E-mails", "status": "configured" if configured_env("SMTP_PASSWORD") or configured_env("RESEND_API_KEY") else "not_configured", "detail": "SMTP ou Resend"},
+            {"name": "Paiements", "status": "configured" if configured_env("STRIPE_SECRET_KEY") and configured_env("STRIPE_WEBHOOK_SECRET") else "not_configured", "detail": "Stripe"},
+            {"name": "MetaTrader", "status": "configured" if configured_env("METAAPI_TOKEN") else "not_configured", "detail": "MetaApi"},
+            {"name": "cTrader", "status": "configured" if configured_env("CTRADER_CLIENT_ID") and configured_env("CTRADER_CLIENT_SECRET") else "not_configured", "detail": "Open API"},
+            {"name": "Tradovate", "status": "configured" if configured_env("TRADOVATE_CLIENT_ID") and configured_env("TRADOVATE_CLIENT_SECRET") else "not_configured", "detail": "OAuth/API"},
+        ]
+        return {"services": services, "incidents": incidents, "sync_errors": [sanitize(row) for row in failed_runs], "email_errors": [sanitize(row) for row in email_failures], "checked_at": iso()}
 
     async def atlas_monitor(self, days: int) -> dict[str, Any]:
         since = utcnow() - timedelta(days=days)

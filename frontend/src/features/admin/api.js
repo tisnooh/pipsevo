@@ -14,6 +14,9 @@ export const adminApi = {
   replySupport: (id, payload) => api.post(`/admin/support/${id}/messages`, payload),
   sync: (params) => api.get("/admin/trading-sync", { params }),
   syncRuns: (id) => api.get(`/admin/trading-sync/${id}/runs`),
+  tradingAccounts: (params) => api.get("/admin/trading-accounts", { params }),
+  integrations: (days = 30) => api.get("/admin/integrations", { params: { days } }),
+  system: () => api.get("/admin/system"),
   propFirms: () => api.get("/admin/prop-firms"),
   savePropFirm: (item) => item.id
     ? api.put(`/admin/prop-firms/${item.id}`, item)

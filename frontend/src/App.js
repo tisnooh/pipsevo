@@ -55,6 +55,11 @@ const AdminAtlas = adminOperation("AdminAtlas");
 const AdminBacktesting = adminOperation("AdminBacktesting");
 const AdminAnalytics = adminOperation("AdminAnalytics");
 const AdminSubscriptions = adminOperation("AdminSubscriptions");
+const loadAdminPlatform = () => import("@/features/admin/AdminPlatform");
+const adminPlatform = (name) => lazy(() => loadAdminPlatform().then((module) => ({ default: module[name] })));
+const AdminTradingAccounts = adminPlatform("AdminTradingAccounts");
+const AdminIntegrations = adminPlatform("AdminIntegrations");
+const AdminSystem = adminPlatform("AdminSystem");
 const loadAdminControl = () => import("@/features/admin/AdminControl");
 const adminControl = (name) => lazy(() => loadAdminControl().then((module) => ({ default: module[name] })));
 const AdminAnnouncements = adminControl("AdminAnnouncements");
@@ -170,11 +175,14 @@ export default function App() {
           <Route element={<AdminAccess />}>
             <Route path="/admin" element={<AdminShell />}>
               <Route index element={<AdminOverview />} />
+              <Route path="dashboard" element={<Navigate to="/admin" replace />} />
               <Route path="users" element={<AdminUsers />} />
               <Route path="users/:userId" element={<AdminUserDetail />} />
               <Route path="support" element={<AdminSupport />} />
               <Route path="support/:ticketId" element={<AdminSupportDetail />} />
               <Route path="trading-sync" element={<AdminSync />} />
+              <Route path="trading-accounts" element={<AdminTradingAccounts />} />
+              <Route path="integrations" element={<AdminIntegrations />} />
               <Route path="prop-firms" element={<AdminPropFirms />} />
               <Route path="emails" element={<AdminEmails />} />
               <Route path="atlas" element={<AdminAtlas />} />
@@ -185,6 +193,8 @@ export default function App() {
               <Route path="feature-flags" element={<AdminFlags />} />
               <Route path="incidents" element={<AdminIncidents />} />
               <Route path="audit" element={<AdminAudit />} />
+              <Route path="audit-logs" element={<AdminAudit />} />
+              <Route path="system" element={<AdminSystem />} />
               <Route path="settings" element={<AdminSettings />} />
             </Route>
           </Route>

@@ -53,6 +53,9 @@ def build_admin_router(get_current_user, service: AdminService) -> APIRouter:
     users_manage = require_permission(get_current_user, "users.manage")
     subscriptions_read = require_permission(get_current_user, "subscriptions.read")
     sync_read = require_permission(get_current_user, "sync.read")
+    trading_accounts_read = require_permission(get_current_user, "trading_accounts.read")
+    integrations_read = require_permission(get_current_user, "integrations.read")
+    system_read = require_permission(get_current_user, "system.read")
     prop_firms_read = require_permission(get_current_user, "prop_firms.read")
     prop_firms_write = require_permission(get_current_user, "prop_firms.write")
     emails_read = require_permission(get_current_user, "emails.read")
@@ -73,7 +76,7 @@ def build_admin_router(get_current_user, service: AdminService) -> APIRouter:
         return public_staff_user(user)
 
     @router.get("/admin/overview")
-    async def overview(days: int = Query(30, ge=1, le=365), user=Depends(overview_read)):
+    async def overview(days: int = Query(30, ge=1, le=3650), user=Depends(overview_read)):
         await service.rate_limit(user["id"], "overview", 60)
         return await service.overview(days)
 
@@ -141,9 +144,10 @@ def build_admin_router(get_current_user, service: AdminService) -> APIRouter:
     @router.get("/admin/subscriptions")
     async def subscriptions(
         page: int = Query(1, ge=1), per_page: int = Query(25, ge=1, le=100),
-        plan: str | None = None, user=Depends(subscriptions_read),
+        plan: str | None = None, subscription_status: str | None = Query(None, alias="status"),
+        user=Depends(subscriptions_read),
     ):
-        return await service.list_users(page, per_page, "", None, None, plan)
+        return await service.subscriptions(page, per_page, plan, subscription_status)
 
     @router.get("/admin/support")
     async def support(
@@ -195,6 +199,23 @@ def build_admin_router(get_current_user, service: AdminService) -> APIRouter:
     @router.get("/admin/trading-sync/{connection_id}/runs")
     async def trading_sync_runs(connection_id: str, user=Depends(sync_read)):
         return {"items": await service.sync_runs(_valid_uuid(connection_id, "Connexion"))}
+
+    @router.get("/admin/trading-accounts")
+    async def trading_accounts(
+        page: int = Query(1, ge=1), per_page: int = Query(25, ge=1, le=100),
+        search: str = Query("", max_length=100), provider: str | None = None,
+        account_status: str | None = Query(None, alias="status"),
+        user=Depends(trading_accounts_read),
+    ):
+        return await service.trading_accounts(page, per_page, search, provider, account_status)
+
+    @router.get("/admin/integrations")
+    async def integrations(days: int = Query(30, ge=1, le=365), user=Depends(integrations_read)):
+        return await service.integrations(days)
+
+    @router.get("/admin/system")
+    async def system_status(user=Depends(system_read)):
+        return await service.system_status()
 
     @router.get("/admin/prop-firms")
     async def prop_firms_admin(

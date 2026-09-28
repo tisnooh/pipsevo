@@ -1,31 +1,29 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  Activity, AlertTriangle, BarChart3, BellRing, Building2, ChevronLeft, CreditCard,
-  FileClock, Flag, FlaskConical, Headphones, LayoutDashboard, Mail, Menu, Search,
-  Settings, Sparkles, Users, X, Zap,
+  Activity, BarChart3, BellRing, Cable, ChevronLeft, CreditCard, Database,
+  FileClock, Flag, Headphones, LayoutDashboard, LogOut, Menu, Search,
+  Settings, UserCircle, Users, X,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { useAuth } from "@/context/AuthContext";
 import { adminApi, isSuperAdmin } from "./api";
 import { useAdminSession } from "./AdminAccess";
 import "./admin.css";
 
 const navigation = [
-  ["/admin", "Vue d’ensemble", LayoutDashboard, "overview.read"],
+  ["/admin", "Dashboard", LayoutDashboard, "overview.read"],
   ["/admin/users", "Utilisateurs", Users, "users.support_read|users.read"],
-  ["/admin/support", "Support", Headphones, "support.read"],
-  ["/admin/trading-sync", "Synchronisations", Zap, "sync.read"],
-  ["/admin/prop-firms", "Prop firms", Building2, "prop_firms.read"],
-  ["/admin/emails", "E-mails", Mail, "emails.read"],
-  ["/admin/atlas", "Atlas IA", Sparkles, "atlas.read"],
-  ["/admin/backtesting", "Backtest Lab", FlaskConical, "backtest.read"],
-  ["/admin/analytics", "Analytics", BarChart3, "analytics.read"],
   ["/admin/subscriptions", "Abonnements", CreditCard, "subscriptions.read"],
+  ["/admin/trading-accounts", "Comptes de trading", Activity, "trading_accounts.read"],
+  ["/admin/integrations", "Intégrations", Cable, "integrations.read"],
+  ["/admin/support", "Support", Headphones, "support.read"],
+  ["/admin/analytics", "Analytics", BarChart3, "analytics.read"],
   ["/admin/announcements", "Annonces", BellRing, "announcements.read"],
   ["/admin/feature-flags", "Feature flags", Flag, "*"],
-  ["/admin/incidents", "Incidents", AlertTriangle, "incidents.read"],
-  ["/admin/audit", "Journal d’audit", FileClock, "*"],
-  ["/admin/settings", "Réglages", Settings, "*"],
+  ["/admin/audit-logs", "Journal d’audit", FileClock, "*"],
+  ["/admin/system", "Système", Database, "system.read"],
+  ["/admin/settings", "Paramètres", Settings, "*"],
 ];
 
 const permissionMatches = (session, required) => {
@@ -35,6 +33,7 @@ const permissionMatches = (session, required) => {
 
 export default function AdminShell() {
   const session = useAdminSession();
+  const { logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobile, setMobile] = useState(false);
@@ -53,9 +52,9 @@ export default function AdminShell() {
     {mobile && <button className="admin-backdrop" aria-label="Fermer le menu" onClick={() => setMobile(false)} />}
     <aside className={`admin-sidebar ${mobile ? "is-open" : ""}`}>
       <div className="admin-brand"><Logo size="sm" /><button onClick={() => setMobile(false)} aria-label="Fermer"><X /></button></div>
-      <div className="admin-label">CONTROL CENTER</div>
+      <div className="admin-label">PIPSEVO ADMIN</div>
       <nav>{links.map(([to, label, Icon]) => <NavLink key={to} end={to === "/admin"} to={to} className={({ isActive }) => isActive ? "active" : ""}><Icon />{label}</NavLink>)}</nav>
-      <div className="admin-sidebar-foot"><span>{session?.name || session?.email}</span><small>{session?.role?.replace("_", " ")}</small><button onClick={() => navigate("/app/dashboard")}><ChevronLeft /> Retour à PipsEvo</button></div>
+      <div className="admin-sidebar-foot"><span>{session?.name || session?.email}</span><small>{session?.role?.replace("_", " ")}</small><button onClick={() => navigate("/admin/settings")}><UserCircle /> Profil administrateur</button><button onClick={() => navigate("/app/dashboard")}><ChevronLeft /> Retour à PipsEvo</button><button className="admin-logout" onClick={async () => { await logout("local"); window.location.href = "/login"; }}><LogOut /> Déconnexion</button></div>
     </aside>
     <section className="admin-main">
       <header className="admin-topbar">
