@@ -155,6 +155,20 @@ class SupabaseIntegrationRepository:
                 {"id": account_id, "user_id": user_id}
             )
 
+    async def list_integration_accounts_for_core_account(
+        self, account_id: str, user_id: str
+    ) -> list[dict]:
+        return await self._request(
+            "GET",
+            "/rest/v1/integration_accounts",
+            headers=self._admin_headers(),
+            params={
+                "account_id": f"eq.{account_id}",
+                "user_id": f"eq.{user_id}",
+                "select": "id,status,account_id,connection_id",
+            },
+        ) or []
+
     async def store_credentials(
         self,
         connection_id: str,
@@ -439,7 +453,13 @@ class SupabaseIntegrationRepository:
     async def update_account_balance(
         self, account_id: str, user_id: str, balance: str | float
     ) -> None:
-        numeric_balance = float(balance)
+        await self.update_account_from_snapshot(
+            account_id, user_id, {"balance": balance}
+        )
+
+    async def update_account_from_snapshot(
+        self, account_id: str, user_id: str, snapshot: dict
+    ) -> None:
         rows = await self._request(
             "GET",
             "/rest/v1/accounts",
@@ -447,12 +467,51 @@ class SupabaseIntegrationRepository:
             params={
                 "id": f"eq.{account_id}",
                 "user_id": f"eq.{user_id}",
-                "select": "initial_balance",
+                "select": (
+                    "initial_balance,balance,profit_target,max_drawdown,"
+                    "daily_loss_limit,current_drawdown"
+                ),
             },
         ) or []
-        updates = {"balance": balance}
-        if rows and float(rows[0].get("initial_balance") or 0) <= 0 < numeric_balance:
+        if not rows:
+            return
+        current = rows[0]
+        updates: dict[str, str | float] = {}
+
+        for field in (
+            "balance",
+            "initial_balance",
+            "profit_target",
+            "max_drawdown",
+            "daily_loss_limit",
+            "current_drawdown",
+        ):
+            value = snapshot.get(field)
+            if value is not None and value != "":
+                updates[field] = value
+
+        # The API can expose a balance floor. Convert it only when TradeLocker
+        # also supplied the original balance; otherwise the amount is not
+        # reliable and remains visible in provider metadata.
+        if "max_drawdown" not in updates:
+            floor = snapshot.get("max_drawdown_level")
+            baseline = snapshot.get("initial_balance")
+            if floor is not None and baseline is not None:
+                allowed = float(baseline) - float(floor)
+                if allowed >= 0:
+                    updates["max_drawdown"] = str(allowed)
+
+        balance = snapshot.get("balance")
+        if (
+            "initial_balance" not in updates
+            and balance is not None
+            and float(current.get("initial_balance") or 0)
+            <= 0
+            < float(balance)
+        ):
             updates["initial_balance"] = balance
+        if not updates:
+            return
         await self._request(
             "PATCH",
             "/rest/v1/accounts",

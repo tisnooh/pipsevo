@@ -128,6 +128,10 @@ def build_integration_router(get_current_user, service) -> APIRouter:
     async def sync(connection_id: str, user=Depends(get_current_user)):
         return await invoke(service.sync_connection(user["id"], connection_id, "manual"))
 
+    @router.delete("/core-accounts/{account_id}")
+    async def delete_core_account(account_id: str, user=Depends(get_current_user)):
+        return await invoke(service.delete_core_account(user["id"], account_id))
+
     @router.post("/{connection_id}/reconnect")
     async def reconnect(connection_id: str, body: MT5Credentials, user=Depends(get_current_user)):
         return await invoke(service.reconnect(user["id"], plan_for(user), connection_id, body))

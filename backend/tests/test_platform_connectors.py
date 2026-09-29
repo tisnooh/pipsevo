@@ -385,6 +385,21 @@ def test_tradelocker_sync_uses_official_response_shapes(monkeypatch):
             }
         if url.endswith("/state"):
             return {"d": {"accountDetailsData": [50250, 50300, 100, 50150]}}
+        if url.endswith("/trade/accounts"):
+            return {
+                "d": [
+                    {
+                        "id": "123456789",
+                        "status": "ACTIVE",
+                        "riskRules": {
+                            "dailyLossLimit": {"value": 2500},
+                            "dailyProfitTarget": 1000,
+                            "maxTrailingDrawdown": 5000,
+                            "maxDrawdownLevel": 45000,
+                        },
+                    }
+                ]
+            }
         if url.endswith("/instruments"):
             return {"d": {"instruments": [{"tradableInstrumentId": 42, "name": "ES"}]}}
         raise AssertionError(f"Unexpected request: {method} {url}")
@@ -413,6 +428,110 @@ def test_tradelocker_sync_uses_official_response_shapes(monkeypatch):
     assert batch.executions[0].symbol == "ES"
     assert batch.snapshot.balance == Decimal("50250")
     assert batch.snapshot.equity == Decimal("50300")
+    assert batch.snapshot.daily_loss_limit == Decimal("2500")
+    assert batch.snapshot.max_drawdown == Decimal("5000")
+    assert batch.snapshot.max_drawdown_level == Decimal("45000")
+    assert batch.snapshot.profit_target is None
+    assert batch.snapshot.provider_status == "ACTIVE"
+    assert batch.snapshot.risk_rules["dailyProfitTarget"] == 1000
+
+
+def test_tradelocker_ignores_cancelled_orders_and_derives_realized_pnl(monkeypatch):
+    async def fake_request(method, url, **kwargs):
+        if url.endswith("/trade/config"):
+            return {
+                "d": {
+                    "ordersHistoryConfig": {
+                        "columns": [
+                            {"id": "id"},
+                            {"id": "positionId"},
+                            {"id": "tradableInstrumentId"},
+                            {"id": "routeId"},
+                            {"id": "side"},
+                            {"id": "status"},
+                            {"id": "filledQty"},
+                            {"id": "avgPrice"},
+                            {"id": "createdDate"},
+                        ]
+                    },
+                    "accountDetailsConfig": {
+                        "columns": [{"id": "balance"}, {"id": "equity"}]
+                    },
+                }
+            }
+        if url.endswith("/ordersHistory"):
+            return {
+                "d": {
+                    "ordersHistory": [
+                        [1, 99, 42, 7, "buy", "Filled", 1, 100, "2026-09-01T10:00:00Z"],
+                        [2, 99, 42, 7, "sell", "Cancelled", None, 80, "2026-09-01T10:30:00Z"],
+                        [3, 99, 42, 7, "sell", "Filled", 1, 110, "2026-09-01T11:00:00Z"],
+                    ]
+                }
+            }
+        if url.endswith("/state"):
+            return {"d": {"accountDetailsData": [10050, 10050]}}
+        if url.endswith("/trade/accounts"):
+            return {"d": [{"id": "123456789", "status": "ACTIVE"}]}
+        if url.endswith("/instruments"):
+            return {
+                "d": {
+                    "instruments": [
+                        {
+                            "tradableInstrumentId": 42,
+                            "name": "ES",
+                            "routes": [{"id": 7, "type": "TRADE"}],
+                        }
+                    ]
+                }
+            }
+        if url.endswith("/trade/instruments/42"):
+            assert kwargs["params"] == {"routeId": "7"}
+            return {
+                "d": {
+                    "tickSize": [{"leftRangeLimit": 0, "tickSize": 0.5}],
+                    "tickCost": [{"leftRangeLimit": 0, "tickCost": 2.5}],
+                    "lotSize": 1,
+                }
+            }
+        raise AssertionError(f"Unexpected request: {method} {url}")
+
+    monkeypatch.setattr(
+        "integrations.connectors.tradelocker.request_json", fake_request
+    )
+    connector = TradeLockerConnector(
+        "https://demo.example", "https://live.example", "developer-key"
+    )
+    account = integration_account("tradelocker", "123456789", acc_num=2)
+
+    batch = asyncio.run(
+        connector._sync(
+            account,
+            {"access_token": "token", "environment": "demo"},
+            datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+    )
+
+    assert len(batch.trades) == 1
+    assert len(batch.executions) == 2
+    assert batch.trades[0].close_price == Decimal("110")
+    assert batch.trades[0].gross_profit == Decimal("50")
+    assert batch.trades[0].raw_payload["pnl_source"] == "derived_tick_cost"
+    assert [item.execution_type for item in batch.executions] == ["open", "close"]
+    assert batch.executions[1].realized_pnl == Decimal("50")
+    assert batch.next_cursor["normalization_version"] == 2
+
+
+def test_tradelocker_syncs_explicit_total_objective_when_broker_exposes_it():
+    connector = TradeLockerConnector(
+        "https://demo.example", "https://live.example"
+    )
+    risk_rules = {"profitTarget": 10000, "dailyProfitTarget": 1200}
+
+    assert connector._first_decimal(
+        risk_rules, "profitTarget", "totalProfitTarget"
+    ) == Decimal("10000")
+    assert connector._first_decimal(risk_rules, "missingTarget") is None
 
 
 def test_tradelocker_requires_acc_num_from_reconnected_account():

@@ -207,6 +207,14 @@ class AccountSnapshot(BaseModel):
     equity: Decimal | None = None
     margin: Decimal | None = None
     free_margin: Decimal | None = None
+    initial_balance: Decimal | None = None
+    profit_target: Decimal | None = None
+    max_drawdown: Decimal | None = None
+    max_drawdown_level: Decimal | None = None
+    daily_loss_limit: Decimal | None = None
+    current_drawdown: Decimal | None = None
+    provider_status: str | None = None
+    risk_rules: dict[str, Any] = Field(default_factory=dict)
     currency: str | None = None
     captured_at: datetime
     raw_payload: dict[str, Any] = Field(default_factory=dict)

@@ -244,20 +244,7 @@ export const accounts = {
     return response(enrichAccount(data));
   },
   delete: async (id) => {
-    const user = await currentAuthUser();
-    const { data: linkedIntegrations, error: integrationError } = await supabase
-      .from("integration_accounts")
-      .select("id,status")
-      .eq("account_id", id)
-      .eq("user_id", user.id)
-      .neq("status", "disconnected")
-      .limit(1);
-    check(integrationError, "Impossible de vérifier les connexions de ce compte");
-    if (linkedIntegrations?.length) {
-      throw new Error("Déconnecte d’abord la plateforme liée avant de supprimer ce compte.");
-    }
-    const { error } = await supabase.from("accounts").delete().eq("id", id).eq("user_id", user.id);
-    check(error, "Impossible de supprimer le compte");
+    await api.delete(`/integrations/core-accounts/${id}`);
     notifyAppDataChanged(["accounts", "trades", "dashboard", "discipline", "analytics", "dna"]);
     return response({ ok: true });
   },

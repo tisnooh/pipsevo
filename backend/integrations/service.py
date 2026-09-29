@@ -1056,7 +1056,13 @@ class IntegrationService:
                         "recorded_at": batch.snapshot.captured_at.isoformat(),
                     }
                 )
-                if batch.snapshot.balance is not None and hasattr(
+                if hasattr(self.repository, "update_account_from_snapshot"):
+                    await self.repository.update_account_from_snapshot(
+                        account.account_id,
+                        user_id,
+                        batch.snapshot.model_dump(mode="json"),
+                    )
+                elif batch.snapshot.balance is not None and hasattr(
                     self.repository, "update_account_balance"
                 ):
                     await self.repository.update_account_balance(
@@ -1066,6 +1072,36 @@ class IntegrationService:
                     )
             completed = datetime.now(timezone.utc).isoformat()
             status = "partial_error" if batch.partial_error else "success"
+            provider_metadata = dict(account.provider_metadata or {})
+            if batch.snapshot:
+                automatic_fields = ["balance", "equity", "trades", "net_pnl"]
+                optional_fields = (
+                    "initial_balance",
+                    "profit_target",
+                    "max_drawdown",
+                    "daily_loss_limit",
+                    "current_drawdown",
+                )
+                automatic_fields.extend(
+                    field
+                    for field in optional_fields
+                    if getattr(batch.snapshot, field) is not None
+                )
+                provider_metadata.update(
+                    {
+                        "risk_rules": batch.snapshot.risk_rules,
+                        "provider_status": batch.snapshot.provider_status,
+                        "synchronization": {
+                            "automatic_fields": automatic_fields,
+                            "manual_fields": [
+                                field
+                                for field in optional_fields
+                                if getattr(batch.snapshot, field) is None
+                            ],
+                            "updated_at": completed,
+                        },
+                    }
+                )
             await self.repository.update_integration_account(
                 account.id,
                 user_id,
@@ -1073,8 +1109,11 @@ class IntegrationService:
                     "status": "connected",
                     "sync_cursor": batch.next_cursor,
                     "last_successful_sync_at": completed,
+                    "last_error_code": None,
+                    "last_error_message": None,
                     "balance": str(batch.snapshot.balance) if batch.snapshot and batch.snapshot.balance is not None else (str(account.balance) if account.balance is not None else None),
                     "equity": str(batch.snapshot.equity) if batch.snapshot and batch.snapshot.equity is not None else (str(account.equity) if account.equity is not None else None),
+                    "provider_metadata": provider_metadata,
                 },
             )
             await self.repository.update_connection(
@@ -1085,6 +1124,8 @@ class IntegrationService:
                     "sync_status": status,
                     "last_successful_sync_at": completed,
                     "last_sync_attempt_at": now,
+                    "last_error_code": None,
+                    "last_error_message": None,
                 },
             )
             await self.repository.update_sync_run(
@@ -1422,6 +1463,66 @@ class IntegrationService:
             user_id, f"{connection.provider}_disconnected", "success", connection.id
         )
         return updated
+
+    async def delete_core_account(self, user_id: str, account_id: str) -> dict:
+        """Delete a manual or inactive provider account without breaking sync.
+
+        Provider accounts that are still selected/syncing/connected must first
+        be disconnected. An account left behind by a deselected or disconnected
+        provider is safe to detach and delete; the provider account itself stays
+        available for a future selection.
+        """
+        linked = await self.repository.list_integration_accounts_for_core_account(
+            account_id, user_id
+        )
+        blocking = [
+            row
+            for row in linked
+            if row.get("status") not in {"available", "disconnected"}
+        ]
+        if blocking:
+            raise IntegrationError(
+                "account_still_connected",
+                "Déconnecte ou désélectionne d’abord la plateforme liée à ce compte.",
+                409,
+            )
+
+        detached: list[dict] = []
+        try:
+            for row in linked:
+                await self.repository.update_integration_account(
+                    row["id"], user_id, {"account_id": None}
+                )
+                detached.append(row)
+            await self.repository.delete_account(account_id, user_id)
+        except Exception as exc:
+            # Keep the provider/core relation intact if account deletion fails
+            # after detaching one of the inactive provider accounts.
+            for row in detached:
+                try:
+                    await self.repository.update_integration_account(
+                        row["id"], user_id, {"account_id": account_id}
+                    )
+                except Exception:
+                    pass
+            if isinstance(exc, IntegrationError):
+                raise
+            raise IntegrationError(
+                "account_delete_failed",
+                "Impossible de supprimer ce compte pour le moment.",
+                409,
+            ) from None
+
+        await self.repository.audit(
+            user_id,
+            "trading_account_deleted",
+            "success",
+            metadata={
+                "account_id": account_id,
+                "detached_integration_accounts": len(detached),
+            },
+        )
+        return {"ok": True, "detached_integration_accounts": len(detached)}
 
     async def reconnect(
         self, user_id: str, plan: str, connection_id: str, credentials: MT5Credentials

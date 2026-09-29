@@ -429,6 +429,95 @@ def test_core_account_is_mirrored_with_the_same_id():
     asyncio.run(scenario())
 
 
+def test_provider_snapshot_updates_rules_and_preserves_manual_objective():
+    async def scenario():
+        mirror = RecordingDatabase()
+        repository = SupabaseIntegrationRepository(
+            "https://project.supabase.co",
+            "publishable",
+            "secret",
+            mirror_db=mirror,
+        )
+        requests = []
+
+        async def request(method, path, **kwargs):
+            requests.append((method, path, kwargs))
+            if method == "GET":
+                return [
+                    {
+                        "initial_balance": 50_000,
+                        "balance": 50_000,
+                        "profit_target": 5_000,
+                        "max_drawdown": 2_500,
+                        "daily_loss_limit": 1_000,
+                        "current_drawdown": 0,
+                    }
+                ]
+            return []
+
+        repository._request = request
+        await repository.update_account_from_snapshot(
+            "core-account-id",
+            "user-id",
+            {
+                "balance": "51000",
+                "daily_loss_limit": "0",
+                "max_drawdown": "3000",
+                "max_drawdown_level": "47000",
+            },
+        )
+
+        patch = next(item for item in requests if item[0] == "PATCH")
+        assert patch[2]["json"] == {
+            "balance": "51000",
+            "max_drawdown": "3000",
+            "daily_loss_limit": "0",
+        }
+        assert "profit_target" not in patch[2]["json"]
+        assert mirror.accounts.updates[0][1]["$set"] == {
+            "balance": 51000.0,
+            "max_drawdown": 3000.0,
+            "daily_loss_limit": 0.0,
+        }
+
+    asyncio.run(scenario())
+
+
+def test_drawdown_floor_is_not_guessed_without_provider_initial_balance():
+    async def scenario():
+        repository = SupabaseIntegrationRepository(
+            "https://project.supabase.co", "publishable", "secret"
+        )
+        requests = []
+
+        async def request(method, path, **kwargs):
+            requests.append((method, path, kwargs))
+            if method == "GET":
+                return [
+                    {
+                        "initial_balance": 50_000,
+                        "balance": 49_000,
+                        "profit_target": 5_000,
+                        "max_drawdown": 2_500,
+                        "daily_loss_limit": 1_000,
+                        "current_drawdown": 1_000,
+                    }
+                ]
+            return []
+
+        repository._request = request
+        await repository.update_account_from_snapshot(
+            "core-account-id",
+            "user-id",
+            {"balance": "49000", "max_drawdown_level": "47000"},
+        )
+
+        patch = next(item for item in requests if item[0] == "PATCH")
+        assert patch[2]["json"] == {"balance": "49000"}
+
+    asyncio.run(scenario())
+
+
 def test_provider_update_is_idempotent_and_preserves_journal_enrichment():
     async def scenario():
         mirror = RecordingDatabase()

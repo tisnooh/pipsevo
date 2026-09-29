@@ -226,14 +226,15 @@ class AdminService:
         )
         if not profile:
             return None
-        accounts, connections, trades, sync_runs = await asyncio.gather(
+        accounts, connections, trades, executions = await asyncio.gather(
             self.supabase.rows("accounts", {"user_id": f"eq.{user_id}", "select": "id,name,firm,market_type,status,created_at", "order": "created_at.desc", "limit": "100"}),
             self.supabase.rows("integration_connections", {"user_id": f"eq.{user_id}", "select": "id,account_id,platform,provider,broker_name,account_number_masked,connection_status,sync_status,last_successful_sync_at,last_sync_attempt_at,last_error_code,last_error_message,created_at", "order": "created_at.desc", "limit": "100"}),
-            self.supabase.rows("trades", {"user_id": f"eq.{user_id}", "select": "id,date,instrument,direction,pnl,r,setup,session,plan_respected,screenshots,created_at", "order": "date.desc", "limit": "10000"}),
-            self.supabase.rows("integration_sync_runs", {"user_id": f"eq.{user_id}", "select": "connection_id,imported_count", "status": "in.(success,partial_error)", "limit": "10000"}),
+            self.supabase.rows("trades", {"user_id": f"eq.{user_id}", "select": "id,date,instrument,direction,pnl,r,setup,session,plan_respected,screenshots,created_at,integration_connection_id", "order": "date.desc", "limit": "10000"}),
+            self.supabase.rows("trade_executions", {"user_id": f"eq.{user_id}", "select": "id,connection_id", "limit": "10000"}),
         )
-        trades_count, reports_count, backtest_count = await asyncio.gather(
+        trades_count, executions_count, reports_count, backtest_count = await asyncio.gather(
             self.supabase.count("trades", {"user_id": f"eq.{user_id}"}),
+            self.supabase.count("trade_executions", {"user_id": f"eq.{user_id}"}),
             self.supabase.count("ai_reports", {"user_id": f"eq.{user_id}"}),
             self.db.backtest_sessions.count_documents({"user_id": user_id}),
         )
@@ -243,10 +244,19 @@ class AdminService:
             if trade.get("date") and trade.get("pnl") is not None:
                 day_totals[str(trade["date"])[:10]] += float(trade["pnl"])
         imported_by_connection: defaultdict[str, int] = defaultdict(int)
-        for run in sync_runs:
-            imported_by_connection[str(run.get("connection_id"))] += int(run.get("imported_count") or 0)
+        executions_by_connection: defaultdict[str, int] = defaultdict(int)
+        for trade in trades:
+            if trade.get("integration_connection_id"):
+                imported_by_connection[str(trade["integration_connection_id"])] += 1
+        for execution in executions:
+            if execution.get("connection_id"):
+                executions_by_connection[str(execution["connection_id"])] += 1
         safe_connections = [
-            {**connection, "trades_imported": imported_by_connection.get(str(connection.get("id")), 0)}
+            {
+                **connection,
+                "trades_imported": imported_by_connection.get(str(connection.get("id")), 0),
+                "executions_imported": executions_by_connection.get(str(connection.get("id")), 0),
+            }
             for connection in connections
         ]
         metrics = context["metrics"]
@@ -260,7 +270,12 @@ class AdminService:
                 "language": (auth_user or {}).get("user_metadata", {}).get("language"),
                 "onboarding_completed": bool(profile.get("onboarding_completed")),
             },
-            "trading": {"accounts": accounts, "connections": safe_connections, "trades_count": trades_count},
+            "trading": {
+                "accounts": accounts,
+                "connections": safe_connections,
+                "trades_count": trades_count,
+                "executions_count": executions_count,
+            },
             "trading_data": {
                 **metrics,
                 "best_day": max(day_totals.items(), key=lambda item: item[1], default=(None, None)),

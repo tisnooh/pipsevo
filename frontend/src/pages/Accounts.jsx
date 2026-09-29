@@ -11,6 +11,11 @@ import { listenForAppDataChanges } from "@/lib/appDataEvents";
 
 const blank = { name: "Combine", firm: "", market_type: "futures", balance: 50000, initial_balance: 50000, profit_target: 3000, max_drawdown: 2000, daily_loss_limit: 1000, status: "active" };
 
+const apiErrorMessage = (error, fallback) => {
+  const detail = error?.response?.data?.detail;
+  return (typeof detail === "object" ? detail?.message : detail) || error?.message || fallback;
+};
+
 export default function Accounts() {
   const { user } = useAuth();
   const { settings, money } = useAppSettings();
@@ -55,7 +60,7 @@ export default function Accounts() {
     if (!window.confirm(`Supprimer « ${account.name} » et tous ses trades ? Cette action est définitive.`)) return;
     setDeleting(account.id);
     try { await accounts.delete(account.id); toast.success("Compte supprimé"); await load(); }
-    catch (e) { toast.error(e.response?.data?.detail || "Suppression impossible"); }
+    catch (e) { toast.error(apiErrorMessage(e, "Suppression impossible")); }
     finally { setDeleting(""); }
   };
 

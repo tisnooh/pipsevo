@@ -275,6 +275,63 @@ def test_user_cannot_read_another_users_connection():
     asyncio.run(scenario())
 
 
+def test_delete_inactive_provider_account_detaches_then_deletes():
+    async def scenario():
+        service, repository, _ = build_service()
+        repository.list_integration_accounts_for_core_account = AsyncMock(
+            return_value=[
+                {
+                    "id": "integration-account-1",
+                    "account_id": "core-account-1",
+                    "connection_id": "connection-1",
+                    "status": "available",
+                }
+            ]
+        )
+        repository.update_integration_account = AsyncMock()
+        repository.delete_account = AsyncMock()
+
+        result = await service.delete_core_account("user-1", "core-account-1")
+
+        assert result == {"ok": True, "detached_integration_accounts": 1}
+        repository.update_integration_account.assert_awaited_once_with(
+            "integration-account-1", "user-1", {"account_id": None}
+        )
+        repository.delete_account.assert_awaited_once_with(
+            "core-account-1", "user-1"
+        )
+
+    asyncio.run(scenario())
+
+
+def test_delete_active_provider_account_requires_disconnect():
+    async def scenario():
+        service, repository, _ = build_service()
+        repository.list_integration_accounts_for_core_account = AsyncMock(
+            return_value=[
+                {
+                    "id": "integration-account-1",
+                    "account_id": "core-account-1",
+                    "connection_id": "connection-1",
+                    "status": "connected",
+                }
+            ]
+        )
+        repository.update_integration_account = AsyncMock()
+        repository.delete_account = AsyncMock()
+
+        try:
+            await service.delete_core_account("user-1", "core-account-1")
+        except IntegrationError as exc:
+            assert exc.code == "account_still_connected"
+        else:
+            raise AssertionError("Active provider account deletion should be blocked")
+        repository.update_integration_account.assert_not_awaited()
+        repository.delete_account.assert_not_awaited()
+
+    asyncio.run(scenario())
+
+
 def test_single_account_authentication_runs_initial_import_immediately():
     async def scenario():
         service, repository, _ = build_service()
