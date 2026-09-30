@@ -22,7 +22,7 @@
     person_profiles: "identified_only",
     autocapture: false,
     disable_session_recording: true,
-    capture_pageview: true,
+    capture_pageview: false,
     persistence: "localStorage"
   });
 })(document, window.posthog || []);

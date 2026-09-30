@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Home, Wallet, BookOpen, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X, PanelLeftClose, PanelLeftOpen, CalendarDays, CalendarRange, LockKeyhole } from "lucide-react";
+import { Home, Wallet, BookOpen, BookOpenCheck, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X, PanelLeftClose, PanelLeftOpen, CalendarDays, CalendarRange, LockKeyhole } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { LogoMark } from "@/components/Logo";
 import { dashboard, accounts as accountsAPI, trades as tradesAPI } from "@/lib/api";
@@ -18,6 +18,7 @@ const NAV_LINKS = [
   { to: "/app/dashboard", fr: "Aperçu", en: "Overview", icon: Home, testid: "nav-dashboard" },
   { to: "/app/accounts", fr: "Comptes", en: "Accounts", icon: Wallet, testid: "nav-accounts" },
   { to: "/app/journal", fr: "Journal", en: "Journal", icon: BookOpen, testid: "nav-journal" },
+  { to: "/app/trading-plan", fr: "Plan de trading", en: "Trading plan", icon: BookOpenCheck, testid: "nav-trading-plan" },
   { to: "/app/day-view", fr: "Vue journalière", en: "Day view", icon: CalendarRange, testid: "nav-day-view" },
   { to: "/app/markets", fr: "Marchés", en: "Markets", icon: BarChart3, testid: "nav-markets" },
   { to: "/app/economic-calendar", fr: "Calendrier éco", en: "Economic calendar", icon: CalendarDays, testid: "nav-economic-calendar" },

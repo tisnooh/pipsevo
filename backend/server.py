@@ -649,10 +649,26 @@ async def send_account_welcome(body: WelcomeEmailIn, user=Depends(get_current_us
     if existing and existing.get("status") in {"sent", "delivered"}:
         return {"ok": True, "status": "already_sent"}
     now = datetime.now(timezone.utc)
+    # A deployment or worker interruption can leave a delivery in ``sending``.
+    # Treat that claim as a short lease so the welcome message is never blocked
+    # forever while the provider idempotency key still prevents duplicates.
+    stale_before = now - timedelta(minutes=5)
     if existing:
         claim = await db.email_deliveries.update_one(
-            {"event": event, "user_id": user["id"], "status": {"$ne": "sending"}},
-            {"$set": {"status": "sending", "updated_at": now, "locale": body.locale}},
+            {
+                "event": event,
+                "user_id": user["id"],
+                "$or": [
+                    {"status": {"$ne": "sending"}},
+                    {"updated_at": {"$lte": stale_before}},
+                    {"updated_at": {"$exists": False}},
+                ],
+            },
+            {
+                "$set": {"status": "sending", "updated_at": now, "locale": body.locale},
+                "$inc": {"attempt_count": 1},
+                "$unset": {"last_error": ""},
+            },
         )
         if not claim.modified_count:
             return {"ok": True, "status": "already_sending"}
@@ -663,6 +679,7 @@ async def send_account_welcome(body: WelcomeEmailIn, user=Depends(get_current_us
                 "user_id": user["id"],
                 "status": "sending",
                 "locale": body.locale,
+                "attempt_count": 1,
                 "created_at": now,
                 "updated_at": now,
             })
@@ -678,7 +695,11 @@ async def send_account_welcome(body: WelcomeEmailIn, user=Depends(get_current_us
     except (EmailConfigurationError, EmailDeliveryError):
         await db.email_deliveries.update_one(
             {"event": event, "user_id": user["id"]},
-            {"$set": {"status": "failed", "updated_at": datetime.now(timezone.utc)}},
+            {"$set": {
+                "status": "failed",
+                "last_error": "provider_delivery_failed",
+                "updated_at": datetime.now(timezone.utc),
+            }},
         )
         logging.exception("Account welcome delivery failed user_id=%s", user["id"])
         raise HTTPException(503, "L’e-mail de bienvenue est temporairement indisponible.")

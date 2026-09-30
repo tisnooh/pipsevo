@@ -4,6 +4,7 @@ import { AUTH_CONFIG } from "@/config/auth";
 import { notifyAppDataChanged } from "@/lib/appDataEvents";
 import { tradeDateKey } from "@/lib/tradeCalendar";
 import { measuredTradePnl, tradeOutcome } from "@/lib/tradeAnalytics";
+import { MAX_TRADE_SCREENSHOT_BYTES, TRADE_SCREENSHOT_TYPES } from "@/lib/tradeMedia";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
@@ -114,7 +115,7 @@ export const auth = {
     const cleanEmail = email.trim();
     const displayName = name.trim();
     const options = {
-      data: { display_name: displayName, onboarding_completed: false, language: language === "en" ? "en" : "fr", welcome_email_pending: true },
+      data: { display_name: displayName, onboarding_completed: false, language: language === "en" ? "en" : "fr" },
     };
     if (AUTH_CONFIG.requireEmailConfirmation) {
       options.emailRedirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(AUTH_CONFIG.postSignUpPath)}`;
@@ -150,7 +151,7 @@ export const auth = {
   me: async () => response(await loadCurrentUser({ retries: 3 })),
   update: async (values) => {
     const user = await currentAuthUser();
-    const allowed = ["name", "trader_type", "prop_firms", "num_accounts", "onboarded", "onboarding_completed", "rules", "journal_preferences", "app_preferences"];
+    const allowed = ["name", "trader_type", "prop_firms", "num_accounts", "onboarded", "onboarding_completed", "rules", "journal_preferences", "app_preferences", "trading_plan"];
     const payload = Object.fromEntries(Object.entries(values).filter(([key]) => allowed.includes(key)));
     const { error } = await supabase.from("profiles").update(payload).eq("id", user.id);
     check(error, "Impossible de sauvegarder le profil");
@@ -559,9 +560,11 @@ export const contact = async (values) => {
 export const tradeScreenshots = {
   upload: async (tradeId, file) => {
     const user = await currentAuthUser();
-    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    if (!TRADE_SCREENSHOT_TYPES.has(file?.type)) throw fail("Formats acceptés : JPEG, PNG ou WebP.", 400);
+    if (file.size > MAX_TRADE_SCREENSHOT_BYTES) throw fail("Chaque capture doit faire 10 Mo maximum.", 400);
+    const extension = ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" })[file.type];
     const path = `${user.id}/${tradeId}/${crypto.randomUUID()}.${extension}`;
-    const { error } = await supabase.storage.from("trade-screenshots").upload(path, file, { upsert: false });
+    const { error } = await supabase.storage.from("trade-screenshots").upload(path, file, { upsert: false, contentType: file.type });
     check(error, "Impossible d’envoyer la capture");
     return path;
   },
@@ -571,7 +574,9 @@ export const tradeScreenshots = {
     return data.signedUrl;
   },
   delete: async (paths) => {
-    const { error } = await supabase.storage.from("trade-screenshots").remove(paths);
+    const storedPaths = (paths || []).filter((path) => path && !/^https?:\/\//i.test(path));
+    if (!storedPaths.length) return response({ ok: true });
+    const { error } = await supabase.storage.from("trade-screenshots").remove(storedPaths);
     check(error, "Impossible de supprimer la capture");
     return response({ ok: true });
   },

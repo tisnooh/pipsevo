@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { motion } from "framer-motion"
 import { Star, Edit2, Trash2, Camera, Check, Plus, Upload, BarChart3, Target, TrendingUp, ArrowUpRight, ArrowDownRight, Ruler, CalendarDays, X } from "lucide-react"
 import { AreaChart, Area, ResponsiveContainer } from "recharts"
-import { trades as tradesAPI, accounts as accAPI } from "@/lib/api"
+import { trades as tradesAPI, accounts as accAPI, tradeScreenshots } from "@/lib/api"
 import { toast } from "sonner"
 import { useAuth } from "@/context/AuthContext"
 import { normalizeTradingRules } from "@/components/TradingRulesEditor"
@@ -17,6 +17,7 @@ import { listenForAppDataChanges } from "@/lib/appDataEvents"
 import { JOURNAL_LIST_PATH, journalTradePath, resolveJournalRoute } from "@/lib/journalNavigation"
 import MobileTradeList from "@/components/MobileTradeList"
 import { tradeOutcome } from "@/lib/tradeAnalytics"
+import PrivateTradeImage from "@/components/PrivateTradeImage"
 
 const miniChartData = [
   { t: 1, v: 1.0784 }, { t: 2, v: 1.0790 }, { t: 3, v: 1.0785 },
@@ -85,17 +86,33 @@ export function JournalPage() {
     if (openForm && !editingTrade) writePreTradeChecks(checklistChecks, activeChecklist)
   }, [activeChecklist, checklistChecks, editingTrade, openForm])
 
-  const saveTrade = async (payload) => {
+  const saveTrade = async (payload, screenshotFiles = []) => {
     setSaving(true)
+    let createdTrade = null
+    const uploadedPaths = []
     try {
-      if (editingTrade) await tradesAPI.update(editingTrade.id, payload); else await tradesAPI.create(payload)
+      const tradeId = editingTrade?.id || (await tradesAPI.create({...payload,screenshots:[]})).data.id
+      if (!editingTrade) createdTrade = { id: tradeId }
+      for (const file of screenshotFiles) uploadedPaths.push(await tradeScreenshots.upload(tradeId,file))
+      const nextScreenshots=[...(payload.screenshots || []),...uploadedPaths]
+      if (editingTrade) {
+        await tradesAPI.update(tradeId,{...payload,screenshots:nextScreenshots})
+        const removed=(editingTrade.screenshots || []).filter(path=>!nextScreenshots.includes(path))
+        if (removed.length) tradeScreenshots.delete(removed).catch(()=>toast.warning("Le trade est enregistré, mais une ancienne capture n’a pas pu être supprimée."))
+      } else if (nextScreenshots.length) {
+        await tradesAPI.update(tradeId,{screenshots:nextScreenshots})
+      }
       localStorage.setItem("pipsevo_last_trade_choices",JSON.stringify({account_id:payload.account_id,session:payload.session,setups:payload.setups,emotion:payload.emotion,emotion_intensity:payload.emotion_intensity,duration:payload.duration,market_type:payload.market_type}))
       if (!editingTrade) { clearPreTradeChecks(); setChecklistChecks({}) }
       toast.success(editingTrade ? "Trade mis à jour" : "Trade ajouté")
       setOpenForm(false)
       setEditingTrade(null)
       load()
-    } catch (e) { toast.error(e.response?.data?.detail || "Impossible d’enregistrer le trade") }
+    } catch (e) {
+      if (uploadedPaths.length) await tradeScreenshots.delete(uploadedPaths).catch(()=>{})
+      if (createdTrade) await tradesAPI.delete(createdTrade.id).catch(()=>{})
+      toast.error(e.response?.data?.detail || e.message || "Impossible d’enregistrer le trade")
+    }
     finally { setSaving(false) }
   }
 
@@ -126,7 +143,9 @@ export function JournalPage() {
   const deleteTrade = async (id) => {
     if (!window.confirm("Supprimer ce trade ?")) return
     try {
+      const screenshotPaths=tradeList.find(trade=>String(trade.id)===String(id))?.screenshots || []
       await tradesAPI.delete(id)
+      if (screenshotPaths.length) await tradeScreenshots.delete(screenshotPaths).catch(()=>toast.warning("Le trade est supprimé, mais ses captures devront être nettoyées ultérieurement."))
       toast.success("Trade supprimé")
       if (String(selectedTrade?.id) === String(id)) navigate(JOURNAL_LIST_PATH, { replace: true })
       load()
@@ -432,7 +451,7 @@ export function JournalPage() {
                     </div>
                   </div>
 
-                  <div className="mb-4"><p className="text-[10px] font-medium text-[#9CA3AF] mb-2">Captures d'écran</p>{selectedTrade.screenshots?.length?<div className="grid grid-cols-3 gap-2">{selectedTrade.screenshots.map((src,i)=><img key={src+i} src={src} alt={`Capture ${i+1}`} className="aspect-square rounded-lg border border-[#1E2430] object-cover"/>)}</div>:<div className="rounded-lg border border-dashed border-[#1E2430] p-3 text-center text-[10px] text-[#6B7280]"><Camera className="w-4 h-4 mx-auto mb-1"/>Aucune capture jointe. L’import d’images n’est pas disponible dans cette version.</div>}</div>
+                  <div className="mb-4"><p className="text-[10px] font-medium text-[#9CA3AF] mb-2">Captures d'écran</p>{selectedTrade.screenshots?.length?<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{selectedTrade.screenshots.map((path,i)=><PrivateTradeImage key={path} path={path} alt={`Capture ${i+1}`} className="aspect-video w-full rounded-lg border border-[#1E2430] object-cover"/>)}</div>:<button type="button" onClick={()=>openEditTrade(selectedTrade)} className="w-full rounded-lg border border-dashed border-[#1E2430] p-3 text-center text-[10px] text-[#6B7280] hover:border-[#7C4DFF]/40 hover:text-[#B58BFF]"><Camera className="w-4 h-4 mx-auto mb-1"/>Ajouter des captures à ce trade</button>}</div>
                 </div>
               )}
 

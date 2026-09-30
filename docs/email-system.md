@@ -106,9 +106,10 @@ Le backend :
 
 ## Bienvenue et authentification
 
-- À l'inscription, la langue et le marqueur `welcome_email_pending` sont enregistrés dans les métadonnées Supabase.
-- Après la première session confirmée, `POST /api/email/welcome` envoie le message de bienvenue puis marque l'événement comme livré.
-- Une clé unique par utilisateur empêche les doubles envois.
+- La langue est enregistrée dans les métadonnées Supabase ; le déclenchement ne dépend d'aucun marqueur client, ce qui couvre aussi les inscriptions Google.
+- Après chaque ouverture de session confirmée, le client appelle `POST /api/email/welcome` et le backend envoie le message uniquement si cet utilisateur ne l'a jamais reçu.
+- Une clé unique par utilisateur et une clé d'idempotence fournisseur empêchent les doubles envois.
+- Un envoi interrompu en statut `sending` est automatiquement récupérable après cinq minutes.
 - Les liens expirés affichent une action adaptée pour renvoyer la confirmation ou recommencer la récupération du mot de passe.
 
 ## Newsletter

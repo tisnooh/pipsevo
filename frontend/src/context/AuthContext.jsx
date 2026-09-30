@@ -44,14 +44,15 @@ export function AuthProvider({ children }) {
         setUser(result.data);
         sessionStorage.removeItem("pipsevo_pending_email");
         const authUser = sessionResult.data.session.user;
-        if (authUser.user_metadata?.welcome_email_pending && !welcomeAttemptedRef.current.has(authUser.id)) {
+        // Every authenticated account asks the backend for its welcome message.
+        // The backend owns the once-only guarantee, so this also covers Google
+        // accounts and sessions created before the former metadata flag existed.
+        if (!welcomeAttemptedRef.current.has(authUser.id)) {
           welcomeAttemptedRef.current.add(authUser.id);
           const welcomeLanguage = authUser.user_metadata?.language || readSettings().language;
-          auth.sendWelcome(welcomeLanguage).then(async () => {
-            await supabase.auth.updateUser({ data: { welcome_email_pending: false } });
-          }).catch(() => {
-            // The account/session remains valid if the optional welcome message
-            // is temporarily unavailable. The server safely retries next time.
+          auth.sendWelcome(welcomeLanguage).catch(() => {
+            // Keep the session valid and allow a later auth refresh to retry.
+            // Delivery errors remain visible in the server-side delivery log.
             welcomeAttemptedRef.current.delete(authUser.id);
           });
         }

@@ -28,6 +28,7 @@ const Analytics = lazy(() => import("@/pages/Analytics"));
 const Payouts = lazy(() => import("@/pages/Payouts"));
 const AICoach = lazy(() => import("@/pages/AICoach"));
 const TradingDNA = lazy(() => import("@/pages/TradingDNA"));
+const TradingPlan = lazy(() => import("@/pages/TradingPlan"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Backtest = lazy(() => import("@/pages/Backtest"));
 const BacktestHome = lazy(() => import("@/features/backtest/BacktestHome"));
@@ -170,6 +171,7 @@ export default function App() {
             <Route path="payouts" element={<Payouts />} />
             <Route path="coach" element={<AICoach />} />
             <Route path="dna" element={<TradingDNA />} />
+            <Route path="trading-plan" element={<TradingPlan />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route element={<AdminAccess />}>
