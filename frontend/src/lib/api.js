@@ -492,7 +492,9 @@ export const dna = async () => {
 export const onboarding = (values) => auth.update({ ...values, onboarded: true, onboarding_completed: true });
 
 export const coach = {
-  ask: (question, tag) => api.post("/coach/ask", { question, context_tag: tag || "overall" }),
+  ask: (question, tag, options = {}) => api.post("/coach/ask", { question, context_tag: tag || "overall", ...options }),
+  readiness: (payload) => api.post("/coach/readiness", payload),
+  briefing: (period = "weekly", localDate) => api.get("/coach/briefing", { params: { period, ...(localDate ? { local_date: localDate } : {}) } }),
   history: async () => {
     const user = await currentAuthUser();
     const { data, error } = await supabase.from("ai_reports").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(50);

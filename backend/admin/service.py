@@ -605,12 +605,22 @@ class AdminService:
         success = sum(1 for item in events if item.get("status") == "success")
         errors = sum(1 for item in events if item.get("status") == "error")
         latencies = [item.get("duration_ms") for item in events if isinstance(item.get("duration_ms"), (int, float))]
+        groq_configured = configured_env("ATLAS_GROQ_API_KEY")
+        anthropic_configured = configured_env("ATLAS_ANTHROPIC_API_KEY") or configured_env("EMERGENT_LLM_KEY")
+        provider = "groq" if groq_configured else "anthropic" if anthropic_configured else "deterministic"
+        if provider == "groq":
+            model = os.environ.get("ATLAS_GROQ_MODEL", "openai/gpt-oss-20b")
+        elif provider == "anthropic":
+            model = os.environ.get("ATLAS_ANTHROPIC_MODEL") or os.environ.get("ATLAS_MODEL", "claude-sonnet-4-6")
+        else:
+            model = "deterministic-coaching-v1"
         return {
-            "configured": configured_env("ATLAS_ANTHROPIC_API_KEY") or configured_env("EMERGENT_LLM_KEY"),
+            "configured": True,
+            "provider": provider,
             "requests": max(reports, len(events)), "success": success, "errors": errors,
             "active_users": len({item.get("user_id") for item in events if item.get("user_id")}),
             "average_latency_ms": round(sum(latencies) / len(latencies)) if latencies else None,
-            "model": os.environ.get("ATLAS_MODEL", "claude-sonnet-4-6"),
+            "model": model,
             "cost_estimate": None, "events": events[:100],
         }
 

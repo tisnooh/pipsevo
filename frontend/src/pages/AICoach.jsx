@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { coach, dashboard } from "@/lib/api";
+import { accounts as accountsAPI, auth, coach, dashboard } from "@/lib/api";
 import { toast } from "sonner";
 import { Sparkles, Send, Brain, AlertTriangle, Target, Clock, Shield, Trophy } from "lucide-react";
 import { useAppSettings } from "@/hooks/useAppSettings";
@@ -8,35 +8,46 @@ import { useAuth } from "@/context/AuthContext";
 import { canUseFeature } from "@/config/billing";
 import { FeatureGate } from "@/components/FeatureGate";
 import { listenForAppDataChanges } from "@/lib/appDataEvents";
+import AtlasReadiness from "@/components/AtlasReadiness";
+import AtlasCoachingHub from "@/components/AtlasCoachingHub";
+import { nextActionState } from "@/lib/atlasBriefing";
+import { localDateKey } from "@/lib/tradeCalendar";
 
 const PRESETS = [
-  { fr:"Analyse mon mois", en:"Analyze my month" },
-  { fr:"Trouve mes erreurs", en:"Find my mistakes" },
-  { fr:"Pourquoi je perds ?", en:"Why am I losing?" },
-  { fr:"Quel est mon meilleur setup ?", en:"What is my best setup?" },
-  { fr:"Comment améliorer ma discipline ?", en:"How can I improve my discipline?" },
-  { fr:"Quel est mon coût d'overtrading ?", en:"What is the cost of my overtrading?" },
+  { fr:"Analyse mon mois", en:"Analyze my month", tag:"review" },
+  { fr:"Trouve mes erreurs", en:"Find my mistakes", tag:"mistakes" },
+  { fr:"Pourquoi je perds ?", en:"Why am I losing?", tag:"performance" },
+  { fr:"Quel est mon meilleur setup ?", en:"What is my best setup?", tag:"setups" },
+  { fr:"Comment améliorer ma discipline ?", en:"How can I improve my discipline?", tag:"discipline" },
+  { fr:"Quel est mon coût d'overtrading ?", en:"What is the cost of my overtrading?", tag:"risk" },
+  { fr:"Mes émotions influencent-elles mes résultats ?", en:"Do my emotions affect my results?", tag:"emotions" },
 ];
 
 export default function AICoach() {
   const { date } = useAppSettings();
   const { language } = useI18n();
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const hasCoachAccess = canUseFeature(user, "aiCoach");
   const [q, setQ] = useState("");
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState(null);
+  const [accounts, setAccounts] = useState([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [askError, setAskError] = useState("");
   const [lastQuestion, setLastQuestion] = useState("");
+  const [lastTag, setLastTag] = useState("overall");
+  const [lastOptions, setLastOptions] = useState({});
+  const [briefing, setBriefing] = useState(null);
+  const [briefingPeriod, setBriefingPeriod] = useState("weekly");
+  const [savingAction, setSavingAction] = useState("");
   const conversationRef = useRef(null);
 
   const load = useCallback(() => {
     if (!hasCoachAccess) { setInitialLoading(false); return; }
     setInitialLoading(true);
-    Promise.all([coach.history(),dashboard()]).then(([h,d])=>{setHistory(h.data);setSummary(d.data)}).catch(()=>toast.error("Impossible de charger l’analyse")).finally(()=>setInitialLoading(false));
-  }, [hasCoachAccess]);
+    Promise.all([coach.history(),dashboard(),accountsAPI.list(),coach.briefing(briefingPeriod,localDateKey())]).then(([h,d,a,b])=>{setHistory(h.data);setSummary(d.data);setAccounts(a.data||[]);setBriefing(b.data)}).catch(()=>toast.error("Impossible de charger l’analyse")).finally(()=>setInitialLoading(false));
+  }, [briefingPeriod,hasCoachAccess]);
   useEffect(() => {
     load();
     if (!hasCoachAccess) return undefined;
@@ -51,15 +62,17 @@ export default function AICoach() {
     { I: Target, t: "Trades analysés", d: `${summary.kpis.total_trades} trades réels`, c: "#B58BFF" },
   ] : [];
 
-  const ask = async (text) => {
+  const ask = async (text, tag = "overall", options = {}) => {
     const question = text || q;
     if (!question.trim()) return;
     const normalizedQuestion = question.trim();
     setAskError("");
     setLastQuestion(normalizedQuestion);
+    setLastTag(tag);
+    setLastOptions(options);
     setLoading(true);
     try {
-      const { data } = await coach.ask(normalizedQuestion);
+      const { data } = await coach.ask(normalizedQuestion, tag, options);
       setHistory(h => [data, ...h]);
       setQ(""); toast.success("Analyse prête");
       requestAnimationFrame(()=>conversationRef.current?.scrollIntoView({behavior:"smooth",block:"start"}));
@@ -69,6 +82,36 @@ export default function AICoach() {
       toast.error(message);
     }
     finally { setLoading(false); }
+  };
+
+  const analyzeBriefing = ({ tradeId, period = briefingPeriod } = {}) => {
+    const options = { period, local_date: localDateKey(), ...(tradeId ? { trade_id: tradeId } : {}) };
+    if (tradeId) {
+      ask(language === "en" ? "Review this trade's process, discipline, risk and documented emotions. Separate the decision quality from the financial outcome." : "Analyse le processus, la discipline, le risque et les émotions documentées de ce trade. Sépare la qualité de la décision du résultat financier.", "post_trade", options);
+      return;
+    }
+    ask(
+      language === "en"
+        ? `Turn my ${period === "daily" ? "daily briefing" : "weekly review"} into a concrete behavioral action plan.`
+        : `Transforme mon ${period === "daily" ? "bilan quotidien" : "bilan hebdomadaire"} en plan d’action comportemental concret.`,
+      period === "daily" ? "daily_briefing" : "weekly_review",
+      options,
+    );
+  };
+
+  const toggleAction = async (actionId) => {
+    if (!user || savingAction) return;
+    setSavingAction(actionId);
+    const appPreferences = user.app_preferences && typeof user.app_preferences === "object" ? user.app_preferences : {};
+    const actionState = appPreferences.atlas_action_state && typeof appPreferences.atlas_action_state === "object" ? appPreferences.atlas_action_state : {};
+    try {
+      const { data } = await auth.update({ app_preferences: { ...appPreferences, atlas_action_state: nextActionState(actionState, actionId) } });
+      setUser(data);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Impossible d’enregistrer cette action.");
+    } finally {
+      setSavingAction("");
+    }
   };
 
   return (
@@ -82,15 +125,19 @@ export default function AICoach() {
         </div>
       </div>
 
+      {hasCoachAccess && <AtlasReadiness accounts={accounts} user={user}/>}
+
+      {hasCoachAccess && <AtlasCoachingHub briefing={briefing} loading={initialLoading} period={briefingPeriod} onPeriodChange={setBriefingPeriod} onAnalyze={analyzeBriefing} analysisLoading={loading} actionState={user?.app_preferences?.atlas_action_state||{}} onToggleAction={toggleAction} savingAction={savingAction}/>}
+
       {!hasCoachAccess ? <FeatureGate feature="aiCoach" label="le coach IA complet" className="block w-full"><div className="pe-card pe-card-pad glow-purple"><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-[#B58BFF]"/><div><div className="font-semibold">Atlas est en préparation</div><p className="mt-1 text-xs text-[#9CA3AF]">Aperçu de la future analyse comportementale, sans signal de trading.</p></div></div></div></FeatureGate> : <div className="pe-card pe-card-pad glow-purple">
         <div className="flex flex-col gap-2 sm:flex-row">
           <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Pose ta question à Atlas…" data-testid="coach-input" className="pe-control min-w-0 flex-1" onKeyDown={(e)=>e.key==="Enter"&&ask()} />
           <button onClick={()=>ask()} disabled={loading} className="btn-primary inline-flex items-center gap-2 text-sm" data-testid="coach-ask"><Send className="w-4 h-4"/>{loading?"…":"Envoyer"}</button>
         </div>
         <div className="flex flex-wrap gap-2 mt-4">
-          {PRESETS.map(p => { const label=p[language] || p.fr; return <button key={p.fr} onClick={()=>ask(label)} disabled={loading} data-testid={`coach-preset-${p.fr.slice(0,8)}`} className="pe-badge min-h-8 hover:border-[#7C4DFF]/40 hover:text-white">{label}</button> })}
+          {PRESETS.map(p => { const label=p[language] || p.fr; return <button key={p.fr} onClick={()=>ask(label,p.tag)} disabled={loading} data-testid={`coach-preset-${p.fr.slice(0,8)}`} className="pe-badge min-h-8 hover:border-[#7C4DFF]/40 hover:text-white">{label}</button> })}
         </div>
-        {askError&&<div role="alert" className="mt-4 flex flex-col gap-3 rounded-xl border border-[#F26A70]/25 bg-[#F26A70]/10 p-3 text-sm text-[#FF9A9E] sm:flex-row sm:items-center sm:justify-between"><span>{askError}</span><button type="button" onClick={()=>ask(lastQuestion)} disabled={loading||!lastQuestion} className="min-h-11 shrink-0 rounded-xl border border-[#F26A70]/30 px-4 text-xs font-semibold text-white transition hover:bg-[#F26A70]/10 disabled:opacity-50">Réessayer</button></div>}
+        {askError&&<div role="alert" className="mt-4 flex flex-col gap-3 rounded-xl border border-[#F26A70]/25 bg-[#F26A70]/10 p-3 text-sm text-[#FF9A9E] sm:flex-row sm:items-center sm:justify-between"><span>{askError}</span><button type="button" onClick={()=>ask(lastQuestion,lastTag,lastOptions)} disabled={loading||!lastQuestion} className="min-h-11 shrink-0 rounded-xl border border-[#F26A70]/30 px-4 text-xs font-semibold text-white transition hover:bg-[#F26A70]/10 disabled:opacity-50">Réessayer</button></div>}
       </div>}
 
       {hasCoachAccess && (initialLoading ? <div className="grid md:grid-cols-5 gap-3">{Array.from({length:5}).map((_,i)=><div key={i} className="h-28 card-flat animate-pulse"/>)}</div> : insights.length ? <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-3">

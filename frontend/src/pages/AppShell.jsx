@@ -3,16 +3,17 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Home, Wallet, BookOpen, BookOpenCheck, FlaskConical, BarChart3, Brain, Shield, Banknote, FileText, Settings as Cog, LogOut, Search, Bell, Menu, X, PanelLeftClose, PanelLeftOpen, CalendarDays, CalendarRange, LockKeyhole } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { LogoMark } from "@/components/Logo";
-import { dashboard, accounts as accountsAPI, trades as tradesAPI } from "@/lib/api";
+import { dashboard, accounts as accountsAPI, coach, trades as tradesAPI } from "@/lib/api";
 import { useI18n } from "@/context/I18nContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { applyDocumentPreferences, listenForSettingsChanges, readSettings } from "@/lib/preferences";
-import { BILLING_CONFIG, COMMERCIAL_PHASES } from "@/config/billing";
+import { BILLING_CONFIG, COMMERCIAL_PHASES, canUseFeature } from "@/config/billing";
 import { evaluateRiskAlerts } from "@/lib/riskEngine";
 import { listenForAppDataChanges, notifyAppDataChanged } from "@/lib/appDataEvents";
 import { JOURNAL_LIST_PATH } from "@/lib/journalNavigation";
 import { MotionOverlay, MotionPopover, MotionScope, Presence } from "../components/motion/MotionSystem";
 import { AnnouncementBanner } from "@/features/admin/ProductOperations";
+import { localDateKey } from "@/lib/tradeCalendar";
 
 const NAV_LINKS = [
   { to: "/app/dashboard", fr: "Aperçu", en: "Overview", icon: Home, testid: "nav-dashboard" },
@@ -49,6 +50,7 @@ export default function AppShell() {
   const [discipline, setDiscipline] = useState(0);
   const [summary, setSummary] = useState(null);
   const [riskAlerts, setRiskAlerts] = useState([]);
+  const [atlasAlerts, setAtlasAlerts] = useState([]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
@@ -62,19 +64,24 @@ export default function AppShell() {
   const [query, setQuery] = useState("");
   const [settings, setSettings] = useState(readSettings);
   const shellRequest = useRef(0);
+  const hasCoachAccess = canUseFeature(user, "aiCoach");
 
   const refreshShellData = useCallback(async () => {
     const requestId = ++shellRequest.current;
     try {
-      const [dashboardResponse, accountResponse, tradeResponse] = await Promise.all([dashboard(), accountsAPI.list(), tradesAPI.list()]);
+      const atlasRequest = hasCoachAccess
+        ? coach.briefing("daily", localDateKey()).catch(() => ({ data: null }))
+        : Promise.resolve({ data: null });
+      const [dashboardResponse, accountResponse, tradeResponse, atlasResponse] = await Promise.all([dashboard(), accountsAPI.list(), tradesAPI.list(), atlasRequest]);
       if (requestId !== shellRequest.current) return;
       setDiscipline(dashboardResponse.data?.kpis?.discipline_score ?? 0);
       setSummary(dashboardResponse.data);
       setRiskAlerts(evaluateRiskAlerts({ accounts: accountResponse.data, trades: tradeResponse.data, rules: user?.rules || {} }));
+      setAtlasAlerts(atlasResponse.data?.alerts || []);
     } catch {
       // Les pages gardent leur propre état d'erreur. Le shell conserve la dernière valeur connue.
     }
-  }, [user?.rules]);
+  }, [hasCoachAccess, user?.rules]);
 
   useEffect(() => {
     refreshShellData();
@@ -277,7 +284,7 @@ export default function AppShell() {
           onMenuClick={() => setMobileOpen(true)}
           onSearch={()=>setSearchOpen(true)}
           notificationsOpen={notificationsOpen}
-          notifications={buildNotifications(summary, settings, t, riskAlerts)}
+          notifications={buildNotifications(summary, settings, t, riskAlerts, atlasAlerts)}
           onNotifications={()=>setNotificationsOpen(v=>!v)}
           onNavigate={(to)=>nav(to)}
           onLogout={async()=>{ await logout(); window.location.href = "/"; }}
@@ -413,13 +420,14 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
   );
 }
 
-function buildNotifications(summary, settings, t, riskAlerts = []) {
+function buildNotifications(summary, settings, t, riskAlerts = [], atlasAlerts = []) {
   if (!summary) return [];
   const out = [];
   if (settings.daily && !summary.kpis?.active_accounts) out.push({ text: t("Ajoute ton premier compte pour commencer le suivi.", "Add your first account to start tracking."), to: "/app/accounts" });
   else if (settings.daily && !summary.kpis?.total_trades) out.push({ text: t("Journalise ton premier trade pour activer les analyses.", "Log your first trade to activate analytics."), to: "/app/journal" });
   if (settings.risk && summary.metrics?.plan_respect_rate < 80 && summary.kpis?.total_trades) out.push({ text: t(`Plan respecté sur ${summary.metrics.plan_respect_rate}% des trades. Consulte ta discipline.`, `Plan followed on ${summary.metrics.plan_respect_rate}% of trades. Review your discipline.`), to: "/app/discipline" });
   if (settings.risk) riskAlerts.slice(0, 3).forEach(alert => out.push({ text: alert.title, to: "/app/discipline" }));
+  if (settings.risk) atlasAlerts.filter(alert => ["critical", "warning"].includes(alert.severity)).slice(0, 2).forEach(alert => out.push({ text: `Atlas · ${alert.title}`, to: "/app/coach" }));
   if (settings.payout && summary.kpis?.active_accounts && !summary.kpis?.total_payouts) out.push({ text: t("Configure ton objectif de payout pour suivre ta progression.", "Set your payout goal to track your progress."), to: "/app/payouts" });
-  return out;
+  return out.filter((item, index) => out.findIndex(candidate => candidate.text === item.text && candidate.to === item.to) === index);
 }

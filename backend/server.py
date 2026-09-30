@@ -17,11 +17,11 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime, timezone, timedelta
-import anthropic
 import asyncio
 import requests
 
-from atlas import build_atlas_context, build_atlas_prompt
+from atlas import build_atlas_context, build_atlas_prompt, build_coaching_briefing, build_deterministic_coach_answer, build_pretrade_readiness, measured_trade_pnl
+from atlas_provider import AtlasProviderConfig, AtlasProviderFailure, generate_atlas_answer
 from admin import build_admin_router
 from admin.client import AdminConfigurationError, AdminDataError, SupabaseAdminClient
 from admin.security import normalize_role
@@ -62,10 +62,7 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALG = os.environ.get('JWT_ALGORITHM', 'HS256')
 JWT_EXP_HOURS = int(os.environ.get('JWT_EXPIRE_HOURS', '168'))
-ATLAS_API_KEY = os.environ.get('ATLAS_ANTHROPIC_API_KEY') or os.environ.get('EMERGENT_LLM_KEY')
-ATLAS_MODEL = os.environ.get('ATLAS_MODEL', 'claude-sonnet-4-6').strip()
-ATLAS_TIMEOUT_SECONDS = max(5, min(int(os.environ.get('ATLAS_TIMEOUT_SECONDS', '45')), 120))
-client_ai = anthropic.Anthropic(api_key=ATLAS_API_KEY) if ATLAS_API_KEY else None
+ATLAS_PROVIDER_CONFIG = AtlasProviderConfig.from_env()
 SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://zwnrmnoutwhazhgoomoi.supabase.co').rstrip('/')
 SUPABASE_PUBLISHABLE_KEY = os.environ.get(
     'SUPABASE_PUBLISHABLE_KEY',
@@ -479,7 +476,49 @@ class PayoutIn(BaseModel):
 
 class CoachQuery(BaseModel):
     question: str = Field(min_length=2, max_length=1000)
-    context_tag: Optional[str] = "overall"
+    context_tag: Literal[
+        "overall", "review", "discipline", "risk", "emotions", "setups",
+        "mistakes", "performance", "daily_briefing", "weekly_review", "post_trade",
+    ] = "overall"
+    period: Literal["daily", "weekly"] = "weekly"
+    local_date: Optional[str] = Field(default=None, min_length=10, max_length=10)
+    trade_id: Optional[str] = Field(default=None, min_length=1, max_length=120)
+
+    @field_validator("local_date")
+    @classmethod
+    def validate_optional_local_date(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        try:
+            datetime.strptime(value, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError("local_date must use YYYY-MM-DD") from exc
+        return value
+
+
+class PreTradeReadinessIn(BaseModel):
+    account_id: str = Field(min_length=1, max_length=120)
+    local_date: str = Field(min_length=10, max_length=10)
+    instrument: Optional[str] = Field(default=None, max_length=40)
+    setup: Optional[str] = Field(default=None, max_length=120)
+    session: Optional[str] = Field(default=None, max_length=120)
+    emotion: Optional[str] = Field(default=None, max_length=120)
+    emotion_intensity: Optional[Literal["low", "medium", "high"]] = None
+    planned_risk_percent: Optional[float] = Field(default=None, ge=0, le=100)
+    planned_risk_amount: Optional[float] = Field(default=None, ge=0)
+    entry: Optional[float] = None
+    stop: Optional[float] = None
+    take_profit: Optional[float] = None
+    checklist_results: List[Dict[str, Any]] = Field(default_factory=list, max_length=50)
+
+    @field_validator("local_date")
+    @classmethod
+    def validate_local_date(cls, value: str) -> str:
+        try:
+            datetime.strptime(value, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError("local_date must use YYYY-MM-DD") from exc
+        return value
 
 
 class ContactIn(BaseModel):
@@ -1389,6 +1428,8 @@ COACH_SYSTEM = (
     "Always answer in the same language as the trader's question (French or English). "
     "Every claim about a specific trade must cite its evidence alias such as [T1]. "
     "Never invent a trade, metric, prop-firm rule, or market fact that is not present in the context. "
+    "Deterministic alerts and action priorities inside coaching_briefing are authoritative process checks: "
+    "explain them, but never remove, contradict, or convert them into a market recommendation. "
     "When the measured sample cannot support the requested conclusion, say 'Je n’ai pas encore assez de données pour conclure.' "
     "for a French question, or its direct English equivalent for an English question, then name the missing data. "
     "Respond in clear sections: Summary, Discipline & Process, Emotional Patterns, "
@@ -1397,12 +1438,102 @@ COACH_SYSTEM = (
 )
 
 
+async def load_atlas_data(user: dict, trade_limit: int = 500) -> tuple[list[dict], list[dict], list[dict]]:
+    """Load only data owned by the authenticated user for Atlas."""
+    if user.get("_supabase_token"):
+        token = user["_supabase_token"]
+        accounts, trades, payouts = await asyncio.gather(
+            supabase_select("accounts", token, {"user_id": f"eq.{user['id']}", "select": "*", "limit": "50"}),
+            supabase_select("trades", token, {"user_id": f"eq.{user['id']}", "select": "*", "order": "date.desc", "limit": str(trade_limit)}),
+            supabase_select("payouts", token, {"user_id": f"eq.{user['id']}", "select": "*", "order": "date.desc", "limit": "50"}),
+        )
+        return accounts, trades, payouts
+    accounts, trades, payouts = await asyncio.gather(
+        db.accounts.find({"user_id": user["id"]}, {"_id": 0}).to_list(50),
+        db.trades.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(trade_limit),
+        db.payouts.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(50),
+    )
+    return accounts, trades, payouts
+
+
+@api.get("/coach/briefing")
+async def coach_briefing(
+    period: Literal["daily", "weekly"] = "weekly",
+    local_date: Optional[str] = None,
+    user=Depends(get_current_user),
+):
+    """Return proactive, explainable coaching alerts without invoking the LLM."""
+    if not await admin_service.feature_enabled("atlas_v2", user, True):
+        raise HTTPException(403, "Atlas n’est pas activé pour ce compte.")
+    if local_date:
+        try:
+            datetime.strptime(local_date, "%Y-%m-%d")
+        except ValueError as exc:
+            raise HTTPException(422, "local_date must use YYYY-MM-DD") from exc
+    accounts, trades, _payouts = await load_atlas_data(user, trade_limit=1000)
+    return build_coaching_briefing(
+        user,
+        accounts,
+        trades,
+        period=period,
+        local_date=local_date,
+    )
+
+
+@api.post("/coach/readiness")
+async def coach_readiness(body: PreTradeReadinessIn, user=Depends(get_current_user)):
+    """Validate the trader's configured process without generating a signal."""
+    if not await admin_service.feature_enabled("atlas_v2", user, True):
+        raise HTTPException(403, "Atlas n’est pas activé pour ce compte.")
+
+    if user.get("_supabase_token"):
+        token = user["_supabase_token"]
+        account_rows, trades = await asyncio.gather(
+            supabase_select("accounts", token, {
+                "user_id": f"eq.{user['id']}",
+                "id": f"eq.{body.account_id}",
+                "select": "*",
+                "limit": "1",
+            }),
+            supabase_select("trades", token, {
+                "user_id": f"eq.{user['id']}",
+                "account_id": f"eq.{body.account_id}",
+                "select": "*",
+                "order": "date.desc",
+                "limit": "500",
+            }),
+        )
+        account = account_rows[0] if account_rows else None
+    else:
+        account, trades = await asyncio.gather(
+            db.accounts.find_one({"id": body.account_id, "user_id": user["id"]}, {"_id": 0}),
+            db.trades.find({"account_id": body.account_id, "user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(500),
+        )
+
+    if not account:
+        raise HTTPException(404, "Compte introuvable.")
+
+    result = build_pretrade_readiness(user, account, trades, body.model_dump())
+    try:
+        await db.atlas_events.insert_one({
+            "user_id": user["id"],
+            "model": "deterministic-readiness-v1",
+            "tag": "pretrade_readiness",
+            "status": "success",
+            "readiness_status": result["status"],
+            "error_code": None,
+            "duration_ms": 0,
+            "created_at": datetime.now(timezone.utc),
+        })
+    except Exception:
+        logging.exception("atlas_readiness_event_write_failed user_id=%s", user["id"])
+    return result
+
+
 @api.post("/coach/ask")
 async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
     if not await admin_service.feature_enabled("atlas_v2", user, True):
         raise HTTPException(403, "Atlas n’est pas activé pour ce compte.")
-    if not ATLAS_API_KEY or client_ai is None:
-        raise HTTPException(503, "Atlas n’est pas configuré côté serveur (ATLAS_ANTHROPIC_API_KEY manquante).")
 
     if user.get("_supabase_token"):
         token = user["_supabase_token"]
@@ -1427,58 +1558,80 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
         raise HTTPException(422, "Ajoute au moins un trade réel avant de demander une analyse à Atlas")
 
     context, evidence = build_atlas_context(user, accounts, trades, payouts)
+    context["coaching_briefing"] = build_coaching_briefing(
+        user,
+        accounts,
+        trades,
+        period=body.period,
+        local_date=body.local_date,
+    )
+    if body.trade_id:
+        focus_trade = next((row for row in trades if str(row.get("id")) == body.trade_id), None)
+        if not focus_trade:
+            raise HTTPException(404, "Trade introuvable pour cette revue.")
+        focus_evidence = {
+            "alias": "FOCUS",
+            "trade_id": focus_trade.get("id"),
+            "date": focus_trade.get("date"),
+            "instrument": focus_trade.get("instrument"),
+            "direction": focus_trade.get("direction"),
+            "pnl": measured_trade_pnl(focus_trade),
+            "r": focus_trade.get("r"),
+            "setup": focus_trade.get("setup"),
+            "session": focus_trade.get("session"),
+            "emotion": focus_trade.get("emotion"),
+            "emotion_intensity": focus_trade.get("emotion_intensity"),
+            "plan_respected": focus_trade.get("plan_respected") if isinstance(focus_trade.get("plan_respected"), bool) else None,
+            "mistakes": focus_trade.get("mistakes") if isinstance(focus_trade.get("mistakes"), list) else [],
+            "notes": focus_trade.get("notes"),
+            "checklist_results": focus_trade.get("checklist_results") if isinstance(focus_trade.get("checklist_results"), list) else [],
+        }
+        context["focus_trade"] = focus_evidence
+        evidence = [focus_evidence, *[row for row in evidence if str(row.get("trade_id")) != body.trade_id]]
     user_prompt = build_atlas_prompt(body.question.strip(), body.context_tag or "overall", context)
 
     started_at = asyncio.get_running_loop().time()
-    atlas_status = "error"
-    atlas_error_code = "unexpected_error"
+    atlas_status = "success"
+    atlas_error_code = None
+    report_model = ATLAS_PROVIDER_CONFIG.model
     try:
-        message = await asyncio.wait_for(
-            asyncio.to_thread(
-                client_ai.messages.create,
-                model=ATLAS_MODEL,
-                max_tokens=1200,
-                system=COACH_SYSTEM,
-                messages=[{"role": "user", "content": user_prompt}],
-            ),
-            timeout=ATLAS_TIMEOUT_SECONDS,
-        )
-        answer = next((block.text for block in message.content if getattr(block, "text", None)), "").strip()
-        if not answer:
-            atlas_error_code = "empty_response"
-            raise HTTPException(502, "Atlas a renvoyé une réponse vide. Réessaie.")
-        atlas_status = "success"
-        atlas_error_code = None
-    except anthropic.AuthenticationError:
-        atlas_error_code = "provider_auth"
-        logging.error("atlas_request_failed code=provider_auth user_id=%s model=%s", user["id"], ATLAS_MODEL)
-        raise HTTPException(503, "Atlas est mal configuré côté serveur. Vérifie ATLAS_ANTHROPIC_API_KEY.")
-    except anthropic.RateLimitError:
-        atlas_error_code = "rate_limit"
-        logging.warning("atlas_request_failed code=rate_limit user_id=%s model=%s", user["id"], ATLAS_MODEL)
-        raise HTTPException(429, "Atlas est momentanément très sollicité. Réessaie dans quelques instants.")
-    except (anthropic.APIConnectionError, asyncio.TimeoutError):
-        atlas_error_code = "unavailable"
-        logging.warning("atlas_request_failed code=unavailable user_id=%s model=%s", user["id"], ATLAS_MODEL)
-        raise HTTPException(503, "Atlas ne répond pas pour le moment. Réessaie.")
-    except HTTPException as exc:
-        atlas_error_code = atlas_error_code or f"http_{exc.status_code}"
-        raise
-    except anthropic.APIError:
-        atlas_error_code = "provider_error"
-        logging.exception("atlas_request_failed code=provider_error user_id=%s model=%s", user["id"], ATLAS_MODEL)
-        raise HTTPException(502, "Atlas n’a pas pu terminer l’analyse. Réessaie.")
+        if ATLAS_PROVIDER_CONFIG.provider == "deterministic":
+            answer = build_deterministic_coach_answer(body.question, body.context_tag or "overall", context)
+        else:
+            try:
+                answer = await generate_atlas_answer(
+                    ATLAS_PROVIDER_CONFIG,
+                    system=COACH_SYSTEM,
+                    prompt=user_prompt,
+                )
+            except AtlasProviderFailure as exc:
+                atlas_error_code = f"fallback_{exc.code}"
+                report_model = "deterministic-coaching-v1"
+                logging.warning(
+                    "atlas_provider_fallback code=%s provider=%s user_id=%s model=%s",
+                    exc.code,
+                    ATLAS_PROVIDER_CONFIG.provider,
+                    user["id"],
+                    ATLAS_PROVIDER_CONFIG.model,
+                )
+                answer = build_deterministic_coach_answer(body.question, body.context_tag or "overall", context)
+    except Exception:
+        atlas_status = "error"
+        atlas_error_code = atlas_error_code or "unexpected_error"
+        logging.exception("atlas_request_failed code=%s user_id=%s", atlas_error_code, user["id"])
+        raise HTTPException(500, "Atlas n’a pas pu terminer l’analyse.")
     finally:
         duration_ms = round((asyncio.get_running_loop().time() - started_at) * 1000)
         logging.info(
-            "atlas_request_finished user_id=%s model=%s duration_ms=%d",
+            "atlas_request_finished user_id=%s provider=%s model=%s duration_ms=%d",
             user["id"],
-            ATLAS_MODEL,
+            ATLAS_PROVIDER_CONFIG.provider,
+            report_model,
             duration_ms,
         )
         try:
             await db.atlas_events.insert_one({
-                "user_id": user["id"], "model": ATLAS_MODEL,
+                "user_id": user["id"], "model": report_model,
                 "tag": body.context_tag or "overall", "status": atlas_status,
                 "error_code": atlas_error_code, "duration_ms": duration_ms,
                 "created_at": datetime.now(timezone.utc),
@@ -1494,7 +1647,7 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
         "answer": answer,
         "tag": body.context_tag,
         "evidence": evidence,
-        "model": ATLAS_MODEL,
+        "model": report_model,
         "created_at": now_utc(),
     }
     if user.get("_supabase_token"):
