@@ -1,4 +1,4 @@
-from atlas import build_atlas_context, build_atlas_prompt
+from atlas import build_atlas_context, build_atlas_prompt, measured_trade_pnl
 
 
 def test_atlas_metrics_distinguish_missing_values_from_zero():
@@ -31,6 +31,93 @@ def test_atlas_group_comparison_requires_two_trades():
 
     assert groups["FVG"]["eligible_for_comparison"] is True
     assert groups["Single sample"]["eligible_for_comparison"] is False
+
+
+def test_win_rate_uses_price_outcome_for_legacy_provider_zero_pnl():
+    trades = [
+        {
+            "id": "short-win",
+            "pnl": 0,
+            "direction": "short",
+            "entry": 4154.88,
+            "exit_price": 4146,
+            "result_status": "closed",
+            "integration_connection_id": "connection-1",
+            "provider_metadata": {},
+        },
+        {
+            "id": "long-win",
+            "pnl": 0,
+            "direction": "long",
+            "entry": 30476.6,
+            "exit_price": 30479.5,
+            "result_status": "closed",
+            "integration_connection_id": "connection-1",
+            "provider_metadata": {"pnl_source": "unavailable"},
+        },
+    ]
+
+    context, _ = build_atlas_context({}, [], trades)
+
+    assert context["metrics"]["wins"] == 2
+    assert context["metrics"]["losses"] == 0
+    assert context["metrics"]["win_rate_percent"] == 100
+    assert context["metrics"]["net_pnl"] is None
+    assert context["data_quality"]["trades_with_pnl"] == 0
+
+
+def test_legacy_provider_zero_is_not_treated_as_measured_money():
+    trade = {
+        "pnl": 0,
+        "source_provider": "tradelocker",
+        "provider_metadata": {"pnl_source": "unavailable"},
+    }
+
+    assert measured_trade_pnl(trade) is None
+
+
+def test_unavailable_provider_pnl_does_not_expose_partial_fees_as_net_profit():
+    trade = {
+        "pnl": -2.5,
+        "source_provider": "tradelocker",
+        "provider_metadata": {"pnl_source": "unavailable"},
+    }
+
+    assert measured_trade_pnl(trade) is None
+
+
+def test_manual_and_provider_confirmed_zero_remain_measured():
+    assert measured_trade_pnl({"pnl": 0}) == 0
+    assert measured_trade_pnl(
+        {
+            "pnl": 0,
+            "source_provider": "tradelocker",
+            "provider_metadata": {"pnl_source": "derived_tick_cost"},
+        }
+    ) == 0
+
+
+def test_measured_provider_zero_remains_a_breakeven():
+    context, _ = build_atlas_context(
+        {},
+        [],
+        [
+            {
+                "id": "breakeven",
+                "pnl": 0,
+                "direction": "long",
+                "entry": 100,
+                "exit_price": 101,
+                "result_status": "closed",
+                "integration_connection_id": "connection-1",
+                "provider_metadata": {"pnl_source": "derived_tick_cost"},
+            }
+        ],
+    )
+
+    assert context["metrics"]["wins"] == 0
+    assert context["metrics"]["losses"] == 0
+    assert context["metrics"]["win_rate_percent"] == 0
 
 
 def test_atlas_prompt_contains_no_inference_rule():

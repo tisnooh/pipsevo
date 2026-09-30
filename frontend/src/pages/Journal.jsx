@@ -16,6 +16,7 @@ import { clearPreTradeChecks, readPreTradeChecks, writePreTradeChecks } from "@/
 import { listenForAppDataChanges } from "@/lib/appDataEvents"
 import { JOURNAL_LIST_PATH, journalTradePath, resolveJournalRoute } from "@/lib/journalNavigation"
 import MobileTradeList from "@/components/MobileTradeList"
+import { tradeOutcome } from "@/lib/tradeAnalytics"
 
 const miniChartData = [
   { t: 1, v: 1.0784 }, { t: 2, v: 1.0790 }, { t: 3, v: 1.0785 },
@@ -168,20 +169,24 @@ export function JournalPage() {
     : byAccountAndDate.filter(t => t.starred)
 
   // KPIs calculés depuis les vraies données
-  const wins = filtered.filter(t => typeof t.pnl === "number" && t.pnl > 0)
-  const losses = filtered.filter(t => typeof t.pnl === "number" && t.pnl < 0)
-  const totalPnl = filtered.reduce((s, t) => s + (t.pnl || 0), 0)
-  const winRate = filtered.length ? Math.round((wins.length / filtered.length) * 100) : 0
-  const avgWin = wins.length ? wins.reduce((s, t) => s + (t.pnl || 0), 0) / wins.length : 0
-  const avgLoss = losses.length ? losses.reduce((s, t) => s + (t.pnl || 0), 0) / losses.length : 0
+  const outcomes = filtered.map(t => ({ trade: t, outcome: tradeOutcome(t) })).filter(item => item.outcome !== null)
+  const wins = outcomes.filter(item => item.outcome > 0)
+  const losses = outcomes.filter(item => item.outcome < 0)
+  const measuredTrades = filtered.filter(t => typeof t.pnl === "number")
+  const monetaryWins = measuredTrades.filter(t => t.pnl > 0)
+  const monetaryLosses = measuredTrades.filter(t => t.pnl < 0)
+  const totalPnl = measuredTrades.length ? measuredTrades.reduce((s, t) => s + t.pnl, 0) : null
+  const winRate = outcomes.length ? Math.round((wins.length / outcomes.length) * 100) : 0
+  const avgWin = monetaryWins.length ? monetaryWins.reduce((s, t) => s + t.pnl, 0) / monetaryWins.length : null
+  const avgLoss = monetaryLosses.length ? monetaryLosses.reduce((s, t) => s + t.pnl, 0) / monetaryLosses.length : null
   const avgR = filtered.length ? filtered.reduce((s, t) => s + (t.r || 0), 0) / filtered.length : 0
 
   const kpis = [
     { label: "Trades", value: filtered.length.toString(), sub: "", Icon: BarChart3, color: "#4F8CFF" },
     { label: "Win Rate", value: `${winRate}%`, sub: "", Icon: Target, color: "#46C99A" },
-    { label: "Profit net", value: money(totalPnl,{signDisplay:"always"}), sub: "", Icon: TrendingUp, color: totalPnl >= 0 ? "#46C99A" : "#F26A70" },
-    { label: "Gain moyen", value: money(avgWin,{signDisplay:"always"}), sub: "", Icon: ArrowUpRight, color: "#46C99A" },
-    { label: "Perte moyenne", value: money(avgLoss), sub: "", Icon: ArrowDownRight, color: "#F26A70" },
+    { label: "Profit net", value: totalPnl === null ? "—" : money(totalPnl,{signDisplay:"always"}), sub: "", Icon: TrendingUp, color: totalPnl === null ? "#7E8798" : totalPnl >= 0 ? "#46C99A" : "#F26A70" },
+    { label: "Gain moyen", value: avgWin === null ? "—" : money(avgWin,{signDisplay:"always"}), sub: "", Icon: ArrowUpRight, color: avgWin === null ? "#7E8798" : "#46C99A" },
+    { label: "Perte moyenne", value: avgLoss === null ? "—" : money(avgLoss), sub: "", Icon: ArrowDownRight, color: avgLoss === null ? "#7E8798" : "#F26A70" },
     { label: "R Multiple moyen", value: `${avgR.toFixed(2)}R`, sub: "", Icon: Ruler, color: "#7C4DFF" },
   ]
 

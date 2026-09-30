@@ -677,6 +677,57 @@ class SupabaseIntegrationRepository:
         )
         return "upserted"
 
+    async def prune_non_filled_executions(
+        self,
+        user_id: str,
+        integration_account_id: str,
+        provider: str,
+    ) -> int:
+        """Remove legacy provider orders that were stored as executions.
+
+        Older TradeLocker imports persisted cancelled/rejected orders in
+        ``trade_executions``.  They must not survive a successful provider
+        fetch because they inflate execution counts and used to influence the
+        reconstructed closing price.
+        """
+        rows = await self._request(
+            "GET",
+            "/rest/v1/trade_executions",
+            headers=self._admin_headers(),
+            params={
+                "user_id": f"eq.{user_id}",
+                "integration_account_id": f"eq.{integration_account_id}",
+                "provider": f"eq.{provider}",
+                "select": "id,raw_metadata",
+                "limit": "10000",
+            },
+        ) or []
+        stale_ids = []
+        accepted = {"filled", "executed", "completed"}
+        for row in rows:
+            metadata = row.get("raw_metadata")
+            status = (
+                str(metadata.get("status") or "").strip().lower()
+                if isinstance(metadata, dict)
+                else ""
+            )
+            if status and status not in accepted and row.get("id"):
+                stale_ids.append(str(row["id"]))
+        for start in range(0, len(stale_ids), 200):
+            ids = stale_ids[start : start + 200]
+            await self._request(
+                "DELETE",
+                "/rest/v1/trade_executions",
+                headers=self._admin_headers(),
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "integration_account_id": f"eq.{integration_account_id}",
+                    "provider": f"eq.{provider}",
+                    "id": f"in.({','.join(ids)})",
+                },
+            )
+        return len(stale_ids)
+
     async def create_snapshot(self, payload: dict) -> None:
         await self._request(
             "POST",

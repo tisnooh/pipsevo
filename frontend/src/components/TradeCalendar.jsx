@@ -17,11 +17,13 @@ export default function TradeCalendar({ trades, money, formatDate }) {
   const availableYears = useMemo(() => calendarYears(trades, monthKey), [monthKey, trades]);
   const monthCells = cells.filter(cell => cell.inMonth);
   const monthTrades = monthCells.flatMap(cell => cell.trades);
-  const monthPnl = monthTrades.reduce((sum, trade) => sum + Number(trade.pnl || 0), 0);
+  const measuredMonthTrades = monthTrades.filter(trade => typeof trade.pnl === "number" && Number.isFinite(trade.pnl));
+  const monthPnl = measuredMonthTrades.length ? measuredMonthTrades.reduce((sum, trade) => sum + trade.pnl, 0) : monthTrades.length ? null : 0;
   const activeDays = monthCells.filter(cell => cell.trades.length);
-  const winningDays = activeDays.filter(cell => cell.pnl > 0).length;
-  const losingDays = activeDays.filter(cell => cell.pnl < 0).length;
-  const bestDay = activeDays.reduce((best, cell) => !best || cell.pnl > best.pnl ? cell : best, null);
+  const measuredDays = activeDays.filter(cell => cell.pnl !== null);
+  const winningDays = measuredDays.filter(cell => cell.pnl > 0).length;
+  const losingDays = measuredDays.filter(cell => cell.pnl < 0).length;
+  const bestDay = measuredDays.reduce((best, cell) => !best || cell.pnl > best.pnl ? cell : best, null);
   const selectedTrades = selectedDay ? grouped[selectedDay] || [] : [];
   const today = localDateKey();
 
@@ -38,9 +40,9 @@ export default function TradeCalendar({ trades, money, formatDate }) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Summary icon={Target} label="Trades du mois" value={String(monthTrades.length)} color="#4F8CFF" />
-        <Summary icon={monthPnl >= 0 ? TrendingUp : TrendingDown} label="Résultat net" value={money(monthPnl, { signDisplay: "always" })} color={monthPnl >= 0 ? "#46C99A" : "#F26A70"} />
+        <Summary icon={monthPnl !== null && monthPnl < 0 ? TrendingDown : TrendingUp} label="Résultat net" value={monthPnl === null ? "—" : money(monthPnl, { signDisplay: "always" })} color={monthPnl === null ? "#7E8798" : monthPnl >= 0 ? "#46C99A" : "#F26A70"} />
         <Summary icon={CalendarDays} label="Jours actifs" value={String(activeDays.length)} color="#B58BFF" />
-        <Summary icon={TrendingUp} label="Jours positifs" value={`${winningDays}/${activeDays.length || 0}`} color="#46C99A" sub={losingDays ? `${losingDays} jour${losingDays > 1 ? "s" : ""} négatif${losingDays > 1 ? "s" : ""}` : "Aucun jour négatif"} />
+        <Summary icon={TrendingUp} label="Jours positifs" value={measuredDays.length ? `${winningDays}/${measuredDays.length}` : "—"} color={measuredDays.length ? "#46C99A" : "#7E8798"} sub={measuredDays.length ? losingDays ? `${losingDays} jour${losingDays > 1 ? "s" : ""} négatif${losingDays > 1 ? "s" : ""}` : "Aucun jour négatif" : "P&L non disponible"} />
       </div>
 
       <section className="overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#0B0E16]">
@@ -83,7 +85,7 @@ export default function TradeCalendar({ trades, money, formatDate }) {
                   <span className={`grid h-6 w-6 place-items-center rounded-full text-[10px] font-semibold sm:h-7 sm:w-7 sm:text-xs ${cell.key === today ? "bg-[#7C4DFF] text-white" : ""}`}>{cell.inMonth ? cell.day : ""}</span>
                   {hasTrades && <span className="hidden rounded-md border border-white/[0.07] px-1.5 py-0.5 text-[9px] text-[#788191] sm:block">{cell.trades.length} trade{cell.trades.length > 1 ? "s" : ""}</span>}
                 </div>
-                {hasTrades && <div className="mt-2 sm:mt-4"><div className={`truncate text-[10px] font-bold tabular-nums sm:text-sm ${positive ? "text-[#46C99A]" : negative ? "text-[#F26A70]" : "text-[#9C8EF0]"}`}>{money(cell.pnl, { notation: "compact", maximumFractionDigits: 1, signDisplay: "always" })}</div><div className="mt-1 flex gap-1">{cell.trades.slice(0, 4).map((trade, index) => <span key={`${trade.id}-${index}`} className={`h-1.5 w-1.5 rounded-full ${Number(trade.pnl || 0) > 0 ? "bg-[#46C99A]" : Number(trade.pnl || 0) < 0 ? "bg-[#F26A70]" : "bg-[#7C4DFF]"}`} />)}</div></div>}
+                {hasTrades && <div className="mt-2 sm:mt-4"><div className={`truncate text-[10px] font-bold tabular-nums sm:text-sm ${positive ? "text-[#46C99A]" : negative ? "text-[#F26A70]" : "text-[#9C8EF0]"}`}>{cell.pnl === null ? "—" : money(cell.pnl, { notation: "compact", maximumFractionDigits: 1, signDisplay: "always" })}</div><div className="mt-1 flex gap-1">{cell.trades.slice(0, 4).map((trade, index) => <span key={`${trade.id}-${index}`} className={`h-1.5 w-1.5 rounded-full ${typeof trade.pnl !== "number" ? "bg-[#7C4DFF]" : trade.pnl > 0 ? "bg-[#46C99A]" : trade.pnl < 0 ? "bg-[#F26A70]" : "bg-[#7C4DFF]"}`} />)}</div></div>}
               </button>
             );
           })}
@@ -106,6 +108,7 @@ function Summary({ icon: Icon, label, value, color, sub }) {
 }
 
 function DayDetails({ dayKey, trades, money, formatDate }) {
-  const pnl = trades.reduce((sum, trade) => sum + Number(trade.pnl || 0), 0);
-  return <div><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold text-white">Trades du {formatDate(dayKey)}</h3><p className="mt-1 text-[10px] text-[#6F7785]">{trades.length} opération{trades.length > 1 ? "s" : ""} enregistrée{trades.length > 1 ? "s" : ""}</p></div><div className={`text-sm font-bold tabular-nums ${pnl > 0 ? "text-[#46C99A]" : pnl < 0 ? "text-[#F26A70]" : "text-[#9C8EF0]"}`}>{money(pnl, { signDisplay: "always" })}</div></div><div className="space-y-2">{trades.map(trade => <div key={trade.id} className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-white/[0.06] bg-white/[0.018] px-3 py-3 sm:grid-cols-[minmax(100px,1fr)_100px_120px_100px] sm:items-center"><div><div className="text-xs font-semibold text-white">{trade.instrument || "Actif non renseigné"}</div><div className="mt-1 text-[9px] text-[#697282]">{trade.setup || "Setup non renseigné"}</div></div><div className="hidden text-[10px] capitalize text-[#8B93A3] sm:block">{trade.direction === "long" ? "Achat" : trade.direction === "short" ? "Vente" : trade.direction || "—"}</div><div className="hidden text-[10px] text-[#8B93A3] sm:block">{trade.session || "Session non renseignée"}</div><div className={`text-right text-xs font-semibold tabular-nums ${Number(trade.pnl || 0) > 0 ? "text-[#46C99A]" : Number(trade.pnl || 0) < 0 ? "text-[#F26A70]" : "text-[#9C8EF0]"}`}>{typeof trade.pnl === "number" ? money(trade.pnl, { signDisplay: "always" }) : "Ouvert"}</div></div>)}</div></div>;
+  const measuredTrades = trades.filter(trade => typeof trade.pnl === "number" && Number.isFinite(trade.pnl));
+  const pnl = measuredTrades.length ? measuredTrades.reduce((sum, trade) => sum + trade.pnl, 0) : null;
+  return <div><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold text-white">Trades du {formatDate(dayKey)}</h3><p className="mt-1 text-[10px] text-[#6F7785]">{trades.length} opération{trades.length > 1 ? "s" : ""} enregistrée{trades.length > 1 ? "s" : ""}</p></div><div className={`text-sm font-bold tabular-nums ${pnl === null ? "text-[#9C8EF0]" : pnl > 0 ? "text-[#46C99A]" : pnl < 0 ? "text-[#F26A70]" : "text-[#9C8EF0]"}`}>{pnl === null ? "—" : money(pnl, { signDisplay: "always" })}</div></div><div className="space-y-2">{trades.map(trade => <div key={trade.id} className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-white/[0.06] bg-white/[0.018] px-3 py-3 sm:grid-cols-[minmax(100px,1fr)_100px_120px_100px] sm:items-center"><div><div className="text-xs font-semibold text-white">{trade.instrument || "Actif non renseigné"}</div><div className="mt-1 text-[9px] text-[#697282]">{trade.setup || "Setup non renseigné"}</div></div><div className="hidden text-[10px] capitalize text-[#8B93A3] sm:block">{trade.direction === "long" ? "Achat" : trade.direction === "short" ? "Vente" : trade.direction || "—"}</div><div className="hidden text-[10px] text-[#8B93A3] sm:block">{trade.session || "Session non renseignée"}</div><div className={`text-right text-xs font-semibold tabular-nums ${typeof trade.pnl !== "number" ? "text-[#9C8EF0]" : trade.pnl > 0 ? "text-[#46C99A]" : trade.pnl < 0 ? "text-[#F26A70]" : "text-[#9C8EF0]"}`}>{typeof trade.pnl === "number" ? money(trade.pnl, { signDisplay: "always" }) : "—"}</div></div>)}</div></div>;
 }

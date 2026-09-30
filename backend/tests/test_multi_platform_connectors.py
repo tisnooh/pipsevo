@@ -569,3 +569,38 @@ def test_provider_update_is_idempotent_and_preserves_journal_enrichment():
         assert options == {"upsert": True}
 
     asyncio.run(scenario())
+
+
+def test_repository_prunes_only_terminal_non_filled_executions():
+    async def scenario():
+        repository = SupabaseIntegrationRepository(
+            "https://project.supabase.co", "publishable", "secret"
+        )
+        requests = []
+
+        async def request(method, path, **kwargs):
+            requests.append((method, path, kwargs))
+            if method == "GET":
+                return [
+                    {"id": "filled-id", "raw_metadata": {"status": "Filled"}},
+                    {"id": "cancelled-id", "raw_metadata": {"status": "Cancelled"}},
+                    {"id": "rejected-id", "raw_metadata": {"status": "Rejected"}},
+                    {"id": "legacy-id", "raw_metadata": {}},
+                ]
+            return None
+
+        repository._request = request
+        removed = await repository.prune_non_filled_executions(
+            "user-id", "integration-account-id", "tradelocker"
+        )
+
+        assert removed == 2
+        delete_request = next(item for item in requests if item[0] == "DELETE")
+        assert delete_request[2]["params"] == {
+            "user_id": "eq.user-id",
+            "integration_account_id": "eq.integration-account-id",
+            "provider": "eq.tradelocker",
+            "id": "in.(cancelled-id,rejected-id)",
+        }
+
+    asyncio.run(scenario())

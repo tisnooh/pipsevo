@@ -62,8 +62,9 @@ export function buildMonthCells(monthKey, tradesByDate) {
     date.setDate(gridStart.getDate() + index);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     const trades = tradesByDate[key] || [];
-    const pnl = trades.reduce((sum, trade) => sum + Number(trade.pnl || 0), 0);
-    return { key, day: date.getDate(), inMonth: date.getMonth() === month - 1, trades, pnl };
+    const measuredTrades = trades.filter(trade => typeof trade.pnl === "number" && Number.isFinite(trade.pnl));
+    const pnl = measuredTrades.length ? measuredTrades.reduce((sum, trade) => sum + trade.pnl, 0) : trades.length ? null : 0;
+    return { key, day: date.getDate(), inMonth: date.getMonth() === month - 1, trades, pnl, measuredTradeCount: measuredTrades.length };
   });
 }
 
@@ -77,6 +78,8 @@ export function buildTradeCalendarMonth(monthKey, trades = [], locale = "fr-FR")
     cells,
     activeDays: activeCells.length,
     tradeCount: activeCells.reduce((sum, cell) => sum + cell.trades.length, 0),
-    pnl: activeCells.reduce((sum, cell) => sum + cell.pnl, 0),
+    pnl: activeCells.some(cell => cell.measuredTradeCount > 0)
+      ? activeCells.reduce((sum, cell) => sum + (cell.pnl ?? 0), 0)
+      : activeCells.length ? null : 0,
   };
 }

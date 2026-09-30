@@ -69,3 +69,16 @@ test("keeps the month label, cells, active days and pnl synchronized", () => {
   expect(november).toMatchObject({ monthKey: "2026-11", label: "novembre 2026", activeDays: 0, tradeCount: 0, pnl: 0 });
   expect(formatMonthLabel("2027-01")).toBe("janvier 2027");
 });
+
+test("does not turn missing provider pnl into a fake zero", () => {
+  const calendar = buildTradeCalendarMonth("2026-09", [
+    { id: "provider-1", date: "2026-09-29", pnl: null },
+    { id: "provider-2", date: "2026-09-29", pnl: null },
+  ]);
+
+  expect(calendar.pnl).toBeNull();
+  expect(calendar.cells.find(cell => cell.key === "2026-09-29")).toMatchObject({
+    pnl: null,
+    measuredTradeCount: 0,
+  });
+});

@@ -1,4 +1,4 @@
-import { calculateTradeAnalytics, groupTradesByWeekday } from "./tradeAnalytics";
+import { calculateTradeAnalytics, groupTradesByWeekday, measuredTradePnl } from "./tradeAnalytics";
 
 describe("statistiques synchronisées avec le journal", () => {
   const accounts = [
@@ -33,5 +33,30 @@ describe("statistiques synchronisées avec le journal", () => {
   test("regroupe une date métier sans décalage de jour", () => {
     const days = groupTradesByWeekday([{ date: "2026-09-02T23:30:00Z", pnl: 75 }]);
     expect(days.find(day => day.name === "Mer").pnl).toBe(75);
+  });
+
+  test("déduit le résultat par les prix quand le P&L fournisseur est indisponible", () => {
+    const stats = calculateTradeAnalytics([
+      { pnl: 0, direction: "short", entry: 4154.88, exit_price: 4146, result_status: "closed", integration_connection_id: "c1", provider_metadata: {} },
+      { pnl: 0, direction: "long", entry: 30476.6, exit_price: 30479.5, result_status: "closed", integration_connection_id: "c1", provider_metadata: { pnl_source: "unavailable" } },
+    ], accounts);
+
+    expect(stats.winrate).toBe(100);
+    expect(stats.wins).toBe(2);
+    expect(stats.losses).toBe(0);
+    expect(stats.pnl).toBeNull();
+    expect(stats.avgWin).toBeNull();
+  });
+
+  test("distingue un zéro mesuré d'un ancien zéro de substitution", () => {
+    expect(measuredTradePnl({ pnl: 0 })).toBe(0);
+    expect(measuredTradePnl({ pnl: 0, source_provider: "tradelocker", provider_metadata: {} })).toBeNull();
+    expect(measuredTradePnl({ pnl: -2.5, source_provider: "tradelocker", provider_metadata: { pnl_source: "unavailable" } })).toBeNull();
+    expect(measuredTradePnl({ pnl: 0, source_provider: "tradelocker", provider_metadata: { pnl_source: "derived_tick_cost" } })).toBe(0);
+  });
+
+  test("affiche un profit factor infini quand tous les P&L mesurés sont gagnants", () => {
+    const stats = calculateTradeAnalytics([{ pnl: 40 }, { pnl: 60 }], accounts);
+    expect(stats.profitFactor).toBe(Infinity);
   });
 });

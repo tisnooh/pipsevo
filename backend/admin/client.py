@@ -33,16 +33,17 @@ class SupabaseAdminClient:
         return bool(self.url and self.secret_key)
 
     def _server_headers(self, extra: dict[str, str] | None = None) -> dict[str, str]:
-        if not self.configured:
+        secret_key = self.secret_key
+        if not self.url or not secret_key:
             raise AdminConfigurationError("SUPABASE_SECRET_KEY is not configured on the server")
-        headers = {
-            "apikey": self.secret_key,
+        headers: dict[str, str] = {
+            "apikey": secret_key,
             "Accept": "application/json",
         }
         # Legacy service_role keys are JWTs. The newer sb_secret_* keys must
         # stay in the apikey header and are not valid Bearer JWTs.
-        if self.secret_key.count(".") == 2:
-            headers["Authorization"] = f"Bearer {self.secret_key}"
+        if secret_key.count(".") == 2:
+            headers["Authorization"] = f"Bearer {secret_key}"
         return {**headers, **(extra or {})}
 
     async def request(

@@ -416,26 +416,26 @@ class IntegrationService:
         first = result.accounts[0] if result.accounts else None
         platform = provider.platforms[0]
         payload = {
-                "user_id": user_id,
-                "platform": platform,
-                "provider": provider.provider_id,
-                "external_connection_id": result.external_connection_id,
-                "external_account_id": first.external_account_id if first else None,
-                "broker_name": first.broker_name if first else None,
-                "server_name": first.server_name if first else None,
-                "account_number_masked": first.account_number_masked if first else None,
-                "account_type": first.account_type if first else "unknown",
-                "account_currency": first.account_currency if first else None,
-                "display_name": first.display_name if first else None,
-                "auth_type": provider.auth_type,
-                "permission_scope": result.tokens.scope or "read",
-                "token_expires_at": result.tokens.expires_at.isoformat() if result.tokens.expires_at else None,
-                "provider_environment": environment,
-                "provider_metadata": result.provider_metadata,
-                "authorized_at": datetime.now(timezone.utc).isoformat(),
-                "connection_status": "connected",
-                "sync_status": "idle",
-            }
+            "user_id": user_id,
+            "platform": platform,
+            "provider": provider.provider_id,
+            "external_connection_id": result.external_connection_id,
+            "external_account_id": first.external_account_id if first else None,
+            "broker_name": first.broker_name if first else None,
+            "server_name": first.server_name if first else None,
+            "account_number_masked": first.account_number_masked if first else None,
+            "account_type": first.account_type if first else "unknown",
+            "account_currency": first.account_currency if first else None,
+            "display_name": first.display_name if first else None,
+            "auth_type": provider.auth_type,
+            "permission_scope": result.tokens.scope or "read",
+            "token_expires_at": result.tokens.expires_at.isoformat() if result.tokens.expires_at else None,
+            "provider_environment": environment,
+            "provider_metadata": result.provider_metadata,
+            "authorized_at": datetime.now(timezone.utc).isoformat(),
+            "connection_status": "connected",
+            "sync_status": "idle",
+        }
         existing = await self.repository.find_connection_by_external(
             user_id, provider.provider_id, result.external_connection_id
         )
@@ -966,6 +966,20 @@ class IntegrationService:
                     await asyncio.sleep(self._retry_delay(attempt))
             if batch is None:
                 raise ProviderUnavailableError()
+            purged_execution_count = 0
+            if connection.provider == "tradelocker" and hasattr(
+                self.repository, "prune_non_filled_executions"
+            ):
+                # A provider response was received successfully. It is now safe
+                # to remove cancelled/rejected orders left by the legacy
+                # TradeLocker importer before the real fills are upserted.
+                purged_execution_count = (
+                    await self.repository.prune_non_filled_executions(
+                        user_id,
+                        account.id,
+                        connection.provider,
+                    )
+                )
             normalized, skipped = normalize_batch(
                 batch.trades,
                 account_id=account.account_id,
@@ -1151,6 +1165,7 @@ class IntegrationService:
                     "integration_account_id": account.id,
                     "imported_count": result.imported_count,
                     "updated_count": result.updated_count,
+                    "purged_execution_count": purged_execution_count,
                 },
             )
             logger.info(
@@ -1168,6 +1183,21 @@ class IntegrationService:
             return result.model_dump(mode="json")
         except Exception as exc:
             safe = self._safe_error(exc)
+            await self.repository.update_connection(
+                connection.id,
+                user_id,
+                {
+                    "connection_status": (
+                        "expired"
+                        if safe.code in {"connection_expired", "invalid_credentials"}
+                        else connection.connection_status
+                    ),
+                    "sync_status": "failed",
+                    "last_sync_attempt_at": now,
+                    "last_error_code": safe.code,
+                    "last_error_message": safe.public_message,
+                },
+            )
             await self.repository.update_integration_account(
                 account.id,
                 user_id,

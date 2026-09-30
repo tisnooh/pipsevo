@@ -32,7 +32,12 @@ def test_normalizes_costs_and_net_profit():
         provider="fake",
         external_account_id="external",
     )
+    assert result.gross_profit == Decimal("25")
+    assert result.commission == Decimal("2")
+    assert result.swap == Decimal("-1")
+    assert result.fees == Decimal("0.50")
     assert result.net_profit == Decimal("21.50")
+    assert result.pnl == result.net_profit
     assert result.result_status == "closed"
     assert result.source == "mt5_api"
 

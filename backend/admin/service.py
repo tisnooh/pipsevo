@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from email_service import EmailConfigurationError, EmailDeliveryError, brand_email_html, send_email
-from atlas import build_atlas_context
+from atlas import build_atlas_context, measured_trade_pnl
 
 from .client import AdminConfigurationError, AdminDataError, SupabaseAdminClient
 from .security import STAFF_ROLES, normalize_role, sanitize
@@ -29,6 +29,48 @@ def iso(value: datetime | None = None) -> str:
 def configured_env(name: str) -> bool:
     value = os.environ.get(name, "").strip()
     return bool(value and not re.search(r"replace|example|your_|_me$", value, re.I))
+
+
+def is_real_execution(row: dict[str, Any]) -> bool:
+    """Exclude terminal non-fills left by the legacy TradeLocker importer."""
+    metadata = row.get("raw_metadata")
+    status = (
+        str(metadata.get("status") or "").strip().lower()
+        if isinstance(metadata, dict)
+        else ""
+    )
+    return not status or status in {"filled", "executed", "completed"}
+
+
+def _timestamp(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _latest_attempt_succeeded(row: dict[str, Any]) -> bool:
+    success_at = _timestamp(row.get("last_successful_sync_at"))
+    attempt_at = _timestamp(row.get("last_sync_attempt_at"))
+    return bool(success_at and (not attempt_at or success_at >= attempt_at))
+
+
+def visible_connection_status(row: dict[str, Any]) -> str | None:
+    """Never present an authentication-expired connection as connected."""
+    if _latest_attempt_succeeded(row):
+        return row.get("connection_status")
+    if row.get("last_error_code") in {"connection_expired", "invalid_credentials"}:
+        return "expired"
+    return row.get("connection_status")
+
+
+def visible_connection_error(row: dict[str, Any], field: str) -> Any:
+    """Hide an error that predates a later successful synchronization."""
+    if _latest_attempt_succeeded(row):
+        return None
+    return row.get(field)
 
 
 class AdminService:
@@ -137,7 +179,7 @@ class AdminService:
             "select": "user_id,occurred_at", "occurred_at": f"gte.{d30.isoformat()}",
             "order": "occurred_at.desc", "limit": "10000",
         })
-        activity = {1: set(), 7: set(), 30: set()}
+        activity: dict[int, set[str]] = {1: set(), 7: set(), 30: set()}
         for row in activity_rows:
             try:
                 occurred = datetime.fromisoformat(str(row["occurred_at"]).replace("Z", "+00:00"))
@@ -229,20 +271,22 @@ class AdminService:
         accounts, connections, trades, executions = await asyncio.gather(
             self.supabase.rows("accounts", {"user_id": f"eq.{user_id}", "select": "id,name,firm,market_type,status,created_at", "order": "created_at.desc", "limit": "100"}),
             self.supabase.rows("integration_connections", {"user_id": f"eq.{user_id}", "select": "id,account_id,platform,provider,broker_name,account_number_masked,connection_status,sync_status,last_successful_sync_at,last_sync_attempt_at,last_error_code,last_error_message,created_at", "order": "created_at.desc", "limit": "100"}),
-            self.supabase.rows("trades", {"user_id": f"eq.{user_id}", "select": "id,date,instrument,direction,pnl,r,setup,session,plan_respected,screenshots,created_at,integration_connection_id", "order": "date.desc", "limit": "10000"}),
-            self.supabase.rows("trade_executions", {"user_id": f"eq.{user_id}", "select": "id,connection_id", "limit": "10000"}),
+            self.supabase.rows("trades", {"user_id": f"eq.{user_id}", "select": "id,date,instrument,direction,entry,exit_price,open_price,close_price,pnl,r,setup,session,plan_respected,screenshots,result_status,provider_metadata,source_provider,created_at,integration_connection_id,integration_account_id", "order": "date.desc", "limit": "10000"}),
+            self.supabase.rows("trade_executions", {"user_id": f"eq.{user_id}", "select": "id,connection_id,raw_metadata", "limit": "10000"}),
         )
-        trades_count, executions_count, reports_count, backtest_count = await asyncio.gather(
+        trades_count, reports_count, backtest_count = await asyncio.gather(
             self.supabase.count("trades", {"user_id": f"eq.{user_id}"}),
-            self.supabase.count("trade_executions", {"user_id": f"eq.{user_id}"}),
             self.supabase.count("ai_reports", {"user_id": f"eq.{user_id}"}),
             self.db.backtest_sessions.count_documents({"user_id": user_id}),
         )
+        executions = [row for row in executions if is_real_execution(row)]
+        executions_count = len(executions)
         context, _ = build_atlas_context(profile, accounts, trades)
         day_totals: defaultdict[str, float] = defaultdict(float)
         for trade in trades:
-            if trade.get("date") and trade.get("pnl") is not None:
-                day_totals[str(trade["date"])[:10]] += float(trade["pnl"])
+            pnl = measured_trade_pnl(trade)
+            if trade.get("date") and pnl is not None:
+                day_totals[str(trade["date"])[:10]] += pnl
         imported_by_connection: defaultdict[str, int] = defaultdict(int)
         executions_by_connection: defaultdict[str, int] = defaultdict(int)
         for trade in trades:
@@ -254,6 +298,13 @@ class AdminService:
         safe_connections = [
             {
                 **connection,
+                "connection_status": visible_connection_status(connection),
+                "last_error_code": visible_connection_error(
+                    connection, "last_error_code"
+                ),
+                "last_error_message": visible_connection_error(
+                    connection, "last_error_message"
+                ),
                 "trades_imported": imported_by_connection.get(str(connection.get("id")), 0),
                 "executions_imported": executions_by_connection.get(str(connection.get("id")), 0),
             }
@@ -284,7 +335,7 @@ class AdminService:
             },
             "journal": {
                 "trades_count": trades_count,
-                "recent": [{"id": row.get("id"), "date": row.get("date"), "instrument": row.get("instrument"), "pnl": row.get("pnl"), "setup": row.get("setup"), "screenshots_count": len(row.get("screenshots") or [])} for row in trades[:10]],
+                "recent": [{"id": row.get("id"), "date": row.get("date"), "instrument": row.get("instrument"), "pnl": measured_trade_pnl(row), "setup": row.get("setup"), "screenshots_count": len(row.get("screenshots") or [])} for row in trades[:10]],
             },
             "backtest": {"sessions_count": backtest_count},
             "atlas": {"requests_count": reports_count},

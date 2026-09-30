@@ -10,6 +10,7 @@ import { DashboardTemplateManager } from "@/components/dashboard/DashboardTempla
 import { DEFAULT_DASHBOARD_TEMPLATES, readDashboardTemplateState } from "@/lib/dashboardTemplates";
 import { CALENDAR_MONTHS_FR, buildTradeCalendarMonth, calendarYears, localDateKey, localMonthKey, shiftMonthKey, tradeDateKey } from "@/lib/tradeCalendar";
 import { listenForAppDataChanges } from "@/lib/appDataEvents";
+import { tradeOutcome } from "@/lib/tradeAnalytics";
 
 const EMPTY_KPIS = { funded_capital: 0, total_profit: 0, remaining_drawdown: 0, estimated_payout: 0, discipline_score: 0, trader_score: 0, total_payouts: 0, active_accounts: 0, total_trades: 0 };
 const EMPTY_METRICS = { winrate: 0, profit_factor: 0, avg_win: 0, avg_loss: 0, plan_respect_rate: 0 };
@@ -66,30 +67,34 @@ export default function Dashboard() {
     (!accountFilter || trade.account_id === accountFilter) &&
     (!assetFilter || trade.instrument === assetFilter), [accountFilter, assetFilter]);
   const scopedTrades = tradeList.filter(matchesDashboardFilters);
+  const measuredScopedTrades = scopedTrades.filter(t => typeof t.pnl === "number");
   const calendarTrades = useMemo(() => recent.filter(matchesDashboardFilters), [recent, matchesDashboardFilters]);
   let runningEquity = 0;
-  const equityData = [...scopedTrades]
+  const equityData = [...measuredScopedTrades]
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
     .map(t => ({ date: t.date, equity: Math.round((runningEquity += Number(t.pnl || 0)) * 100) / 100 }));
   const filtered = scopedTrades.filter(t =>
     (tab === "Tous" || (tab === "Gagnants" ? t.pnl > 0 : t.pnl < 0))
   ).slice(0, 5);
   const isEmptyAccount = !loading && !accList.length && !recent.length;
-  const periodProfit = scopedTrades.reduce((sum,t)=>sum+Number(t.pnl||0),0);
-  const closedScopedTrades = scopedTrades.filter(t => Number.isFinite(Number(t.pnl)) && !["open", "cancelled", "canceled"].includes(t.result_status));
-  const scopedWins = closedScopedTrades.filter(t => Number(t.pnl) > 0);
-  const scopedLosses = closedScopedTrades.filter(t => Number(t.pnl) < 0);
-  const scopedWinrate = closedScopedTrades.length ? scopedWins.length / closedScopedTrades.length * 100 : 0;
-  const scopedGrossProfit = scopedWins.reduce((sum, t) => sum + Number(t.pnl || 0), 0);
-  const scopedGrossLoss = Math.abs(scopedLosses.reduce((sum, t) => sum + Number(t.pnl || 0), 0));
-  const scopedProfitFactor = scopedGrossLoss ? scopedGrossProfit / scopedGrossLoss : 0;
-  const totalsByDay = scopedTrades.reduce((days, trade) => {
+  const periodProfit = measuredScopedTrades.length ? measuredScopedTrades.reduce((sum,t)=>sum+Number(t.pnl),0) : null;
+  const closedScopedTrades = measuredScopedTrades.filter(t => !["open", "cancelled", "canceled"].includes(t.result_status));
+  const scopedOutcomes = scopedTrades.map(tradeOutcome).filter(outcome => outcome !== null);
+  const scopedWins = scopedOutcomes.filter(outcome => outcome > 0);
+  const scopedLosses = scopedOutcomes.filter(outcome => outcome < 0);
+  const monetaryWins = closedScopedTrades.filter(t => Number(t.pnl) > 0);
+  const monetaryLosses = closedScopedTrades.filter(t => Number(t.pnl) < 0);
+  const scopedWinrate = scopedOutcomes.length ? scopedWins.length / scopedOutcomes.length * 100 : 0;
+  const scopedGrossProfit = monetaryWins.reduce((sum, t) => sum + Number(t.pnl || 0), 0);
+  const scopedGrossLoss = Math.abs(monetaryLosses.reduce((sum, t) => sum + Number(t.pnl || 0), 0));
+  const scopedProfitFactor = !closedScopedTrades.length ? null : scopedGrossLoss ? scopedGrossProfit / scopedGrossLoss : scopedGrossProfit > 0 ? Infinity : 0;
+  const totalsByDay = measuredScopedTrades.reduce((days, trade) => {
     const date = tradeDateKey(trade.date) || "—";
     days[date] = (days[date] || 0) + Number(trade.pnl || 0);
     return days;
   }, {});
   const dailyTotals = Object.values(totalsByDay);
-  const dayWinRate = dailyTotals.length ? dailyTotals.filter((pnl) => pnl > 0).length / dailyTotals.length * 100 : 0;
+  const dayWinRate = dailyTotals.length ? dailyTotals.filter((pnl) => pnl > 0).length / dailyTotals.length * 100 : null;
   const tradeStreak = calculateStreak([...closedScopedTrades].sort((a, b) => String(b.date).localeCompare(String(a.date))).map((trade) => Number(trade.pnl || 0)));
   const dayStreak = calculateStreak(Object.entries(totalsByDay).sort(([a], [b]) => String(b).localeCompare(String(a))).map(([, pnl]) => pnl));
   const drawdownLimit = accList.reduce((sum, account) => sum + Number(account.max_drawdown || 0), 0);
@@ -102,7 +107,7 @@ export default function Dashboard() {
       : m.plan_respect_rate < 80
         ? `Ton plan est respecté sur ${m.plan_respect_rate}% des trades renseignés. Priorité : réduire les prises hors plan.`
         : `Ton plan est respecté sur ${m.plan_respect_rate}% des trades renseignés. Continue à documenter chaque décision.`;
-  const dailyData = Object.values(scopedTrades.reduce((days, trade) => {
+  const dailyData = Object.values(measuredScopedTrades.reduce((days, trade) => {
     const date = tradeDateKey(trade.date) || "—";
     days[date] ||= { date, pnl: 0 };
     days[date].pnl += Number(trade.pnl || 0);
@@ -123,8 +128,8 @@ export default function Dashboard() {
     setCalendarMonth(localMonthKey());
     setSelectedDay(null);
   }, []);
-  const tradeTimeData = scopedTrades.map((trade) => ({ hour: tradeHour(trade), pnl: Number(trade.pnl || 0), instrument: trade.instrument })).filter((point) => point.hour !== null);
-  const tradeDurationData = scopedTrades.map((trade) => ({ minutes: tradeDurationMinutes(trade), pnl: Number(trade.pnl || 0), instrument: trade.instrument })).filter((point) => point.minutes !== null);
+  const tradeTimeData = measuredScopedTrades.map((trade) => ({ hour: tradeHour(trade), pnl: Number(trade.pnl), instrument: trade.instrument })).filter((point) => point.hour !== null);
+  const tradeDurationData = measuredScopedTrades.map((trade) => ({ minutes: tradeDurationMinutes(trade), pnl: Number(trade.pnl), instrument: trade.instrument })).filter((point) => point.minutes !== null);
   const templates = useMemo(() => [...DEFAULT_DASHBOARD_TEMPLATES, ...templateState.custom], [templateState.custom]);
   const activeTemplate = templates.find((template) => template.id === templateState.activeId) || DEFAULT_DASHBOARD_TEMPLATES[0];
   const visible = (widget) => activeTemplate.widgets.includes(widget);
@@ -160,10 +165,10 @@ export default function Dashboard() {
       {loading && <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{Array.from({length:5}).map((_,i)=><div key={i} className="h-28 animate-pulse rounded-xl bg-white/[0.035]"/>)}</div>}
 
       {!loading && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        {visible("summary") && <Kpi label="P&L net" value={money(periodProfit,{signDisplay:"always"})} detail={`${scopedTrades.length} trades sur la période`} tone={periodProfit < 0 ? "negative" : "positive"} testid="kpi-profit" accent={accent} />}
+        {visible("summary") && <Kpi label="P&L net" value={periodProfit===null?"—":money(periodProfit,{signDisplay:"always"})} detail={periodProfit===null?"P&L monétaire non disponible":`${measuredScopedTrades.length} trades mesurés sur la période`} tone={periodProfit===null?undefined:periodProfit < 0 ? "negative" : "positive"} testid="kpi-profit" accent={accent} />}
         {visible("summary") && <GaugeKpi label="Win rate" value={scopedWinrate} display={`${scopedWinrate.toFixed(1)}%`} detail={`${scopedWins.length} gains · ${scopedLosses.length} pertes`} accent={accent} id="win-rate" />}
-        {visible("summary") && <RingKpi label="Profit factor" value={Math.min(100, scopedProfitFactor / 3 * 100)} display={scopedProfitFactor.toFixed(2)} detail="Objectif solide : 1,50+" accent={accent} id="profit-factor" />}
-        {visible("summary") && <GaugeKpi label="Jours gagnants" value={dayWinRate} display={`${dayWinRate.toFixed(0)}%`} detail={`${dailyTotals.filter((pnl) => pnl > 0).length} jours positifs`} accent={accent} id="day-win-rate" />}
+        {visible("summary") && <RingKpi label="Profit factor" value={scopedProfitFactor===null?0:Number.isFinite(scopedProfitFactor)?Math.min(100, scopedProfitFactor / 3 * 100):100} display={scopedProfitFactor===null?"—":Number.isFinite(scopedProfitFactor)?scopedProfitFactor.toFixed(2):"∞"} detail={scopedProfitFactor===null?"P&L monétaire non disponible":"Objectif solide : 1,50+"} accent={accent} id="profit-factor" />}
+        {visible("summary") && <GaugeKpi label="Jours gagnants" value={dayWinRate??0} display={dayWinRate===null?"—":`${dayWinRate.toFixed(0)}%`} detail={dayWinRate===null?"P&L journalier non disponible":`${dailyTotals.filter((pnl) => pnl > 0).length} jours positifs`} accent={accent} id="day-win-rate" />}
         <GaugeKpi label="Drawdown disponible" value={drawdownRate} display={money(k.remaining_drawdown)} detail={`${k.active_accounts} compte${k.active_accounts>1?"s":""} actif${k.active_accounts>1?"s":""}`} accent={activeTemplate.accent === "blue" ? "#6D7CFF" : "#4F8DFF"} id="drawdown" testid="kpi-dd" amount />
         <StreakKpi dayStreak={dayStreak} tradeStreak={tradeStreak} accent={accent} />
       </div>}
@@ -372,7 +377,7 @@ function TradeCalendarPanel({ calendar, accent, money, onPrevious, onNext, onTod
         <button type="button" onClick={onToday} className="ml-1 rounded-lg border border-[#6571CF]/15 px-3 py-2 text-[10px] text-[#98A1B5] transition hover:border-[#7881E8]/35 hover:text-white">Ce mois</button>
         <span className="sr-only" aria-live="polite" data-testid="calendar-month-label">{label}</span>
       </div>
-      <div className="flex flex-wrap items-center gap-2 text-[10px]" aria-live="polite"><Link to="/app/day-view" className="rounded-lg border border-[#8067F4]/30 bg-[#8067F4]/10 px-2.5 py-1.5 font-semibold text-[#B7A8FF] transition hover:border-[#8067F4]/55 hover:text-white">Vue journalière</Link><span className="rounded-lg border border-[#6571CF]/15 bg-[#090E1C] px-2.5 py-1.5 text-[#8B95A9]" data-testid="calendar-active-days">{activeDays} jour{activeDays === 1 ? "" : "s"} tradé{activeDays === 1 ? "" : "s"} · {tradeCount} trade{tradeCount === 1 ? "" : "s"}</span><span className={`font-numeric rounded-lg border px-2.5 py-1.5 ${monthPnl > 0 ? "border-[#46C99A]/20 bg-[#46C99A]/[0.07] text-[#46C99A]" : monthPnl < 0 ? "border-[#F26A70]/20 bg-[#F26A70]/[0.07] text-[#F26A70]" : "border-[#6571CF]/15 bg-[#090E1C] text-[#8B95A9]"}`} data-testid="calendar-month-pnl">{money(monthPnl, { signDisplay: "always" })}</span></div>
+      <div className="flex flex-wrap items-center gap-2 text-[10px]" aria-live="polite"><Link to="/app/day-view" className="rounded-lg border border-[#8067F4]/30 bg-[#8067F4]/10 px-2.5 py-1.5 font-semibold text-[#B7A8FF] transition hover:border-[#8067F4]/55 hover:text-white">Vue journalière</Link><span className="rounded-lg border border-[#6571CF]/15 bg-[#090E1C] px-2.5 py-1.5 text-[#8B95A9]" data-testid="calendar-active-days">{activeDays} jour{activeDays === 1 ? "" : "s"} tradé{activeDays === 1 ? "" : "s"} · {tradeCount} trade{tradeCount === 1 ? "" : "s"}</span><span className={`font-numeric rounded-lg border px-2.5 py-1.5 ${monthPnl !== null && monthPnl > 0 ? "border-[#46C99A]/20 bg-[#46C99A]/[0.07] text-[#46C99A]" : monthPnl !== null && monthPnl < 0 ? "border-[#F26A70]/20 bg-[#F26A70]/[0.07] text-[#F26A70]" : "border-[#6571CF]/15 bg-[#090E1C] text-[#8B95A9]"}`} data-testid="calendar-month-pnl">{monthPnl === null ? "—" : money(monthPnl, { signDisplay: "always" })}</span></div>
     </div>
     <div className="p-2 sm:p-4">
       <div className="grid grid-cols-7 gap-1 text-center text-[8px] font-medium uppercase tracking-[.12em] text-[#5F6A80] sm:gap-2 sm:text-[9px]">{["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => <div key={day} className="py-1.5">{day}</div>)}</div>
@@ -387,10 +392,10 @@ function TradeCalendarPanel({ calendar, accent, money, onPrevious, onNext, onTod
             onClick={() => onSelect(cell)}
             disabled={!cell.inMonth}
             className={`relative min-h-[58px] rounded-lg border p-1.5 text-left transition sm:min-h-[92px] sm:p-2.5 ${!cell.inMonth ? "cursor-default border-transparent bg-transparent opacity-25" : hasTrades ? positive ? "border-[#46C99A]/30 bg-[#46C99A]/[0.08] hover:border-[#46C99A]/55" : negative ? "border-[#F26A70]/30 bg-[#F26A70]/[0.08] hover:border-[#F26A70]/55" : "border-[#6571CF]/18 bg-[#6571CF]/[0.06] hover:border-[#727DDE]/35" : "border-[#6571CF]/12 bg-[#090E1C] hover:border-[#727DDE]/28"}`}
-            aria-label={`${cell.key}, ${cell.trades.length} trades, ${money(cell.pnl)}`}
+            aria-label={`${cell.key}, ${cell.trades.length} trades, ${cell.pnl === null ? "P&L indisponible" : money(cell.pnl)}`}
           >
             <div className="font-numeric text-right text-[9px] text-[#7F899E] sm:text-[10px]">{cell.inMonth ? cell.day : ""}</div>
-            {hasTrades && <div className="mt-1 text-center sm:mt-3"><div className={`font-numeric truncate text-[8px] font-semibold sm:text-xs ${positive ? "text-[#46C99A]" : negative ? "text-[#F26A70]" : "text-[#9C8EF0]"}`}>{money(cell.pnl, { signDisplay: "always", maximumFractionDigits: 0 })}</div><div className="mt-1 hidden text-[8px] text-[#69758B] sm:block">{cell.trades.length} trade{cell.trades.length > 1 ? "s" : ""}</div><span className="mx-auto mt-1 block h-1 w-1 rounded-full sm:hidden" style={{ background: positive ? "#46C99A" : negative ? "#F26A70" : accent }} /></div>}
+            {hasTrades && <div className="mt-1 text-center sm:mt-3"><div className={`font-numeric truncate text-[8px] font-semibold sm:text-xs ${positive ? "text-[#46C99A]" : negative ? "text-[#F26A70]" : "text-[#9C8EF0]"}`}>{cell.pnl === null ? "—" : money(cell.pnl, { signDisplay: "always", maximumFractionDigits: 0 })}</div><div className="mt-1 hidden text-[8px] text-[#69758B] sm:block">{cell.trades.length} trade{cell.trades.length > 1 ? "s" : ""}</div><span className="mx-auto mt-1 block h-1 w-1 rounded-full sm:hidden" style={{ background: positive ? "#46C99A" : negative ? "#F26A70" : accent }} /></div>}
           </button>;
         })}
       </div>
@@ -400,48 +405,53 @@ function TradeCalendarPanel({ calendar, accent, money, onPrevious, onNext, onTod
 
 function DayTradeModal({ day, accounts, accent, money, onClose }) {
   const orderedTrades = [...day.trades].sort((a, b) => tradeTimestamp(a) - tradeTimestamp(b));
+  const measuredTrades = orderedTrades.filter((trade) => typeof trade.pnl === "number");
+  const measuredPnl = measuredTrades.length ? measuredTrades.reduce((sum, trade) => sum + trade.pnl, 0) : null;
   let cumulative = 0;
-  const curve = [{ index: 0, label: "Début", pnl: 0 }, ...orderedTrades.map((trade, index) => ({
+  const curve = [{ index: 0, label: "Début", pnl: 0 }, ...measuredTrades.map((trade, index) => ({
     index: index + 1,
     label: tradeTimeLabel(trade),
     pnl: Math.round((cumulative += Number(trade.pnl || 0)) * 100) / 100,
   }))];
-  const wins = orderedTrades.filter((trade) => Number(trade.pnl) > 0);
-  const losses = orderedTrades.filter((trade) => Number(trade.pnl) < 0);
-  const grossProfit = wins.reduce((sum, trade) => sum + Number(trade.pnl || 0), 0);
-  const grossLoss = Math.abs(losses.reduce((sum, trade) => sum + Number(trade.pnl || 0), 0));
-  const profitFactor = grossLoss ? grossProfit / grossLoss : grossProfit > 0 ? grossProfit : 0;
+  const outcomes = orderedTrades.map(trade => ({ trade, outcome: tradeOutcome(trade) })).filter(item => item.outcome !== null);
+  const wins = outcomes.filter(item => item.outcome > 0).map(item => item.trade);
+  const losses = outcomes.filter(item => item.outcome < 0).map(item => item.trade);
+  const monetaryWins = measuredTrades.filter((trade) => trade.pnl > 0);
+  const monetaryLosses = measuredTrades.filter((trade) => trade.pnl < 0);
+  const grossProfit = monetaryWins.reduce((sum, trade) => sum + trade.pnl, 0);
+  const grossLoss = Math.abs(monetaryLosses.reduce((sum, trade) => sum + trade.pnl, 0));
+  const profitFactor = !measuredTrades.length ? null : grossLoss ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : 0;
   const commissions = orderedTrades.reduce((sum, trade) => sum + Number(trade.commission ?? trade.commissions ?? trade.fees ?? 0), 0);
   const volume = orderedTrades.reduce((sum, trade) => sum + Number(trade.volume ?? trade.quantity ?? trade.size ?? 0), 0);
   const dateLabel = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(new Date(`${day.key}T12:00:00`));
   const summary = [
     ["Total trades", orderedTrades.length],
-    ["P&L net", money(day.pnl, { signDisplay: "always" })],
+    ["P&L net", measuredPnl===null?"—":money(measuredPnl, { signDisplay: "always" })],
     ["Gagnants / Perdants", `${wins.length} / ${losses.length}`],
-    ["Win rate", `${orderedTrades.length ? (wins.length / orderedTrades.length * 100).toFixed(1) : "0.0"}%`],
+    ["Win rate", `${outcomes.length ? (wins.length / outcomes.length * 100).toFixed(1) : "0.0"}%`],
     ["Volume", volume ? volume.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) : "—"],
-    ["Profit factor", profitFactor ? profitFactor.toFixed(2) : "—"],
+    ["Profit factor", profitFactor===null?"—":Number.isFinite(profitFactor)?profitFactor.toFixed(2):"∞"],
     ["Commissions", commissions ? money(commissions) : "—"],
   ];
 
   return <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#03050C]/80 backdrop-blur-sm sm:items-center sm:p-4" role="presentation" onMouseDown={onClose}>
     <section data-motion-item data-motion-surface role="dialog" aria-modal="true" aria-labelledby="day-trades-title" onMouseDown={(event) => event.stopPropagation()} className="flex max-h-[96dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl border border-[#6571CF]/25 bg-[#090E1C] shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
       <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[#6571CF]/15 px-4 py-4 sm:px-6">
-        <div className="min-w-0"><div className="pe-eyebrow">Détail de la séance</div><h2 id="day-trades-title" className="mt-1 truncate text-lg font-semibold capitalize text-[#F3F5FA] sm:text-xl">{dateLabel}</h2><div className={`mt-1 font-numeric text-sm font-semibold ${day.pnl < 0 ? "text-[#F26A70]" : "text-[#85A9FF]"}`}>P&amp;L net · {money(day.pnl, { signDisplay: "always" })}</div></div>
+        <div className="min-w-0"><div className="pe-eyebrow">Détail de la séance</div><h2 id="day-trades-title" className="mt-1 truncate text-lg font-semibold capitalize text-[#F3F5FA] sm:text-xl">{dateLabel}</h2><div className={`mt-1 font-numeric text-sm font-semibold ${measuredPnl !== null && measuredPnl < 0 ? "text-[#F26A70]" : "text-[#85A9FF]"}`}>P&amp;L net · {measuredPnl===null?"—":money(measuredPnl, { signDisplay: "always" })}</div></div>
         <button type="button" onClick={onClose} aria-label="Fermer le détail de la journée" className="pe-icon-button !h-9 !w-9"><X className="h-4 w-4" /></button>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
         <div className="grid gap-4 border-b border-[#6571CF]/15 p-4 sm:p-6 lg:grid-cols-[320px_minmax(0,1fr)]">
           <div className="h-52 rounded-xl border border-[#6571CF]/15 bg-[#0D1120] p-3">
-            {orderedTrades.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={curve} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}><defs><linearGradient id="day-modal-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={day.pnl < 0 ? "#F26A70" : accent} stopOpacity="0.35"/><stop offset="100%" stopColor={day.pnl < 0 ? "#F26A70" : accent} stopOpacity="0"/></linearGradient></defs><CartesianGrid vertical={false} stroke="rgba(101,113,207,.14)" strokeDasharray="3 4"/><XAxis dataKey="index" tick={{ fill: "#687288", fontSize: 9 }} tickLine={false} axisLine={false}/><YAxis width={52} tick={{ fill: "#687288", fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={(value) => money(value, { maximumFractionDigits: 0 })}/><ReferenceLine y={0} stroke="rgba(255,255,255,.18)"/><Tooltip contentStyle={{ background: "#0B1020", border: "1px solid rgba(112,119,218,.3)", borderRadius: 8, color: "#F3F4F6", fontSize: 11, boxShadow: "0 12px 32px rgba(0,0,0,.38)" }} labelStyle={{ color: "#D6D9E2" }} itemStyle={{ color: day.pnl < 0 ? "#F26A70" : accent }} wrapperStyle={{ outline: "none" }} formatter={(value) => [money(value, { signDisplay: "always" }), "P&L cumulé"]}/><Area type="monotone" dataKey="pnl" stroke={day.pnl < 0 ? "#F26A70" : accent} strokeWidth={2} fill="url(#day-modal-fill)"/></AreaChart></ResponsiveContainer> : <div className="grid h-full place-items-center text-center text-xs text-[#687288]">Aucun trade enregistré ce jour.</div>}
+            {measuredTrades.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={curve} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}><defs><linearGradient id="day-modal-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={measuredPnl < 0 ? "#F26A70" : accent} stopOpacity="0.35"/><stop offset="100%" stopColor={measuredPnl < 0 ? "#F26A70" : accent} stopOpacity="0"/></linearGradient></defs><CartesianGrid vertical={false} stroke="rgba(101,113,207,.14)" strokeDasharray="3 4"/><XAxis dataKey="index" tick={{ fill: "#687288", fontSize: 9 }} tickLine={false} axisLine={false}/><YAxis width={52} tick={{ fill: "#687288", fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={(value) => money(value, { maximumFractionDigits: 0 })}/><ReferenceLine y={0} stroke="rgba(255,255,255,.18)"/><Tooltip contentStyle={{ background: "#0B1020", border: "1px solid rgba(112,119,218,.3)", borderRadius: 8, color: "#F3F4F6", fontSize: 11, boxShadow: "0 12px 32px rgba(0,0,0,.38)" }} labelStyle={{ color: "#D6D9E2" }} itemStyle={{ color: measuredPnl < 0 ? "#F26A70" : accent }} wrapperStyle={{ outline: "none" }} formatter={(value) => [money(value, { signDisplay: "always" }), "P&L cumulé"]}/><Area type="monotone" dataKey="pnl" stroke={measuredPnl < 0 ? "#F26A70" : accent} strokeWidth={2} fill="url(#day-modal-fill)"/></AreaChart></ResponsiveContainer> : <div className="grid h-full place-items-center text-center text-xs text-[#687288]">P&amp;L monétaire non disponible pour cette journée.</div>}
           </div>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3 lg:grid-cols-4">{summary.map(([label, value]) => <div key={label} className="min-w-0 border-b border-[#6571CF]/10 pb-3"><div className="text-[10px] text-[#747E93]">{label}</div><div className="font-numeric mt-1 truncate text-sm font-semibold text-[#E6E9F1] sm:text-base">{value}</div></div>)}</div>
         </div>
 
         <div className="p-4 sm:p-6">
           <div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">Trades de la journée</h3><p className="mt-1 text-[10px] text-[#687288]">{orderedTrades.length} opération{orderedTrades.length > 1 ? "s" : ""} dans le journal</p></div></div>
-          {orderedTrades.length ? <div className="overflow-x-auto rounded-xl border border-[#6571CF]/15"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-[#11162A] text-[10px] uppercase tracking-[.08em] text-[#747E93]"><tr><th className="px-4 py-3">Heure</th><th className="px-4 py-3">Actif</th><th className="px-4 py-3">Sens</th><th className="px-4 py-3">Compte</th><th className="px-4 py-3">P&amp;L net</th><th className="px-4 py-3">R réalisé</th><th className="px-4 py-3">Setup</th></tr></thead><tbody>{orderedTrades.map((trade, index) => { const pnl = Number(trade.pnl || 0); const account = accounts.find((item) => item.id === trade.account_id); return <tr key={trade.id || `${day.key}-${index}`} className="border-t border-[#6571CF]/10 text-[#C7CCDA]"><td className="px-4 py-3 font-mono text-[#8D96AA]">{tradeTimeLabel(trade)}</td><td className="px-4 py-3 font-semibold text-white">{trade.instrument || trade.asset || "—"}</td><td className="px-4 py-3"><span className={`rounded-md px-2 py-1 text-[10px] ${String(trade.direction).toLowerCase() === "long" ? "bg-[#4F8DFF]/10 text-[#85A9FF]" : "bg-[#8067F4]/10 text-[#B7A8FF]"}`}>{tradeDirectionLabel(trade.direction)}</span></td><td className="px-4 py-3 text-[#8D96AA]">{account?.name || account?.firm || "—"}</td><td className={`px-4 py-3 font-numeric font-semibold ${pnl < 0 ? "text-[#F26A70]" : pnl > 0 ? "text-[#46C99A]" : "text-[#98A1B5]"}`}>{money(pnl, { signDisplay: "always" })}</td><td className="px-4 py-3 font-mono">{Number.isFinite(Number(trade.r)) ? `${Number(trade.r).toFixed(2)}R` : "—"}</td><td className="px-4 py-3 text-[#8D96AA]">{trade.setup || trade.setups?.[0] || trade.tags?.[0] || "—"}</td></tr>; })}</tbody></table></div> : <div className="rounded-xl border border-dashed border-[#6571CF]/20 py-12 text-center text-xs text-[#687288]">Aucun trade enregistré pour cette date.</div>}
+          {orderedTrades.length ? <div className="overflow-x-auto rounded-xl border border-[#6571CF]/15"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-[#11162A] text-[10px] uppercase tracking-[.08em] text-[#747E93]"><tr><th className="px-4 py-3">Heure</th><th className="px-4 py-3">Actif</th><th className="px-4 py-3">Sens</th><th className="px-4 py-3">Compte</th><th className="px-4 py-3">P&amp;L net</th><th className="px-4 py-3">R réalisé</th><th className="px-4 py-3">Setup</th></tr></thead><tbody>{orderedTrades.map((trade, index) => { const pnl = typeof trade.pnl === "number" ? trade.pnl : null; const account = accounts.find((item) => item.id === trade.account_id); return <tr key={trade.id || `${day.key}-${index}`} className="border-t border-[#6571CF]/10 text-[#C7CCDA]"><td className="px-4 py-3 font-mono text-[#8D96AA]">{tradeTimeLabel(trade)}</td><td className="px-4 py-3 font-semibold text-white">{trade.instrument || trade.asset || "—"}</td><td className="px-4 py-3"><span className={`rounded-md px-2 py-1 text-[10px] ${String(trade.direction).toLowerCase() === "long" ? "bg-[#4F8DFF]/10 text-[#85A9FF]" : "bg-[#8067F4]/10 text-[#B7A8FF]"}`}>{tradeDirectionLabel(trade.direction)}</span></td><td className="px-4 py-3 text-[#8D96AA]">{account?.name || account?.firm || "—"}</td><td className={`px-4 py-3 font-numeric font-semibold ${pnl === null ? "text-[#98A1B5]" : pnl < 0 ? "text-[#F26A70]" : pnl > 0 ? "text-[#46C99A]" : "text-[#98A1B5]"}`}>{pnl === null ? "—" : money(pnl, { signDisplay: "always" })}</td><td className="px-4 py-3 font-mono">{Number.isFinite(Number(trade.r)) ? `${Number(trade.r).toFixed(2)}R` : "—"}</td><td className="px-4 py-3 text-[#8D96AA]">{trade.setup || trade.setups?.[0] || trade.tags?.[0] || "—"}</td></tr>; })}</tbody></table></div> : <div className="rounded-xl border border-dashed border-[#6571CF]/20 py-12 text-center text-xs text-[#687288]">Aucun trade enregistré pour cette date.</div>}
         </div>
       </div>
 

@@ -17,7 +17,7 @@ from integrations.models import (
     ProviderTradeRecord,
     SyncBatch,
 )
-from integrations.providers import MT5IntegrationProvider, ProviderRegistry
+from integrations.providers import MT5IntegrationProvider, ProviderRegistry, TradingConnector
 from integrations.security import CredentialVault
 from integrations.service import IntegrationService
 
@@ -100,6 +100,23 @@ class FakeProvider(MT5IntegrationProvider):
             open_price="0",
             gross_profit="100",
         )
+
+
+class ExpiredConnector(TradingConnector):
+    provider_id = "tradelocker"
+    platforms = ("tradelocker",)
+    auth_type = "credentials"
+
+    async def list_accounts(self, _access):
+        return []
+
+    async def sync_historical(self, _account, _access):
+        raise IntegrationError(
+            "connection_expired", "Reconnecte TradeLocker pour continuer.", 401
+        )
+
+    async def sync_recent(self, _account, _access, _cursor):
+        return await self.sync_historical(_account, _access)
 
 
 class MemoryRepository:
@@ -493,5 +510,57 @@ def test_expired_refresh_token_persists_reconnection_required_state():
             args[1] == "ctrader_connection_expired"
             for args, _kwargs in repository.audits
         )
+
+    asyncio.run(scenario())
+
+
+def test_account_sync_failure_marks_parent_connection_expired():
+    async def scenario():
+        service, repository, _ = build_service()
+        service.registry.register(ExpiredConnector())
+        connection = await repository.create_connection(
+            {
+                "user_id": "user-1",
+                "platform": "tradelocker",
+                "provider": "tradelocker",
+                "connection_status": "connected",
+                "sync_status": "success",
+            }
+        )
+        await service._store_access(
+            connection,
+            "user-1",
+            "tradelocker",
+            {"access_token": "provider-token"},
+        )
+        repository.get_integration_account = AsyncMock(
+            return_value={
+                "id": "integration-account-1",
+                "connection_id": connection["id"],
+                "user_id": "user-1",
+                "account_id": "core-account-1",
+                "provider": "tradelocker",
+                "platform": "tradelocker",
+                "external_account_id": "external-account-1",
+                "status": "connected",
+            }
+        )
+        repository.claim_sync_lock = AsyncMock(return_value=True)
+        repository.release_sync_lock = AsyncMock()
+        repository.update_integration_account = AsyncMock()
+
+        try:
+            await service.sync_integration_account(
+                "user-1", "integration-account-1", "manual"
+            )
+            assert False, "La synchronisation expirée doit échouer"
+        except IntegrationError as exc:
+            assert exc.code == "connection_expired"
+
+        persisted = repository.connections[connection["id"]]
+        assert persisted["connection_status"] == "expired"
+        assert persisted["sync_status"] == "failed"
+        assert persisted["last_error_code"] == "connection_expired"
+        repository.release_sync_lock.assert_awaited_once()
 
     asyncio.run(scenario())

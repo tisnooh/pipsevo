@@ -3,6 +3,7 @@ import { supabase, SUPABASE_AUTH_STORAGE_KEY } from "@/lib/supabase";
 import { AUTH_CONFIG } from "@/config/auth";
 import { notifyAppDataChanged } from "@/lib/appDataEvents";
 import { tradeDateKey } from "@/lib/tradeCalendar";
+import { measuredTradePnl, tradeOutcome } from "@/lib/tradeAnalytics";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
@@ -262,7 +263,10 @@ const cleanTrade = (values) => {
   }
   return payload;
 };
-const normalizeTrade = (value) => numeric(value, tradeNumbers);
+const normalizeTrade = (value) => {
+  const trade = numeric(value, tradeNumbers);
+  return { ...trade, pnl: measuredTradePnl(trade) };
+};
 
 export const trades = {
   list: async (accountId) => {
@@ -402,12 +406,12 @@ export const dataExports = {
 
 const groupTrades = (rows, key) => {
   const result = {};
-  rows.forEach((trade) => {
+  rows.filter(trade => typeof trade.pnl === "number" && Number.isFinite(trade.pnl)).forEach((trade) => {
     const name = trade[key] || "Non renseigné";
     result[name] ||= { trades: 0, pnl: 0, wins: 0 };
     result[name].trades += 1;
-    result[name].pnl += Number(trade.pnl || 0);
-    if (Number(trade.pnl || 0) > 0) result[name].wins += 1;
+    result[name].pnl += trade.pnl;
+    if (trade.pnl > 0) result[name].wins += 1;
   });
   Object.values(result).forEach((item) => { item.winrate = Math.round((item.wins / Math.max(item.trades, 1)) * 1000) / 10; });
   return result;
@@ -420,9 +424,10 @@ const buildDashboard = (accountRows, tradeRows, payoutRows) => {
   const completedTrades = tradeRows.filter((item) =>
     item.pnl !== null && item.pnl !== undefined && !["open", "cancelled", "canceled"].includes(item.result_status)
   );
+  const measuredOutcomes = tradeRows.map(item => ({ item, outcome: tradeOutcome(item) })).filter(row => row.outcome !== null);
   const wins = completedTrades.filter((item) => Number(item.pnl) > 0);
   const losses = completedTrades.filter((item) => Number(item.pnl) < 0);
-  const winrate = completedTrades.length ? wins.length / completedTrades.length * 100 : 0;
+  const winrate = measuredOutcomes.length ? measuredOutcomes.filter(row => row.outcome > 0).length / measuredOutcomes.length * 100 : 0;
   const measuredPlanTrades = tradeRows.filter((item) => item.plan_respected === true || item.plan_respected === false);
   const planRate = measuredPlanTrades.length
     ? measuredPlanTrades.filter((item) => item.plan_respected === true).length / measuredPlanTrades.length * 100
@@ -450,14 +455,14 @@ const buildDashboard = (accountRows, tradeRows, payoutRows) => {
       estimated_payout: Math.max(0, totalProfit * 0.8), discipline_score: discipline,
       trader_score: Math.trunc((discipline + survival + Math.max(0, Math.min(100, winrate))) / 3),
       survival_score: survival, total_payouts: payoutRows.reduce((total, item) => total + Number(item.amount || 0), 0),
-      active_accounts: accountRows.filter((item) => item.status === "active").length, total_trades: completedTrades.length,
+      active_accounts: accountRows.filter((item) => item.status === "active").length, total_trades: measuredOutcomes.length,
     },
     equity_curve: equity.slice(-180),
     metrics: {
       winrate: Math.round(winrate * 10) / 10,
-      profit_factor: losses.length ? Math.round((sum(wins) / Math.abs(sum(losses))) * 100) / 100 : 0,
-      avg_win: wins.length ? Math.round(sum(wins) / wins.length * 100) / 100 : 0,
-      avg_loss: losses.length ? Math.round(sum(losses) / losses.length * 100) / 100 : 0,
+      profit_factor: !completedTrades.length ? null : losses.length ? Math.round((sum(wins) / Math.abs(sum(losses))) * 100) / 100 : wins.length ? Infinity : 0,
+      avg_win: wins.length ? Math.round(sum(wins) / wins.length * 100) / 100 : null,
+      avg_loss: losses.length ? Math.round(sum(losses) / losses.length * 100) / 100 : null,
       plan_respect_rate: planRate === null ? null : Math.round(planRate * 10) / 10,
     },
     setups, sessions,
@@ -472,13 +477,14 @@ export const dashboard = async () => {
 };
 export const dna = async () => {
   const { data: rows } = await trades.list();
-  if (!rows.length) return response({ trader_type: "Untested", best_session: null, best_setup: null, best_conditions: "Insufficient data" });
-  const totals = (key) => rows.reduce((result, item) => ({ ...result, [item[key] || "?"]: (result[item[key] || "?"] || 0) + Number(item.pnl || 0) }), {});
+  const measuredRows = rows.filter(item => typeof item.pnl === "number" && Number.isFinite(item.pnl));
+  if (!measuredRows.length) return response({ trader_type: "Untested", best_session: null, best_setup: null, best_conditions: "Insufficient monetary data" });
+  const totals = (key) => measuredRows.reduce((result, item) => ({ ...result, [item[key] || "?"]: (result[item[key] || "?"] || 0) + item.pnl }), {});
   const best = (values) => Object.keys(values).reduce((winner, key) => values[key] > values[winner] ? key : winner);
   const sessions = totals("session"), setups = totals("setup"), emotions = totals("emotion");
-  const average = rows.reduce((sum, item) => sum + Number(item.pnl || 0), 0) / rows.length;
+  const average = measuredRows.reduce((sum, item) => sum + item.pnl, 0) / measuredRows.length;
   return response({
-    trader_type: rows.length < 50 && average > 0 ? "Sniper" : rows.length >= 100 ? "Volume Trader" : "Developing",
+    trader_type: measuredRows.length < 50 && average > 0 ? "Sniper" : measuredRows.length >= 100 ? "Volume Trader" : "Developing",
     best_session: best(sessions), best_setup: best(setups), best_emotion: best(emotions), trades_logged: rows.length,
   });
 };

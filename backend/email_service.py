@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
-from typing import Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 import jwt
 import requests
@@ -249,7 +249,7 @@ def _send_with_resend(*, to: str, subject: str, html: str, text: str, reply_to: 
     if not api_key:
         raise EmailConfigurationError("RESEND_API_KEY is not configured")
     sender_name, sender_address = _sender()
-    payload: Dict[str, object] = {"from": formataddr((sender_name, sender_address)), "to": [to], "subject": subject, "html": html, "text": text}
+    payload: Dict[str, Any] = {"from": formataddr((sender_name, sender_address)), "to": [to], "subject": subject, "html": html, "text": text}
     effective_reply_to = reply_to or os.environ.get("EMAIL_REPLY_TO")
     if effective_reply_to:
         payload["reply_to"] = effective_reply_to
@@ -277,10 +277,9 @@ def send_email(*, to: str, subject: str, html: str, text: str, category: str = "
         provider_headers["List-Unsubscribe"] = f"<{unsubscribe_url}>"
     if one_click_unsubscribe:
         provider_headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
-    kwargs = {"to": to, "subject": subject, "html": html, "text": text, "reply_to": reply_to, "provider_headers": provider_headers, "idempotency_key": idempotency_key}
     provider = _email_provider()
     if provider == "smtp":
-        return _send_with_smtp(**kwargs)
+        return _send_with_smtp(to=to, subject=subject, html=html, text=text, reply_to=reply_to, provider_headers=provider_headers, idempotency_key=idempotency_key)
     if provider == "resend":
-        return _send_with_resend(**kwargs)
+        return _send_with_resend(to=to, subject=subject, html=html, text=text, reply_to=reply_to, provider_headers=provider_headers, idempotency_key=idempotency_key)
     raise EmailConfigurationError(f"Unsupported EMAIL_PROVIDER: {provider}")
