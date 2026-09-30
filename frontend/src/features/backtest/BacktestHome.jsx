@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FlaskConical, Plus, Upload, ArrowRight } from "lucide-react";
 import { labApi, errorText, usd } from "./api";
+import DemoBacktestPreview from "./DemoBacktestPreview";
 import "./backtest.css";
 
 export default function BacktestHome() {
@@ -46,7 +47,10 @@ export default function BacktestHome() {
             <button disabled={busy} className="btn-primary">Créer et ouvrir le replay</button>
           </>}
         </form>}
-        {!data.sessions.length && <div className="pe-card pe-card-pad"><h2 className="text-lg font-semibold">Ton premier replay commence ici.</h2><p className="pe-page-copy mt-2">Importe un historique 1 minute, choisis le contrat et crée une session. Aucun cours fictif n’est ajouté.</p><button className="btn-secondary mt-4" onClick={() => setTab("data")}>Préparer les données</button></div>}
+        {!data.sessions.length && <>
+          <div className="pe-card pe-card-pad"><h2 className="text-lg font-semibold">Ton premier replay commence ici.</h2><p className="pe-page-copy mt-2">Le graphique PipsEvo n’est pas le site TradingView : Lightweight Charts™ dessine les bougies à partir des données du Lab. Explore la démo ci-dessous, puis importe un historique compatible pour créer une vraie session.</p><button className="btn-secondary mt-4" onClick={() => setTab("data")}>Préparer mes données</button></div>
+          <DemoBacktestPreview onImport={() => setTab("data")} onCreate={() => { setCreating(true); setTab("sessions"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+        </>}
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{data.sessions.map(s => <Link key={s.id} to={`/app/backtest/session/${s.id}`} className="pe-card pe-card-pad hover:border-[#B58BFF]/50"><div className="flex justify-between gap-3"><h2 className="font-semibold">{s.name}</h2><ArrowRight size={18} className="text-[#B58BFF]"/></div><p className="mt-2 text-sm text-[#9CA3AF]">{s.dataset.contract || s.config.symbol} · {s.state.completed ? "Terminée" : "En cours"}</p><p className="mt-5 text-2xl font-numeric">{usd(s.state.equity)}</p><p className="bt-note mt-2">Curseur : {new Date((s.cursor + 60) * 1000).toLocaleString("fr-FR")} · sauvegardé</p></Link>)}</div>
       </>}
       {tab === "data" && <div className="grid xl:grid-cols-2 gap-5">
