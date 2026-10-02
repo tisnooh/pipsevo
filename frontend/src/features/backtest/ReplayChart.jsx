@@ -1,18 +1,21 @@
 import React, { memo, useEffect, useMemo, useRef } from "react";
 import { createChart, CandlestickSeries, HistogramSeries, ColorType } from "lightweight-charts";
+import { useTheme } from "next-themes";
 import { aggregateBars } from "./bars";
 
 export default memo(function ReplayChart({ bars, cursor, timeframe, timezone, position, tickSize = "0.25" }) {
+  const { resolvedTheme } = useTheme();
+  const light = resolvedTheme === "light";
   const container = useRef(null);
   const runtime = useRef(null);
   const aggregated = useMemo(() => aggregateBars(bars, timeframe, cursor), [bars, timeframe, cursor]);
   useEffect(() => {
     const chart = createChart(container.current, {
       autoSize: true, height: 420,
-      layout: { background: { type: ColorType.Solid, color: "#090E1C" }, textColor: "#9CA3AF", attributionLogo: true },
-      grid: { vertLines: { color: "#171D30" }, horzLines: { color: "#171D30" } },
-      rightPriceScale: { borderColor: "#252D45" },
-      timeScale: { timeVisible: true, secondsVisible: false, borderColor: "#252D45" },
+      layout: { background: { type: ColorType.Solid, color: light ? "#FFFFFF" : "#090E1C" }, textColor: light ? "#647086" : "#9CA3AF", attributionLogo: true },
+      grid: { vertLines: { color: light ? "#E8ECF3" : "#171D30" }, horzLines: { color: light ? "#E8ECF3" : "#171D30" } },
+      rightPriceScale: { borderColor: light ? "#D8DFEB" : "#252D45" },
+      timeScale: { timeVisible: true, secondsVisible: false, borderColor: light ? "#D8DFEB" : "#252D45" },
     });
     const candles = chart.addSeries(CandlestickSeries, { upColor: "#46C99A", downColor: "#F26A70", borderVisible: false, wickUpColor: "#46C99A", wickDownColor: "#F26A70" });
     const volume = chart.addSeries(HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "volume" });
@@ -20,7 +23,7 @@ export default memo(function ReplayChart({ bars, cursor, timeframe, timezone, po
     candles.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.2 } });
     runtime.current = { chart, candles, volume, first: null, last: null, timeframe: null, lines: [] };
     return () => { chart.remove(); runtime.current = null; };
-  }, []);
+  }, [light]);
 
   useEffect(() => {
     const r = runtime.current;

@@ -62,3 +62,11 @@
   .bt-demo-toolbar > span:nth-child(-n+2) { border-bottom: 1px solid #252d45; }
   .bt-demo-replay > span { flex-basis: 100%; margin-left: 0; }
 }
+
+html.light .bt-lab .bt-form input:not([type=checkbox]),html.light .bt-lab .bt-form select,html.light .bt-lab .bt-form textarea{border-color:var(--pe-border);background:#fff;color:var(--pe-text)}
+html.light .bt-chart:fullscreen{background:var(--pe-canvas)}
+html.light .bt-demo{border-color:var(--pe-border);background:linear-gradient(145deg,rgba(137,85,255,.08),rgba(255,255,255,.85) 32%,rgba(70,201,154,.05))}
+html.light .bt-demo-toolbar,html.light .bt-demo-journey li,html.light .bt-demo-results,html.light .bt-demo-next,html.light .bt-demo-ticket{border-color:var(--pe-border);background:#fff}
+html.light .bt-demo-toolbar>span,html.light .bt-demo-results-head,html.light .bt-demo-metrics,html.light .bt-demo-metrics>div,html.light .bt-demo-next-head,html.light .bt-demo-detail{border-color:var(--pe-border)}
+html.light .bt-demo-replay,html.light .bt-demo-detail nav button,html.light .bt-demo-analysis>div,html.light .bt-demo-side button,html.light .bt-demo-ticket select,html.light .bt-demo-ticket input{border-color:var(--pe-border);background:#f7f9fd;color:var(--pe-text)}
+html.light .bt-demo-heading h2,html.light .bt-demo-toolbar strong,html.light .bt-demo-results-head,html.light .bt-demo-journey b,html.light .bt-demo-next-head h3,html.light .bt-demo-order-list b{color:var(--pe-text)}

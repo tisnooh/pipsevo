@@ -1,6 +1,5 @@
 import React, { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { I18nProvider } from "@/context/I18nContext";
 import CookieConsent from "@/components/CookieConsent";
@@ -9,6 +8,8 @@ import RouteScrollManager from "@/components/RouteScrollManager";
 import { AUTH_CONFIG, hasCompletedOnboarding } from "@/config/auth";
 import { JOURNAL_DETAIL_ROUTE, JOURNAL_LIST_ROUTE } from "@/lib/journalNavigation";
 import { ProductTelemetry } from "@/features/admin/ProductOperations";
+import ThemeToggle from "@/components/ThemeToggle";
+import { Toaster } from "@/components/ui/sonner";
 import "@/index.css";
 
 const Landing = lazy(() => import("@/pages/LandingV2"));
@@ -81,14 +82,14 @@ const HelpPage = supportPage("HelpPage");
 const AffiliatePage = supportPage("AffiliatePage");
 
 function RouteLoading() {
-  return <div role="status" aria-live="polite" className="min-h-screen bg-[#050505] text-white">
+  return <div role="status" aria-live="polite" className="min-h-screen bg-pe-canvas text-pe-text">
     <span className="sr-only">Chargement…</span>
   </div>;
 }
 
 function Protected() {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-white">Loading…</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-pe-canvas text-pe-text">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (!hasCompletedOnboarding(user)) return <Navigate to="/onboarding" replace />;
   return <AppShell />;
@@ -96,7 +97,7 @@ function Protected() {
 
 function OnboardingGate({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-white">Loading…</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-pe-canvas text-pe-text">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (hasCompletedOnboarding(user)) return <Navigate to={AUTH_CONFIG.authenticatedHomePath} replace />;
   return children;
@@ -104,7 +105,7 @@ function OnboardingGate({ children }) {
 
 function AuthEntryGate({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-white">Loading…</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-pe-canvas text-pe-text">Loading…</div>;
   if (!user) return children;
   return <Navigate to={hasCompletedOnboarding(user) ? AUTH_CONFIG.authenticatedHomePath : AUTH_CONFIG.postSignUpPath} replace />;
 }
@@ -112,7 +113,7 @@ function AuthEntryGate({ children }) {
 function VerifyEmailGate() {
   const { user, loading } = useAuth();
   if (AUTH_CONFIG.requireEmailConfirmation) return <VerifyEmail />;
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-white">Loading…</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-pe-canvas text-pe-text">Loading…</div>;
   if (!user) return <Navigate to="/register" replace />;
   return <Navigate to={hasCompletedOnboarding(user) ? AUTH_CONFIG.authenticatedHomePath : AUTH_CONFIG.postSignUpPath} replace />;
 }
@@ -126,7 +127,8 @@ export default function App() {
         <RouteScrollManager />
         <RouteSEO />
         <CookieConsent />
-        <Toaster theme="dark" position="top-right" />
+        <ThemeToggle className="pe-theme-toggle-global" />
+        <Toaster position="top-right" />
         <Suspense fallback={<RouteLoading />}>
         <Routes>
           <Route path="/" element={<Landing />} />

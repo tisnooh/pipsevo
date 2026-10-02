@@ -3,3 +3,29 @@
 @media(max-width:760px){.admin-sidebar{transform:translateX(-105%);transition:transform .22s}.admin-sidebar.is-open{transform:translateX(0)}.admin-brand>button{display:block}.admin-brand>button svg{width:19px}.admin-backdrop{position:fixed;inset:0;z-index:55;display:block;background:rgba(0,0,0,.66)}.admin-main{margin-left:0}.admin-topbar{height:62px;padding:0 13px}.admin-menu{display:grid;width:38px;height:38px;place-items:center;border:1px solid var(--admin-line);border-radius:10px}.admin-menu svg{width:18px}.admin-role{display:none}.admin-content{padding:24px 14px 90px}.admin-page-head{align-items:flex-start;flex-direction:column}.admin-head-actions{width:100%}.admin-head-actions>*{flex:1}.admin-metrics,.admin-grid.two,.admin-cards,.support-layout,.controls-layout{grid-template-columns:1fr}.admin-health{grid-template-columns:1fr}.admin-panel{padding:16px}.admin-filters{flex-direction:column}.admin-filters input,.admin-filters select{max-width:none}.admin-form{position:static}.firm-card{grid-template-columns:54px 1fr}.firm-card>.admin-status{grid-column:1/-1;width:max-content}.admin-list>article{align-items:flex-start;flex-wrap:wrap}.admin-details>div{grid-template-columns:110px 1fr}.admin-chart{height:170px}}
 .admin-sidebar-foot button{margin-top:7px}.admin-sidebar-foot button:hover{color:#fff}.admin-sidebar-foot .admin-logout{color:#ff8792}.admin-panel-padded{padding:20px 20px 0}.integration-card .admin-health{margin-bottom:14px}.system-cards{grid-template-columns:repeat(4,minmax(0,1fr))}@media(max-width:1100px){.system-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.system-cards{grid-template-columns:1fr}}
 .status-operational,.status-configured{border-color:rgba(54,214,164,.3);background:rgba(54,214,164,.08);color:#4cddb1}.status-not-configured,.status-inactive{border-color:rgba(255,187,85,.3);background:rgba(255,187,85,.08);color:#ffc46b}.admin-shortcuts{flex-wrap:wrap}.admin-shortcuts .admin-button{width:auto}
+
+html.light{--admin-bg:#f2f5fa;--admin-panel:#fff;--admin-panel-2:#f8faff;--admin-line:#d8dfeb;--admin-muted:#68758a;--admin-text:#172033;--admin-violet:#684bd9;--admin-blue:#3475e6;--admin-green:#168461;--admin-red:#d84452;--admin-amber:#b97300}
+html.light .admin-shell{background:radial-gradient(circle at 82% 4%,rgba(104,75,217,.09),transparent 28%),var(--admin-bg)}
+html.light .admin-sidebar{background:rgba(255,255,255,.97);box-shadow:16px 0 38px rgba(58,70,101,.07)}
+html.light .admin-sidebar nav a{color:#647086}
+html.light .admin-sidebar nav a:hover,html.light .admin-sidebar nav a.active{color:#4e35b2;background:rgba(104,75,217,.1)}
+html.light .admin-topbar{background:rgba(255,255,255,.88)}
+html.light .admin-search input,html.light .admin-filters input,html.light .admin-filters select,html.light .admin-page-head select,html.light .admin-panel label input:not([type=checkbox]):not([type=radio]):not([type=range]),html.light .admin-panel label select,html.light .admin-panel label textarea,html.light .admin-reply textarea,html.light .admin-form input,html.light .admin-form select,html.light .admin-form textarea,html.light .admin-table-wrap select,html.light .settings-list input{background:#f8faff;color:var(--admin-text)}
+html.light .admin-search-results{background:#fff;box-shadow:0 24px 70px rgba(45,55,80,.16)}
+html.light .admin-search-results button:hover{background:rgba(31,43,69,.05)}
+html.light .admin-role{color:#5e6a7f}
+html.light .admin-button.secondary,html.light .admin-pagination button{background:#f7f9fd;color:#33405a}
+html.light .admin-metric,html.light .admin-panel{background:linear-gradient(145deg,#fff,#f9fbff);box-shadow:0 18px 55px rgba(54,66,96,.07)}
+html.light .admin-health>div,html.light .admin-rank>div,html.light .admin-list>article,html.light .firm-capabilities span,html.light .admin-funnel>div{border-color:rgba(46,60,91,.09);background:rgba(31,43,69,.018)}
+html.light .admin-health span,html.light .admin-rank span,html.light .admin-note{color:#677388}
+html.light .admin-table-wrap th{background:#f5f7fb;color:#69758b}
+html.light .admin-table-wrap td{border-color:#e4e9f1;color:#4d596e}
+html.light .admin-table-wrap td strong{color:#172033}
+html.light .admin-status{background:#f4f6fb;color:#59667b}
+html.light .admin-details>div{border-color:#e4e9f1}
+html.light .admin-details dt{color:#728096}
+html.light .admin-details dd{color:#263249}
+html.light .firm-logo{background:#f7f9fd}
+html.light .admin-ticket-message{background:#f8faff}
+html.light .admin-ticket-message p{color:#33405a}
+html.light .admin-gate{background:var(--admin-bg);color:var(--admin-text)}
