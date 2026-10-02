@@ -337,12 +337,12 @@ export default function PublicHeader({ variant = "default" }) {
 
   return <>
     <nav aria-label={t("Accès rapide", "Quick access")}><a href="#main-content" className="fixed left-4 top-2 z-[80] -translate-y-16 rounded-lg bg-[#7C4DFF] px-3 py-2 text-sm font-semibold text-white transition focus:translate-y-0">{t("Aller au contenu", "Skip to content")}</a></nav>
-    {landing && <div role="region" aria-label={t("Annonce bêta", "Beta announcement")} className="fixed inset-x-0 top-0 z-[60] flex h-7 items-center justify-center gap-2 border-b border-white/[0.05] bg-[#050505]/95 px-4 text-center text-[10px] font-medium tracking-wide text-[#AEB4C1] backdrop-blur-xl md:h-8 md:text-xs">
+    {landing && <div role="region" aria-label={t("Annonce bêta", "Beta announcement")} className="pe-public-announcement fixed inset-x-0 top-0 z-[60] flex h-7 items-center justify-center gap-2 border-b border-white/[0.05] bg-[#050505]/95 px-4 text-center text-[10px] font-medium tracking-wide text-[#AEB4C1] backdrop-blur-xl md:h-8 md:text-xs">
       <span className="h-1.5 w-1.5 rounded-full bg-[#46C99A]" />
       <span>{t("Bêta publique — accès gratuit sans carte bancaire", "Public beta — free access, no credit card required")}</span>
       <Link to="/register" className="hidden text-[#C7B5FF] transition hover:text-white sm:inline">{t("Rejoindre la bêta →", "Join the beta →")}</Link>
     </div>}
-    <header className={headerClass}>
+    <header className={`pe-public-header ${headerClass}`}>
       <div className={innerClass}>
         <Link to="/" aria-label={t("PipsEvo — accueil", "PipsEvo — home")} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 min-[360px]:hidden">
           <LogoMark size="sm" className="!h-[26px] !w-[26px]" />
@@ -377,7 +377,7 @@ export default function PublicHeader({ variant = "default" }) {
           <div className={landing ? "hidden min-[1120px]:block" : "hidden md:block"}>{landing ? <LanguageMenu language={language} setLanguage={setLanguage} t={t} /> : <LanguageSwitcher compact />}</div>
           {loading && <span data-testid="public-auth-loading" aria-label={t("Chargement de la session", "Loading session")} className="h-10 w-10 animate-pulse rounded-xl border border-white/5 bg-white/[0.04] md:h-11 md:w-24" />}
           {!loading && authenticated && <ProfileMenu user={user} logout={logout} t={t} />}
-          {!loading && !authenticated && <Link to="/login" data-testid="public-auth-action" className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-xl border border-[#7C4DFF]/35 bg-[#7C4DFF]/[0.12] px-4 text-[15px] font-semibold text-[#D6C7FF] transition hover:border-[#7C4DFF]/65 hover:bg-[#7C4DFF]/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 sm:h-11 sm:px-5 sm:text-base">
+          {!loading && !authenticated && <Link to="/login" data-testid="public-auth-action" className="pe-public-auth-action inline-flex h-10 items-center justify-center whitespace-nowrap rounded-xl border border-[#7C4DFF]/35 bg-[#7C4DFF]/[0.12] px-4 text-[15px] font-semibold text-[#D6C7FF] transition hover:border-[#7C4DFF]/65 hover:bg-[#7C4DFF]/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 sm:h-11 sm:px-5 sm:text-base">
             {t("Connexion", "Sign in")}
           </Link>}
           {!loading && !authenticated && <Link to="/register" className={`btn-primary hidden h-11 items-center whitespace-nowrap !rounded-xl !px-4 text-sm lg:!px-5 ${landing ? "xl:inline-flex" : "md:inline-flex"}`}>{t("Accès gratuit", "Free access")}</Link>}
@@ -389,7 +389,7 @@ export default function PublicHeader({ variant = "default" }) {
             aria-expanded={mobileOpen}
             aria-controls="public-mobile-menu"
             onClick={() => setMobileOpen(open => !open)}
-            className={`h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-white transition hover:border-[#7C4DFF]/50 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 sm:h-11 sm:w-11 ${landing ? "inline-flex min-[1120px]:hidden" : "inline-flex md:hidden"}`}
+            className={`pe-public-menu-button h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-white transition hover:border-[#7C4DFF]/50 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 sm:h-11 sm:w-11 ${landing ? "inline-flex min-[1120px]:hidden" : "inline-flex md:hidden"}`}
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>

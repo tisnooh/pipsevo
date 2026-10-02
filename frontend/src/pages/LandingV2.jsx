@@ -227,7 +227,7 @@ function ResultMetric({ label, value, detail, tone = "violet", progress }) {
   const colors = tones[tone] || tones.violet;
 
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-[#090B12] p-3 sm:p-5">
+    <div className="pe-result-metric rounded-2xl border border-white/[0.07] bg-[#090B12] p-3 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-medium uppercase tracking-[.15em] text-[#697282]">{label}</p>
@@ -247,7 +247,7 @@ function ResultMetric({ label, value, detail, tone = "violet", progress }) {
 
 function RulesResultPanel({ t }) {
   return (
-    <div className="relative overflow-hidden rounded-[24px] border border-white/[0.09] bg-[#080A10] p-4 shadow-[0_28px_80px_rgba(0,0,0,.34)] sm:p-6">
+    <div className="pe-results-panel relative overflow-hidden rounded-[24px] border border-white/[0.09] bg-[#080A10] p-4 shadow-[0_28px_80px_rgba(0,0,0,.34)] sm:p-6">
       <div className="pointer-events-none absolute -left-16 -top-20 h-52 w-52 rounded-full bg-[#7657FF]/[0.10] blur-[65px]" />
       <div className="relative flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.07] pb-5">
         <div className="flex items-center gap-3">
@@ -844,7 +844,7 @@ export default function LandingV2() {
     },
   ];
 
-  return <div data-i18n-managed className="relative isolate min-h-screen overflow-hidden bg-[#050505] text-white selection:bg-[#7657FF]/40">
+  return <div data-i18n-managed className="pe-public-site relative isolate min-h-screen overflow-hidden bg-[#050505] text-white selection:bg-[#7657FF]/40">
     <AmbientCandleField />
     <PublicHeader variant="landing" />
     <main id="main-content" className="relative z-10">
@@ -856,14 +856,14 @@ export default function LandingV2() {
         </div>
         <div className="relative mx-auto grid w-full max-w-[1480px] items-center gap-12 lg:grid-cols-12 lg:gap-9 xl:gap-14">
           <Reveal className="text-center lg:col-span-5 lg:text-left">
-            <div className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.025] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.18em] text-[#AEB4C1] lg:mx-0"><span className="h-1.5 w-1.5 rounded-full bg-[#46C99A]" />{t("L’OS des traders financés", "The OS for funded traders")}</div>
+            <div className="pe-hero-eyebrow mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.025] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.18em] text-[#AEB4C1] lg:mx-0"><span className="h-1.5 w-1.5 rounded-full bg-[#46C99A]" />{t("L’OS des traders financés", "The OS for funded traders")}</div>
             <h1 className="mx-auto max-w-[720px] text-balance text-[43px] font-semibold leading-[1.02] tracking-[-0.045em] text-[#F3F4F6] sm:text-[58px] lg:mx-0 lg:text-[64px] xl:text-[72px]">
               {t("Protège tes comptes financés.", "Protect your funded accounts.")}<span className="mt-2 block bg-gradient-to-r from-[#9B72FF] to-[#4F8CFF] bg-clip-text text-transparent">{t("Transforme chaque trade en progrès.", "Turn every trade into progress.")}</span>
             </h1>
-            <p className="mx-auto mt-6 max-w-[570px] text-[16px] leading-7 text-[#A1A8B6] sm:text-lg lg:mx-0">{t("Centralise tes comptes, ton journal, ta discipline, tes statistiques et tes payouts pour comprendre ce qui te rapproche — ou t’éloigne — de ton prochain retrait.", "Centralize accounts, journal, discipline, statistics, and payouts to understand what moves you closer to — or further from — your next withdrawal.")}</p>
+            <p className="pe-hero-copy mx-auto mt-6 max-w-[570px] text-[16px] leading-7 text-[#A1A8B6] sm:text-lg lg:mx-0">{t("Centralise tes comptes, ton journal, ta discipline, tes statistiques et tes payouts pour comprendre ce qui te rapproche — ou t’éloigne — de ton prochain retrait.", "Centralize accounts, journal, discipline, statistics, and payouts to understand what moves you closer to — or further from — your next withdrawal.")}</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
               <Link to="/register" className="btn-primary inline-flex h-[52px] items-center justify-center gap-2 !rounded-xl !px-6 text-[15px]">{t("Commencer gratuitement", "Start for free")}<ArrowRight className="h-4 w-4" /></Link>
-              <a href="#product" className="inline-flex h-[52px] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-6 text-[15px] font-semibold text-[#D8DBE2] transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white">{t("Voir le produit", "See the product")}</a>
+              <a href="#product" className="pe-secondary-cta inline-flex h-[52px] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-6 text-[15px] font-semibold text-[#D8DBE2] transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white">{t("Voir le produit", "See the product")}</a>
             </div>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-[#777F8F] lg:justify-start"><span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-[#46C99A]" />{t("Bêta gratuite", "Free beta")}</span><span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-[#46C99A]" />{t("Sans carte bancaire", "No credit card")}</span><span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-[#46C99A]" />{t("Accès immédiat", "Instant access")}</span></div>
           </Reveal>

@@ -12,8 +12,9 @@ const wordmarkSizes = { sm: "h-7 w-[100px]", md: "h-8 w-[114px]", lg: "h-11 w-[1
 
 export const Logo = ({ size = "md", to = "/", className = "" }) => {
   const dimensions = logoSizes[size] || logoSizes.md;
-  return <Link to={to} aria-label="PipsEvo — accueil" className={`inline-flex shrink-0 items-center ${dimensions} ${className}`}>
-    <img src="/brand/pipsevo-logo.png" alt="PipsEvo" draggable="false" className="pointer-events-none h-full w-full select-none object-contain object-left"/>
+  return <Link to={to} aria-label="PipsEvo — accueil" className={`pe-logo pe-logo--${size} inline-flex shrink-0 items-center ${dimensions} ${className}`}>
+    <img src="/brand/pipsevo-icon.png" alt="" aria-hidden="true" draggable="false" className="pe-logo-symbol pointer-events-none select-none"/>
+    <span className="pe-logo-word" aria-hidden="true"><span>Pips</span><span>Evo</span><span>.</span></span>
   </Link>;
 };
 
@@ -22,7 +23,7 @@ export const LogoMark = ({ size = "md", className = "" }) => (
 );
 
 export const LogoWordmark = ({ size = "md", to = "/", className = "" }) => (
-  <Link to={to} aria-label="PipsEvo — tableau de bord" className={`inline-flex shrink-0 items-center ${wordmarkSizes[size] || wordmarkSizes.md} ${className}`}>
-    <img src="/brand/pipsevo-wordmark.png" alt="PipsEvo" draggable="false" className="pointer-events-none h-full w-full select-none object-contain object-left"/>
+  <Link to={to} aria-label="PipsEvo — tableau de bord" className={`pe-logo pe-logo--${size} inline-flex shrink-0 items-center ${wordmarkSizes[size] || wordmarkSizes.md} ${className}`}>
+    <span className="pe-logo-word pe-logo-word--only" aria-hidden="true"><span>Pips</span><span>Evo</span><span>.</span></span>
   </Link>
 );
