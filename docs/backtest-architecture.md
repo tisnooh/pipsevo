@@ -8,7 +8,7 @@ Checkout réellement utilisé : `C:\Users\utilisateur\Documents\Codex\Projects\P
 
 | Zone | Constat et décision |
 | --- | --- |
-| Frontend | React 19, CRA/CRACO, React Router 7, JSX, Tailwind, design `pe-*`. Routes chargées à la demande. Réutilisés sans refonte du thème. |
+| Frontend | React 19, Vite, React Router 7, JSX, Tailwind, design `pe-*`. Routes chargées à la demande. Réutilisés sans refonte du thème. CRA/CRACO a été retiré le 5 octobre 2026. |
 | Navigation | Shell connecté `/app/*`, protection existante via `AuthContext`. `/app/backtest` était un simulateur déterministe d’hypothèses, sans cours historiques. Conservé à `/app/backtest/projection`. |
 | Auth | Supabase côté client, API FastAPI vérifiant le jeton et le profil (avec compatibilité JWT existante). Aucune nouvelle authentification de production. |
 | Données | Le journal actuel utilise Supabase côté frontend ; FastAPI possède déjà MongoDB pour son état serveur et ses services. Le Lab utilise des collections MongoDB **distinctes**, accessibles exclusivement derrière l’auth API. Pas de double écriture journal live/Mongo/Supabase. |

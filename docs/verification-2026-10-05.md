@@ -18,18 +18,24 @@ Ce document décrit les contrôles réellement exécutés. Il ne constitue pas u
 - Versions serveur FastAPI, Starlette, Uvicorn, Motor et PyMongo alignées sur les versions utilisées lors des tests. Résolution des dépendances vérifiée avec `pip install --dry-run`.
 - Dépendances serveur effectivement utilisées épinglées ; PyJWT, cryptography, AnyIO et urllib3 mis à jour vers des versions corrigées disponibles. Les bibliothèques anciennes inutilisées (`python-jose`, `passlib`, pandas, numpy, boto3, etc.) sont retirées du runtime déclaré. Les outils de développement passent dans `requirements-dev.txt`, pytest dans `requirements-test.txt`. Le transport WebSocket utilisé dynamiquement par cTrader est conservé.
 - Suivi e-mail : les réservations d'envoi de plus de cinq minutes apparaissent « Interrompu » sans modifier la base. La configuration du fournisseur sélectionné doit être complète ; sa présence n'est pas présentée comme une preuve de livraison. Les erreurs et la dernière activité sont visibles pour l'administrateur.
-- Dépendances de compilation frontend : versions transitives épinglées pour `serialize-javascript` (7.1.2), `underscore` (1.13.8), `@tootallnate/once` (2.0.1) et `resolve-url-loader` (5.0.0, utilisant PostCSS 8.5.28). Les options/API effectivement utilisées sont contrôlées par `npm.cmd run check:build-deps`. Node 20 minimum est désormais déclaré ; npm 11.13.0 remplace la référence obsolète à Yarn, pour appliquer réellement les overrides. Le projet Vercel utilise Node 24.x.
+- Compilation frontend migrée de CRA/CRACO vers Vite 8.3.2 et son plugin React 6.1.1. Les anciennes substitutions transitives ne sont plus nécessaires : la chaîne vulnérable a été retirée. Les composants métier sont conservés ; seuls `App` et l'entrée changent d'extension vers `.jsx`. Node `^20.19.0 || >=22.12.0` est déclaré, npm 11.13.0 est conservé et Vercel utilise Node 24.x.
+- Frontière de compilation : seules six variables publiques explicitement revues sont exposées. Les secrets SMTP, Supabase service role, IA, cron et les clés `REACT_APP_*` inconnues ne sont pas sérialisés. Contrôles exécutés avant chaque build et trois nouveaux tests de non-régression.
+- Liens directs : la réécriture SPA couvre les pages publiques, auth, application et administration sans intercepter `/api/sync-due`. Les en-têtes et le cron existants sont conservés. La démo de backtest garde une entrée dédiée et une API synthétique locale, distinctes de l'application réelle.
 
 ## Vérifications locales
 
 | Contrôle | Résultat |
 | --- | --- |
 | `cd backend; python -m pytest -q` | 163 tests réussis ; également 163 dans un environnement virtuel neuf avec les nouvelles dépendances |
-| `cd frontend; npm.cmd test -- --watchAll=false --runInBand` | 47 suites, 194 tests réussis |
+| `cd frontend; npm.cmd test -- --watchAll=false --runInBand` | 48 suites, 197 tests réussis après migration et installation propre |
 | `cd frontend; npm.cmd run build` | Compilation de production réussie |
 | `git diff --check` | Aucun problème de whitespace |
-| `cd frontend; npm.cmd ci --ignore-scripts` | Installation propre du lockfile réussie ; avertissements de peer ESLint historiques encore présents |
-| `cd frontend; npm.cmd run check:build-deps` | Versions verrouillées et compatibilité des deux sérialiseurs, utilitaires, attente de connexion et traitement CSS vérifiées |
+| `cd frontend; npm.cmd ci --ignore-scripts` | Installation propre du lockfile réussie ; avertissements de dépréciation d'outils de développement encore présents |
+| `cd frontend; npm.cmd run check:build-deps` | Versions verrouillées, retrait de CRA/CRACO, allowlist publique et routage SPA vérifiés |
+| `cd frontend; npm.cmd run lint` | Contrôle des règles React Hooks réussi, aucune erreur ni avertissement |
+| `cd frontend; node scripts/backtest-preview.cjs --build-only` | Compilation de la démo isolée réussie, sans importer l'entrée de production |
+| `cd frontend; npm.cmd audit --omit=dev --json` | Aucune alerte connue, code de sortie 0 |
+| `cd frontend; npm.cmd audit --json` | Cinq alertes hautes de compilation, aucune modérée ou critique ; cause unique non corrigée `braces` |
 | Installation isolée de `requirements.txt` et `requirements-test.txt`, puis `pip check` | Installation réussie, aucune incompatibilité ; aucun paquet global modifié |
 | `pip_audit --local --strict` dans cet environnement neuf | 68 paquets contrôlés, aucun avis connu retourné, code de sortie 0 |
 
@@ -39,9 +45,11 @@ Les avertissements de tests concernent notamment les anciens événements FastAP
 
 Une revue ciblée et une contre-revue indépendante ont confirmé et vérifié quatre correctifs : contournement de révocation via JWT historique, calcul bcrypt public non borné, injection de formule CSV et concurrence du quota Atlas. Le scan scellé a une couverture partielle : 57 fichiers entièrement revus sur 379 fichiers dans le périmètre.
 
-L'audit npm passe de 71 à 58 alertes (55 hautes, 3 modérées, aucune faible ou critique) après ces mises à jour transitives. Elles sont principalement portées par l'ancienne chaîne CRA/CRACO et ses dépendances de compilation/développement. Les causes restantes comprennent `braces`, `node-forge`, `nth-check`, `svgo`, `uuid`, `webpack-dev-middleware` et `webpack-dev-server`. Cela ne prouve ni leur exploitabilité dans le bundle navigateur ni leur innocuité. Une migration contrôlée de cette chaîne et une analyse de portée restent nécessaires ; `npm audit fix --force` n'a pas été utilisé.
+Le premier lot de substitutions avait réduit l'audit npm de 71 à 58 alertes. Après retrait de CRA/CRACO et migration vers Vite, l'audit complet retourne **5 alertes hautes**, propagées par une seule cause : `braces` 3.0.3 via Tailwind 3, micromatch, fast-glob et chokidar. L'[avis GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), revérifié le 5 octobre, ne publie aucune version corrigée. Ces paquets sont utilisés par la compilation CSS, pas comme dépendances de production ; `tailwindcss-animate`, plugin de compilation seulement, est déclaré en développement. L'audit `--omit=dev` retourne zéro avis, sans suppression ni faux override. Cela ne certifie ni l'absence de toute vulnérabilité ni l'innocuité générale des outils de compilation.
 
-Les substitutions sont explicites dans `frontend/package.json`, pas masquées dans l'audit. Les métadonnées npm, le [correctif du mainteneur de serialize-javascript](https://github.com/yahoo/serialize-javascript/releases/tag/v7.1.2) et la [compatibilité Webpack 4/5 du loader v5](https://github.com/bholloway/resolve-url-loader/blob/v5/packages/resolve-url-loader/README.md#compatibility) ont été vérifiés. Les 194 tests frontend et la compilation optimisée passent après substitution ; le hash du JavaScript principal reste `main.0c046fbd.js` et celui du CSS principal `main.88f4590f.css`.
+Les glob patterns de contenu Tailwind sont deux constantes locales revues ; aucun utilisateur de l'application ne les fournit. Les builds ne doivent pas être exposés à des configurations non fiables. Un remplacement majeur par Tailwind 4 reste une évolution distincte à vérifier visuellement ; `npm audit fix --force` n'a pas été utilisé. Les anciennes causes node-forge, nth-check, svgo, uuid et Webpack ne sont plus dans le graphe audité.
+
+La migration utilise des versions Vite/Jest/Babel explicitement épinglées et un lockfile testé par installation neuve. Les 197 tests frontend et la compilation optimisée passent ; les hashes locaux Vite sont `index-DviCptWz.js` et `index-B8iQaxjK.css`. Ils ne servent pas à identifier un bundle distant compilé avec d'autres variables d'environnement. La procédure actuelle est dans `frontend/README.md`.
 
 La protection Supabase contre les mots de passe compromis est désactivée dans le projet inspecté. Son activation doit être vérifiée avec les possibilités de l'offre choisie. Aucun changement payant ni mise à niveau de base n'a été déclenché.
 

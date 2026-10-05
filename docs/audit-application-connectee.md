@@ -6,7 +6,7 @@ Audit réalisé le 13 juillet 2026 sur les routes, composants React, états, for
 
 | Page | Composant | Comportement actuel | Comportement attendu | Fichier | Priorité |
 |---|---|---|---|---|---|
-| Application | Routes protégées | Redirige un utilisateur non connecté vers la connexion et un nouvel utilisateur vers l’onboarding | Conserver ce contrôle | `frontend/src/App.js` | Critique |
+| Application | Routes protégées | Redirige un utilisateur non connecté vers la connexion et un nouvel utilisateur vers l’onboarding | Conserver ce contrôle | `frontend/src/App.jsx` | Critique |
 | AppShell | Navigation principale | Toutes les entrées de la sidebar pointent vers une route existante | Conserver et fermer correctement le drawer mobile | `frontend/src/pages/AppShell.jsx` | Critique |
 | AppShell | Menu mobile | Drawer, overlay, fermeture par croix, navigation et touche Échap fonctionnent | Conserver | `frontend/src/pages/AppShell.jsx` | Critique |
 | AppShell | Recherche globale | Recherche les pages de l’application et navigue vers le résultat | Conserver et ajouter l’état « aucun résultat » | `frontend/src/pages/AppShell.jsx` | Importante |

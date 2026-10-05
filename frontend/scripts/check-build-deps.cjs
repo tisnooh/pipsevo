@@ -1,87 +1,64 @@
 const assert = require('node:assert/strict');
-const { EventEmitter } = require('node:events');
+const fs = require('node:fs');
 const path = require('node:path');
-const { createRequire } = require('node:module');
-const { runInNewContext } = require('node:vm');
 const manifest = require('../package.json');
 const lock = require('../package-lock.json');
+const { publicEnvironment, PUBLIC_KEYS } = require('./public-env.cjs');
 
-function dependencyOf(parent, name) {
-  let parentPath;
-  try { parentPath = require.resolve(`${parent}/package.json`); }
-  catch (error) {
-    if (error.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') throw error;
-    parentPath = require.resolve(parent);
-  }
-  const fromParent = createRequire(parentPath);
-  const installed = fromParent(`${name}/package.json`).version;
-  assert.equal(installed, manifest.overrides[name], `${parent} must use the pinned ${name}`);
-  return fromParent(name);
+// Fresh installs must not reintroduce the retired build toolchain.
+for (const legacy of ['react-scripts', '@craco/craco', 'cra-template',
+  'webpack-dev-server', 'webpack-dev-middleware', 'rollup-plugin-terser',
+  'resolve-url-loader', '@emergentbase/visual-edits']) {
+  assert.ok(!Object.keys(lock.packages).some(location =>
+    location.endsWith(`node_modules/${legacy}`)), `${legacy} must be absent`);
+}
+for (const name of ['vite', '@vitejs/plugin-react', 'jest', 'babel-jest', 'jest-environment-jsdom']) {
+  const version = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../node_modules', name, 'package.json'), 'utf8')).version;
+  assert.equal(version, manifest.devDependencies[name], `${name} must be explicitly pinned`);
+  assert.equal(lock.packages[`node_modules/${name}`].version, version);
 }
 
-async function main() {
-  for (const [name, version] of Object.entries(manifest.overrides)) {
-    const entries = Object.entries(lock.packages).filter(([location]) =>
-      location.endsWith(`node_modules/${name}`));
-    assert.ok(entries.length, `${name} must exist in the lockfile`);
-    entries.forEach(([location, entry]) => assert.equal(entry.version, version, location));
-  }
-
-  for (const parent of ['css-minimizer-webpack-plugin', 'rollup-plugin-terser']) {
-    const serialize = dependencyOf(parent, 'serialize-javascript');
-    const value = { label: '</script><script>fixture</script>', pattern: /pips/gi,
-      date: new Date('2026-10-05T00:00:00Z'), transform: value => value + 1 };
-    const output = serialize(value);
-    assert.ok(!output.includes('</script>'), 'HTML delimiters must remain escaped');
-    // Only this fixed, trusted fixture is evaluated; no input from users or the network.
-    const restored = runInNewContext(`(${output})`);
-    assert.equal(restored.label, value.label);
-    assert.equal(restored.pattern.source, value.pattern.source);
-    assert.equal(restored.pattern.flags, value.pattern.flags);
-    assert.equal(restored.date.toISOString(), value.date.toISOString());
-    assert.equal(restored.transform(2), 3);
-  }
-
-  const underscore = dependencyOf('jsonpath', 'underscore');
-  assert.deepEqual(underscore.flatten([1, [2, [3]]]), [1, 2, 3]);
-  assert.ok(underscore.isEqual({ nested: [1, 2] }, { nested: [1, 2] }));
-
-  // http-proxy-agent awaits the connect event without consuming its return value.
-  const once = dependencyOf('http-proxy-agent', '@tootallnate/once').default;
-  const emitter = new EventEmitter();
-  const connected = once(emitter, 'connect');
-  emitter.emit('connect', 'ok');
-  assert.deepEqual(await connected, ['ok']);
-  assert.equal(emitter.listenerCount('connect'), 0);
-  assert.equal(emitter.listenerCount('error'), 0);
-  const failed = once(emitter, 'connect');
-  emitter.emit('error', new Error('fixture connection failure'));
-  await assert.rejects(failed, /fixture connection failure/);
-  assert.equal(emitter.listenerCount('error'), 0);
-
-  const loader = dependencyOf('react-scripts', 'resolve-url-loader');
-  const fromLoader = createRequire(require.resolve('resolve-url-loader/package.json'));
-  assert.equal(fromLoader('postcss/package.json').version, manifest.devDependencies.postcss);
-  const css = '.fixture { color: purple; }';
-  const transformed = await new Promise((resolve, reject) => {
-    loader.call({
-      context: path.resolve(__dirname, '../src'),
-      resourcePath: path.resolve(__dirname, '../src/fixture.css'),
-      getOptions: () => ({ sourceMap: false, silent: true }),
-      cacheable: () => {},
-      async: () => (error, content) => error ? reject(error) : resolve(content),
-    }, css);
-  });
-  assert.equal(transformed, css);
-  console.log('Build dependency compatibility checks passed.');
-}
-
-const timeout = setTimeout(() => {
-  console.error('Build dependency compatibility checks timed out.');
-  process.exitCode = 1;
-}, 30_000);
-main().then(() => clearTimeout(timeout)).catch(error => {
-  clearTimeout(timeout);
-  console.error(error);
-  process.exitCode = 1;
+const secret = 'private-build-fixture-not-for-the-browser';
+const source = {
+  SMTP_PASSWORD: secret, ATLAS_ANTHROPIC_API_KEY: secret,
+  SUPABASE_SERVICE_ROLE_KEY: secret, CRON_SECRET: secret,
+  REACT_APP_UNKNOWN_SECRET: secret,
+  REACT_APP_BACKEND_URL: 'https://api.example.test',
+  REACT_APP_REQUIRE_EMAIL_CONFIRMATION: 'false',
+};
+const exposed = publicEnvironment(source, 'production');
+assert.deepEqual(exposed, {
+  NODE_ENV: 'production', REACT_APP_BACKEND_URL: 'https://api.example.test',
+  REACT_APP_REQUIRE_EMAIL_CONFIRMATION: 'false',
 });
+assert.ok(!JSON.stringify(exposed).includes(secret));
+
+const root = path.resolve(__dirname, '..');
+const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+assert.ok(index.includes('src="/src/index.jsx"'));
+assert.ok(!index.includes('%PUBLIC_URL%'));
+const references = new Set();
+function inspect(folder) {
+  for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
+    const full = path.join(folder, entry.name);
+    if (entry.isDirectory()) inspect(full);
+    else if (/\.(js|jsx)$/.test(entry.name) && !entry.name.includes('.test.')) {
+      const source = fs.readFileSync(full, 'utf8');
+      for (const match of source.matchAll(/process\.env\.(REACT_APP_[A-Z0-9_]+)/g)) {
+        references.add(match[1]);
+      }
+    }
+  }
+}
+inspect(path.join(root, 'src'));
+for (const key of references) assert.ok(PUBLIC_KEYS.includes(key), `${key} needs a reviewed public allowlist entry`);
+
+// SPA deep links must not capture the authenticated serverless cron proxy.
+const deployment = require('../vercel.json');
+const rewrite = new RegExp(`^${deployment.rewrites[0].source}$`);
+for (const route of ['/login', '/auth/callback', '/admin/users/test-user', '/app/backtest/session/demo', '/blog/discipline']) {
+  assert.ok(rewrite.test(route), `${route} must reach the SPA`);
+}
+assert.ok(!rewrite.test('/api/sync-due'), 'cron proxy must not be rewritten to HTML');
+assert.equal(deployment.outputDirectory, 'build');
+console.log('Build toolchain, public environment boundary and SPA routing checks passed.');

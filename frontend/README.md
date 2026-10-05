@@ -1,70 +1,48 @@
-# Getting Started with Create React App
+# Frontend PipsEvo
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+React 19, React Router, Tailwind CSS 3 et Vite. La chaîne CRA/CRACO a été retirée ; les composants métier et les routes sont conservés.
 
-## Available Scripts
+## Lancement local
 
-In the project directory, you can run:
+Utiliser Node `^20.19.0 || >=22.12.0` et npm (Vercel utilise Node 24.x).
 
-### `npm start`
+```powershell
+npm.cmd ci --ignore-scripts
+npm.cmd start
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+L'application écoute uniquement sur `http://127.0.0.1:3000`. Configurer les valeurs publiques à partir de `.env.example`. Les variables `REACT_APP_*` existantes restent compatibles : seules les six clés revues dans `scripts/public-env.cjs` sont injectées dans le navigateur. Ne jamais y ajouter une clé de service Supabase, un secret de cron, un mot de passe SMTP ou une clé IA.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Vérifications
 
-### `npm test`
+```powershell
+npm.cmd test -- --watchAll=false --runInBand
+npm.cmd run lint
+npm.cmd run build
+npm.cmd audit --omit=dev
+npm.cmd audit
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Le `prebuild` contrôle automatiquement les versions verrouillées, l'absence de l'ancienne chaîne, la frontière des variables publiques et les réécritures SPA. Jest et Babel sont configurés indépendamment de Vite. `npm.cmd run preview` sert le bundle optimisé sur `http://127.0.0.1:4173`.
 
-### `npm run build`
+L'audit des dépendances de production est distinct de l'audit complet : les dépendances de compilation restent à contrôler. Ne pas appliquer `npm audit fix --force` ni masquer les alertes sans analyse de compatibilité.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Déploiement Vercel
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+La racine du projet Vercel est `frontend`. `vercel.json` sélectionne Vite et le dossier `build`, garde les en-têtes de sécurité et le cron, et laisse `/api/sync-due` atteindre sa fonction serveur. Vérifier une preview avec le SHA exact avant publication sur `main`.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Démo de backtest isolée
 
-### `npm run eject`
+Depuis la racine du dépôt, lancer le serveur de données synthétiques :
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+```powershell
+python backend/tests/backtest_preview.py
+```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Dans un autre terminal ouvert dans `frontend` :
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+```powershell
+node scripts/backtest-preview.cjs
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Ouvrir `http://127.0.0.1:4188/app/backtest`. Cette démo utilise les vrais composants avec une API locale sur le port 8091, sans authentification de production, compte réel ou base externe. `node scripts/backtest-preview.cjs --build-only` vérifie séparément sa compilation. Les données synthétiques ne sont jamais importées dans la production.
