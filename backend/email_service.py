@@ -208,6 +208,28 @@ def _email_provider() -> str:
     return provider or ("resend" if os.environ.get("RESEND_API_KEY") else "smtp")
 
 
+def email_configuration_status() -> Dict[str, object]:
+    """Describe configuration presence, never provider connectivity or delivery."""
+    provider = _email_provider()
+    configured = False
+    try:
+        _, sender_address = _sender()
+        if provider == "resend":
+            configured = bool(os.environ.get("RESEND_API_KEY", "").strip())
+        elif provider == "smtp":
+            host = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
+            username = os.environ.get("SMTP_USERNAME", "").strip()
+            port = int(os.environ.get("SMTP_PORT", "587"))
+            configured = bool(
+                host and username and os.environ.get("SMTP_PASSWORD", "").strip()
+                and 1 <= port <= 65535
+                and (host.lower() != "smtp.gmail.com" or sender_address.lower() == username.lower())
+            )
+    except (EmailConfigurationError, ValueError):
+        pass
+    return {"provider": provider, "configured": configured}
+
+
 def _send_with_smtp(*, to: str, subject: str, html: str, text: str, reply_to: Optional[str], provider_headers: Dict[str, str], idempotency_key: Optional[str]) -> str:
     host = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
     try:

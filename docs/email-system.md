@@ -19,6 +19,10 @@ Activer la validation en deux étapes sur le compte Google, puis créer un mot d
 
 ### 2. Configurer le backend sur Render
 
+Vérifier d'abord l'offre de calcul du service : les instances **Free** de Render bloquent les connexions sortantes vers les ports SMTP `25`, `465` et `587` ([documentation officielle](https://render.com/docs/free#other-limitations)). Les variables ci-dessous ne suffisent donc pas à rendre Gmail SMTP utilisable sur une instance Free. Il faut alors choisir un fournisseur d'envoi accessible par HTTPS, avec une identité d'expédition vérifiée, ou une offre compatible SMTP. Aucun passage payant ni changement de fournisseur ne doit être déclenché sans validation du propriétaire.
+
+Le SMTP de Supabase Auth est un flux séparé, exécuté par Supabase : son fonctionnement ne prouve pas que le backend Render peut joindre Gmail.
+
 Ajouter les variables suivantes dans l'environnement du backend :
 
 ```dotenv
@@ -108,8 +112,9 @@ Le backend :
 
 - La langue est enregistrée dans les métadonnées Supabase ; le déclenchement ne dépend d'aucun marqueur client, ce qui couvre aussi les inscriptions Google.
 - Après chaque ouverture de session confirmée, le client appelle `POST /api/email/welcome` et le backend envoie le message uniquement si cet utilisateur ne l'a jamais reçu.
-- Une clé unique par utilisateur et une clé d'idempotence fournisseur empêchent les doubles envois.
-- Un envoi interrompu en statut `sending` est automatiquement récupérable après cinq minutes.
+- Une clé unique par utilisateur et une réservation temporaire empêchent les appels concurrents normaux de déclencher plusieurs envois. Un envoi interrompu en statut `sending` est récupérable après cinq minutes, lors d'un nouvel appel authentifié.
+- Resend dispose d'une fenêtre d'idempotence fournisseur limitée à 24 heures. SMTP ne garantit pas cette déduplication : une interruption après acceptation par le serveur SMTP mais avant la mise à jour en base peut entraîner un doublon à la reprise. Ne pas présenter ce flux comme une garantie absolue de livraison unique.
+- Le statut `sent` confirme l'acceptation par le fournisseur, pas l'arrivée en boîte de réception. La présence des variables serveur n'est pas une preuve de livraison : vérifier le journal, puis le message dans la boîte destinataire.
 - Les liens expirés affichent une action adaptée pour renvoyer la confirmation ou recommencer la récupération du mot de passe.
 
 ## Newsletter

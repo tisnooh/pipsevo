@@ -12,7 +12,27 @@ export function AdminSync() {
 export function AdminEmails() {
   const [status, setStatus] = useState("");
   const state = useAdminData(() => adminApi.emails({ per_page: 100, status: status || undefined }), [status]);
-  return <Page eyebrow="MESSAGERIE" title="E-mails" description="Acceptation par le fournisseur et erreurs connues. « Envoyé » ne prétend pas que la boîte du destinataire a livré le message." actions={<RefreshButton onClick={state.reload} />}><div className="admin-filters"><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Tous les statuts</option><option value="sent">Envoyés</option><option value="failed">Échecs</option><option value="bounced">Rejets</option></select></div><LoadState {...state} />{state.data && <><section className="admin-metrics"><Metric label="Messages journalisés" value={state.data.total} /><Metric label="Échecs connus" value={state.data.failed} tone={state.data.failed ? "red" : "green"} /><Metric label="Fournisseur" value={state.data.provider_configured ? "Configuré" : "Absent"} tone={state.data.provider_configured ? "green" : "red"} /></section><div className="admin-panel table-panel">{state.data.items.length ? <div className="admin-table-wrap"><table><thead><tr><th>Type</th><th>Destinataire</th><th>Fournisseur</th><th>Statut</th><th>Date</th></tr></thead><tbody>{state.data.items.map((item, index) => <tr key={`${item.event}-${item.user_id}-${index}`}><td>{item.type}</td><td>{item.recipient || "—"}</td><td>{item.provider}</td><td><Status value={item.status} /></td><td>{formatDate(item.sent_at || item.created_at)}</td></tr>)}</tbody></table></div> : <Empty />}</div></>}</Page>;
+  return <Page eyebrow="MESSAGERIE" title="E-mails" description="« Envoyé » confirme l’acceptation par le fournisseur, pas l’arrivée en boîte de réception. La présence de la configuration ne prouve pas que le fournisseur est joignable." actions={<RefreshButton onClick={state.reload} />}>
+    <div className="admin-filters"><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Tous les statuts</option><option value="sent">Envoyés</option><option value="failed">Échecs</option><option value="bounced">Rejets</option></select></div>
+    <LoadState {...state} />
+    {state.data && <>
+      <section className="admin-metrics">
+        <Metric label="Messages journalisés" value={state.data.total} />
+        <Metric label="Échecs connus" value={state.data.failed} tone={state.data.failed ? "red" : "green"} />
+        <Metric label="Envois bloqués affichés" value={state.data.stalled_in_page ?? "—"} tone={state.data.stalled_in_page ? "red" : "violet"} />
+        <Metric label="Configuration" value={state.data.provider_configured ? "Présente" : "À compléter"} tone={state.data.provider_configured ? "violet" : "red"} />
+      </section>
+      {!!state.data.stalled_in_page && <p className="admin-note">Un envoi « Interrompu » a dépassé sa réservation de cinq minutes. La prochaine ouverture de session peut le reprendre ; cela ne confirme pas une livraison.</p>}
+      <div className="admin-panel table-panel">{state.data.items.length ? <div className="admin-table-wrap"><table>
+        <thead><tr><th>Type</th><th>Destinataire</th><th>Fournisseur</th><th>Statut</th><th>Erreur</th><th>Dernière activité</th></tr></thead>
+        <tbody>{state.data.items.map((item, index) => <tr key={`${item.event}-${item.user_id}-${index}`}>
+          <td>{item.type}</td><td>{item.recipient || "—"}</td><td>{item.provider}</td>
+          <td><Status value={item.status === "stalled" ? "Interrompu" : item.status} /></td>
+          <td>{item.last_error || "—"}</td><td>{formatDate(item.updated_at || item.sent_at || item.created_at)}</td>
+        </tr>)}</tbody>
+      </table></div> : <Empty />}</div>
+    </>}
+  </Page>;
 }
 
 export function AdminAtlas() {

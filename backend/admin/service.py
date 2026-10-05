@@ -11,7 +11,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from email_service import EmailConfigurationError, EmailDeliveryError, brand_email_html, send_email
+from email_service import EmailConfigurationError, EmailDeliveryError, brand_email_html, email_configuration_status, send_email
 from atlas import build_atlas_context, measured_trade_pnl
 
 from .client import AdminConfigurationError, AdminDataError, SupabaseAdminClient
@@ -71,6 +71,18 @@ def visible_connection_error(row: dict[str, Any], field: str) -> Any:
     if _latest_attempt_succeeded(row):
         return None
     return row.get(field)
+
+
+def visible_email_status(row: dict[str, Any], now: datetime | None = None) -> str | None:
+    """Do not label an abandoned five-minute send lease as still in flight."""
+    if row.get("status") != "sending":
+        return row.get("status")
+    updated = _timestamp(row.get("updated_at") or row.get("created_at"))
+    if not updated:
+        return "stalled"
+    if updated.tzinfo is None:
+        updated = updated.replace(tzinfo=timezone.utc)
+    return "stalled" if updated <= (now or utcnow()) - timedelta(minutes=5) else "sending"
 
 
 class AdminService:
@@ -452,14 +464,22 @@ class AdminService:
         query = {"status": status} if status else {}
         total = await self.db.email_deliveries.count_documents(query)
         docs = await self.db.email_deliveries.find(query, {"_id": 0, "message_id": 0}).sort("created_at", -1).skip((page - 1) * per_page).limit(per_page).to_list(per_page)
+        configuration = email_configuration_status()
+        now = utcnow()
         for doc in docs:
             # SMTP/Resend acceptance proves Sent, not final mailbox delivery.
             if doc.get("status") == "delivered" and not doc.get("provider_delivery_confirmed"):
                 doc["status"] = "sent"
-            doc.setdefault("provider", os.environ.get("EMAIL_PROVIDER", "smtp"))
+            doc["status"] = visible_email_status(doc, now)
+            doc.setdefault("provider", configuration["provider"])
             doc["type"] = doc.get("event", "transactional")
         failed = await self.db.email_deliveries.count_documents({"status": {"$in": ["failed", "bounced", "rejected"]}})
-        return {"items": docs, "page": page, "per_page": per_page, "total": total, "failed": failed, "pages": max(1, math.ceil(total / per_page)), "provider_configured": configured_env("SMTP_PASSWORD") or configured_env("RESEND_API_KEY")}
+        return {
+            "items": docs, "page": page, "per_page": per_page, "total": total,
+            "failed": failed, "pages": max(1, math.ceil(total / per_page)),
+            "stalled_in_page": sum(doc.get("status") == "stalled" for doc in docs),
+            "provider_configured": configuration["configured"],
+        }
 
     async def sync_monitor(self, page: int, per_page: int, provider: str | None, status: str | None) -> dict[str, Any]:
         params: dict[str, Any] = {
