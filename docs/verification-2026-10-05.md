@@ -18,6 +18,7 @@ Ce document décrit les contrôles réellement exécutés. Il ne constitue pas u
 - Versions serveur FastAPI, Starlette, Uvicorn, Motor et PyMongo alignées sur les versions utilisées lors des tests. Résolution des dépendances vérifiée avec `pip install --dry-run`.
 - Dépendances serveur effectivement utilisées épinglées ; PyJWT, cryptography, AnyIO et urllib3 mis à jour vers des versions corrigées disponibles. Les bibliothèques anciennes inutilisées (`python-jose`, `passlib`, pandas, numpy, boto3, etc.) sont retirées du runtime déclaré. Les outils de développement passent dans `requirements-dev.txt`, pytest dans `requirements-test.txt`. Le transport WebSocket utilisé dynamiquement par cTrader est conservé.
 - Suivi e-mail : les réservations d'envoi de plus de cinq minutes apparaissent « Interrompu » sans modifier la base. La configuration du fournisseur sélectionné doit être complète ; sa présence n'est pas présentée comme une preuve de livraison. Les erreurs et la dernière activité sont visibles pour l'administrateur.
+- Dépendances de compilation frontend : versions transitives épinglées pour `serialize-javascript` (7.1.2), `underscore` (1.13.8), `@tootallnate/once` (2.0.1) et `resolve-url-loader` (5.0.0, utilisant PostCSS 8.5.28). Les options/API effectivement utilisées sont contrôlées par `npm.cmd run check:build-deps`. Node 20 minimum est désormais déclaré ; npm 11.13.0 remplace la référence obsolète à Yarn, pour appliquer réellement les overrides. Le projet Vercel utilise Node 24.x.
 
 ## Vérifications locales
 
@@ -27,6 +28,8 @@ Ce document décrit les contrôles réellement exécutés. Il ne constitue pas u
 | `cd frontend; npm.cmd test -- --watchAll=false --runInBand` | 47 suites, 194 tests réussis |
 | `cd frontend; npm.cmd run build` | Compilation de production réussie |
 | `git diff --check` | Aucun problème de whitespace |
+| `cd frontend; npm.cmd ci --ignore-scripts` | Installation propre du lockfile réussie ; avertissements de peer ESLint historiques encore présents |
+| `cd frontend; npm.cmd run check:build-deps` | Versions verrouillées et compatibilité des deux sérialiseurs, utilitaires, attente de connexion et traitement CSS vérifiées |
 | Installation isolée de `requirements.txt` et `requirements-test.txt`, puis `pip check` | Installation réussie, aucune incompatibilité ; aucun paquet global modifié |
 | `pip_audit --local --strict` dans cet environnement neuf | 68 paquets contrôlés, aucun avis connu retourné, code de sortie 0 |
 
@@ -36,7 +39,9 @@ Les avertissements de tests concernent notamment les anciens événements FastAP
 
 Une revue ciblée et une contre-revue indépendante ont confirmé et vérifié quatre correctifs : contournement de révocation via JWT historique, calcul bcrypt public non borné, injection de formule CSV et concurrence du quota Atlas. Le scan scellé a une couverture partielle : 57 fichiers entièrement revus sur 379 fichiers dans le périmètre.
 
-L'audit npm conserve 71 alertes (63 hautes, 5 modérées, 3 faibles ; aucune critique) après les mises à jour compatibles. Elles sont principalement portées par l'ancienne chaîne CRA/CRACO et ses dépendances de compilation/développement. Cela ne prouve ni leur exploitabilité dans le bundle navigateur ni leur innocuité. Une migration contrôlée de cette chaîne et une analyse de portée restent nécessaires ; `npm audit fix --force` n'a pas été utilisé.
+L'audit npm passe de 71 à 58 alertes (55 hautes, 3 modérées, aucune faible ou critique) après ces mises à jour transitives. Elles sont principalement portées par l'ancienne chaîne CRA/CRACO et ses dépendances de compilation/développement. Les causes restantes comprennent `braces`, `node-forge`, `nth-check`, `svgo`, `uuid`, `webpack-dev-middleware` et `webpack-dev-server`. Cela ne prouve ni leur exploitabilité dans le bundle navigateur ni leur innocuité. Une migration contrôlée de cette chaîne et une analyse de portée restent nécessaires ; `npm audit fix --force` n'a pas été utilisé.
+
+Les substitutions sont explicites dans `frontend/package.json`, pas masquées dans l'audit. Les métadonnées npm, le [correctif du mainteneur de serialize-javascript](https://github.com/yahoo/serialize-javascript/releases/tag/v7.1.2) et la [compatibilité Webpack 4/5 du loader v5](https://github.com/bholloway/resolve-url-loader/blob/v5/packages/resolve-url-loader/README.md#compatibility) ont été vérifiés. Les 194 tests frontend et la compilation optimisée passent après substitution ; le hash du JavaScript principal reste `main.0c046fbd.js` et celui du CSS principal `main.88f4590f.css`.
 
 La protection Supabase contre les mots de passe compromis est désactivée dans le projet inspecté. Son activation doit être vérifiée avec les possibilités de l'offre choisie. Aucun changement payant ni mise à niveau de base n'a été déclenché.
 
@@ -59,7 +64,7 @@ Objectifs, règles de challenge, émotions, plan de trading, notes et captures n
 
 ## Mails : blocage non résolu
 
-Le journal de production inspecté contient trois envois de bienvenue : deux échecs et une réservation ancienne en statut `sending`. Aucun succès de livraison n'y a été observé. Le mécanisme de reprise est testé, mais la livraison réelle n'est pas certifiée.
+Le journal de production inspecté contenait initialement deux échecs et une réservation ancienne en statut `sending`. Après publication, une connexion normale a repris cette réservation ; l'envoi SMTP a à nouveau échoué. Le journal affiche finalement trois échecs, sans envoi bloqué ni succès. Le mécanisme de reprise fonctionne, mais la livraison réelle n'est pas certifiée.
 
 Les instances Free de Render bloquent les ports SMTP `25`, `465` et `587` ([documentation officielle](https://render.com/docs/free#other-limitations)). Cela pourrait expliquer les échecs Gmail SMTP si ce service utilise cette offre ; l'offre effective et les logs restent à vérifier dans un tableau de bord Render authentifié. Aucun changement de fournisseur, offre payante, mot de passe ou secret n'a été effectué. La distinction SMTP/HTTPS et les limites de déduplication sont détaillées dans `docs/email-system.md`.
 
@@ -69,4 +74,6 @@ L'accueil de production a été inspecté à 390 × 844 en mode clair : texte/bo
 
 Le commit initial de corrections `054c1fddec7f89e8bbffbef77618d0b8d8bb9249` a été poussé sur `main`. Vercel a confirmé un déploiement de production `READY` correspondant exactement à ce SHA, avec l'alias `pipsevo.vercel.app`. Le backend répond `200` au healthcheck ; son ancienne connexion répond désormais `410`, avec les nouveaux en-têtes. Cela vérifie la présence du premier correctif serveur, pas le SHA Render.
 
-Les compléments de suivi e-mail et de dépendances doivent eux aussi être contrôlés après leur publication. Aucun test destructif sur les utilisateurs, comptes de trading ou données de production n'a été effectué.
+Le complément `43e07935af165466e8a47935bd3919445e3f2655` a aussi été poussé : déploiement Vercel de production `READY`, SHA exact et alias vérifiés. Le backend expose le nouveau champ de suivi des envois interrompus et répond `200` au healthcheck. Le journal des mails a été vérifié sur le vrai site, avec les trois échecs décrits ci-dessus.
+
+Les substitutions de dépendances frontend décrites dans ce document devront à leur tour être contrôlées après publication. Aucun test destructif sur les utilisateurs, comptes de trading ou données de production n'a été effectué.
