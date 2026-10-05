@@ -49,4 +49,16 @@ describe("AdminAccess", () => {
 
     expect(container.textContent).toContain("navigate:/app/dashboard");
   });
+
+  it("shows a readable service error and can retry without an endless permission gate", async () => {
+    mockAuthState = { loading: false, user: { id: "staff-1" } };
+    mockSession.mockRejectedValueOnce({ response: { status: 503, data: { detail: { message: "Service temporairement indisponible" } } } });
+    mockSession.mockResolvedValueOnce({ data: { id: "staff-1", role: "admin" } });
+    await act(async () => { root.render(<AdminAccess />); });
+    expect(container.textContent).toContain("Service temporairement indisponible");
+    expect(container.textContent).not.toContain("Vérification des permissions");
+    await act(async () => { container.querySelector("button").click(); });
+    expect(mockSession).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("admin-outlet");
+  });
 });

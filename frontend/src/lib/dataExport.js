@@ -8,7 +8,7 @@ const serializeValue = (value) => {
   if (value === null || value === undefined) return "";
   if (typeof value === "boolean") return value ? "Oui" : "Non";
   if (Array.isArray(value) || typeof value === "object") return JSON.stringify(value);
-  if (typeof value === "string" && /^[=+\-@]/.test(value)) return `'${value}`;
+  if (typeof value === "string" && /^[\s\u0000-\u001f]*[=+\-@]/.test(value)) return `'${value}`;
   return String(value);
 };
 
@@ -55,10 +55,10 @@ export const EXPORT_SCHEMAS = Object.freeze({
   ],
 });
 
-export function buildCsv(rows, schema) {
+export function buildCsv(rows, schema, delimiter = ";") {
   const columns = schema || [];
-  const header = columns.map(([label]) => csvCell(label)).join(";");
-  const body = (rows || []).map((row) => columns.map(([, key]) => csvCell(row?.[key])).join(";")).join("\r\n");
+  const header = columns.map(([label]) => csvCell(label)).join(delimiter);
+  const body = (rows || []).map((row) => columns.map(([, key]) => csvCell(row?.[key])).join(delimiter)).join("\r\n");
   return `\uFEFF${header}${body ? `\r\n${body}` : ""}\r\n`;
 }
 

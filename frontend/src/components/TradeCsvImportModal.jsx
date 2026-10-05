@@ -3,8 +3,10 @@ import { AlertTriangle, CheckCircle2, FileUp, RotateCcw, X } from "lucide-react"
 import { toast } from "sonner";
 import { trades as tradesAPI } from "@/lib/api";
 import { prepareTradeFileImport } from "@/lib/tradeCsvImport";
+import { useConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function TradeCsvImportModal({ accounts, existingTrades, onClose, onImported }) {
+  const { confirm, confirmationDialog, confirmationOpen } = useConfirmDialog();
   const inputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [rows, setRows] = useState([]);
@@ -13,10 +15,10 @@ export default function TradeCsvImportModal({ accounts, existingTrades, onClose,
   const [lastBatch, setLastBatch] = useState(null);
 
   useEffect(() => {
-    const onKeyDown = event => { if (event.key === "Escape" && !importing) onClose(); };
+    const onKeyDown = event => { if (event.key === "Escape" && !event.defaultPrevented && !importing && !confirmationOpen) onClose(); };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [importing, onClose]);
+  }, [importing, onClose, confirmationOpen]);
 
   const summary = useMemo(() => ({
     valid: rows.filter(row => row.valid).length,
@@ -58,7 +60,9 @@ export default function TradeCsvImportModal({ accounts, existingTrades, onClose,
   };
 
   const rollback = async () => {
-    if (!lastBatch || !window.confirm("Supprimer tous les trades ajoutés par cet import ?")) return;
+    if (!lastBatch) return;
+    const accepted = await confirm({ title: "Annuler cet import ?", description: "Tous les trades ajoutés par ce fichier seront supprimés.", confirmLabel: "Annuler l’import", destructive: true });
+    if (!accepted) return;
     setImporting(true);
     try {
       await tradesAPI.rollbackImport(lastBatch.id);
@@ -98,6 +102,7 @@ export default function TradeCsvImportModal({ accounts, existingTrades, onClose,
         {lastBatch ? <button type="button" onClick={rollback} disabled={importing} className="btn-ghost inline-flex items-center justify-center gap-2 text-sm text-[#FF8A8A]"><RotateCcw className="h-4 w-4"/>Annuler cet import</button> : <button type="button" onClick={onClose} disabled={importing} className="btn-ghost text-sm">Annuler</button>}
         <button type="button" onClick={runImport} disabled={importing || !summary.valid || Boolean(lastBatch)} className="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-45">{importing ? "Import en cours…" : `Importer ${summary.valid || ""} trade${summary.valid > 1 ? "s" : ""}`}</button>
       </footer>
+      {confirmationDialog}
     </section>
   </div>;
 }

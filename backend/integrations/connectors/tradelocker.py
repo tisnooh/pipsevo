@@ -27,7 +27,7 @@ class TradeLockerConnector(TradingConnector):
     provider_id = "tradelocker"
     platforms = ("tradelocker",)
     auth_type = "jwt"
-    normalization_version = 2
+    normalization_version = 3
 
     def __init__(
         self, demo_url: str, live_url: str, developer_api_key: str | None = None
@@ -266,7 +266,7 @@ class TradeLockerConnector(TradingConnector):
                 )
             )
             price = Decimal(str(row.get("avgPrice") or row.get("price") or 0))
-            if filled <= 0 or price <= 0:
+            if not filled.is_finite() or not price.is_finite() or filled <= 0 or price <= 0:
                 continue
             executed = self._time(
                 row.get("filledAt")
@@ -353,7 +353,7 @@ class TradeLockerConnector(TradingConnector):
             is_close = execution.direction != trade.direction
             execution.execution_type = "close" if is_close else "open"
             total = closing_volume[position_id]
-            if is_close and trade.close_time and total > 0:
+            if is_close and trade.close_time and total > 0 and trade.raw_payload.get("pnl_source") != "unavailable":
                 execution.realized_pnl = (
                     trade.gross_profit * execution.quantity / total
                 )
@@ -537,17 +537,17 @@ class TradeLockerConnector(TradingConnector):
         closed_volume = sum((quantity(item) for item in closing), Decimal("0"))
         fully_closed = bool(closing) and closed_volume >= opened_volume
         close_price = weighted_price(closing) if fully_closed else None
-        provider_pnl_available = any(
-            item.get("profit") is not None or item.get("realizedPnl") is not None
-            for item in closing
-        )
-        gross_profit = sum(
-            (
-                Decimal(str(item.get("profit") or item.get("realizedPnl") or 0))
-                for item in closing
-            ),
-            Decimal("0"),
-        )
+        provider_results = []
+        for item in closing:
+            value = item.get("profit")
+            value = item.get("realizedPnl") if value is None else value
+            try:
+                amount = Decimal(str(value))
+                provider_results.append(amount if amount.is_finite() else None)
+            except (ArithmeticError, ValueError):
+                provider_results.append(None)
+        provider_pnl_available = bool(closing) and all(value is not None for value in provider_results)
+        gross_profit = sum(provider_results, Decimal("0")) if provider_pnl_available else Decimal("0")
         pnl_source = "provider" if provider_pnl_available else "unavailable"
         instrument_id = str(first.get("tradableInstrumentId") or "")
         pricing = (instrument_details or {}).get(instrument_id)
@@ -667,7 +667,11 @@ class TradeLockerConnector(TradingConnector):
     ) -> Decimal | None:
         tick_size = cls._tier_value(instrument.get("tickSize"), close_price, "tickSize")
         tick_cost = cls._tier_value(instrument.get("tickCost"), close_price, "tickCost")
-        if tick_size is None or tick_cost is None or tick_size <= 0:
+        if (
+            tick_size is None or tick_cost is None or tick_size <= 0 or tick_cost <= 0
+            or direction not in {"long", "short"}
+            or any(not value.is_finite() or value <= 0 for value in (open_price, close_price, volume))
+        ):
             return None
         price_move = (
             close_price - open_price
@@ -689,6 +693,8 @@ class TradeLockerConnector(TradingConnector):
                 limit = Decimal(str(item.get("leftRangeLimit") or 0))
                 value = Decimal(str(item[key]))
             except (ArithmeticError, ValueError):
+                continue
+            if not limit.is_finite() or not value.is_finite():
                 continue
             if limit <= price and (selected_limit is None or limit >= selected_limit):
                 selected = value

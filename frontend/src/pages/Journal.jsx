@@ -2,7 +2,6 @@ import { useCallback, useState, useEffect, useMemo } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { motion } from "framer-motion"
 import { Star, Edit2, Trash2, Camera, Check, Plus, Upload, BarChart3, Target, TrendingUp, ArrowUpRight, ArrowDownRight, Ruler, CalendarDays, X } from "lucide-react"
-import { AreaChart, Area, ResponsiveContainer } from "recharts"
 import { trades as tradesAPI, accounts as accAPI, tradeScreenshots } from "@/lib/api"
 import { toast } from "sonner"
 import { useAuth } from "@/context/AuthContext"
@@ -16,16 +15,13 @@ import { clearPreTradeChecks, readPreTradeChecks, writePreTradeChecks } from "@/
 import { listenForAppDataChanges } from "@/lib/appDataEvents"
 import { JOURNAL_LIST_PATH, journalTradePath, resolveJournalRoute } from "@/lib/journalNavigation"
 import MobileTradeList from "@/components/MobileTradeList"
-import { tradeOutcome } from "@/lib/tradeAnalytics"
+import { measuredTradePnl, tradeOutcome } from "@/lib/tradeAnalytics"
+import { apiErrorMessage } from "@/lib/apiError"
 import PrivateTradeImage from "@/components/PrivateTradeImage"
-
-const miniChartData = [
-  { t: 1, v: 1.0784 }, { t: 2, v: 1.0790 }, { t: 3, v: 1.0785 },
-  { t: 4, v: 1.0795 }, { t: 5, v: 1.0802 }, { t: 6, v: 1.0808 },
-  { t: 7, v: 1.0815 }, { t: 8, v: 1.0812 },
-]
+import { useConfirmDialog } from "@/components/ConfirmDialog"
 
 export function JournalPage() {
+  const { confirm, confirmationDialog } = useConfirmDialog()
   const { user } = useAuth()
   const { money } = useAppSettings()
   const location = useLocation()
@@ -36,6 +32,7 @@ export function JournalPage() {
   const [activeTab, setActiveTab] = useState("Aperçu")
   const [activeFilter, setActiveFilter] = useState("Tous les trades")
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState("")
   const [openForm, setOpenForm] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
@@ -49,12 +46,13 @@ export function JournalPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError("")
     try {
       const [t, a] = await Promise.all([tradesAPI.list(), accAPI.list()])
       setTradeList(t.data)
       setAccounts(a.data)
       if (a.data.length > 0) setForm(f => ({ ...f, account_id: a.data[0].id }))
-    } catch { toast.error("Erreur de chargement") }
+    } catch (error) { setLoadError(apiErrorMessage(error,"Erreur de chargement")) }
     finally { setLoading(false) }
   }, [])
 
@@ -141,7 +139,8 @@ export function JournalPage() {
   }
 
   const deleteTrade = async (id) => {
-    if (!window.confirm("Supprimer ce trade ?")) return
+    const accepted = await confirm({ title: "Supprimer ce trade ?", description: "Le trade et ses données associées seront supprimés définitivement.", confirmLabel: "Supprimer", destructive: true })
+    if (!accepted) return
     try {
       const screenshotPaths=tradeList.find(trade=>String(trade.id)===String(id))?.screenshots || []
       await tradesAPI.delete(id)
@@ -155,16 +154,19 @@ export function JournalPage() {
   // Normalize trade fields
   const normalize = (t) => {
     const linkedAccount = accounts.find(a => a.id === t.account_id)
+    const pnl = measuredTradePnl(t)
+    const outcome = tradeOutcome(t)
     return ({
     ...t,
+    pnl,
+    outcome,
     asset: t.instrument || t.asset || "—",
     direction: t.direction === "long" ? "Achat (Long)" : t.direction === "short" ? "Vente (Short)" : t.direction,
-    win: (t.pnl ?? 0) > 0,
-    toneClass: typeof t.pnl !== "number" || t.pnl === 0 ? "text-[#9CA3AF]" : t.pnl > 0 ? "text-[#46C99A]" : "text-[#F26A70]",
-    chartColor: typeof t.pnl !== "number" || t.pnl === 0 ? "#7C4DFF" : t.pnl > 0 ? "#46C99A" : "#F26A70",
-    statusLabel: ({winner:"Gagnant",loser:"Perdant",breakeven:"Break-even",partial:"Partiellement clôturé",open:"Position ouverte",cancelled:"Annulé"})[t.result_status] || (t.pnl > 0 ? "Gagnant" : t.pnl < 0 ? "Perdant" : "Break-even"),
-    result: typeof t.pnl === "number" ? `${t.pnl >= 0 ? "+" : ""}$${Math.abs(t.pnl).toFixed(2)}` : t.result_status === "open" ? "Ouverte" : "—",
-    rLabel: typeof t.r === "number" ? `${t.r >= 0 ? "+" : ""}${t.r.toFixed(2)}R` : "—",
+    win: outcome > 0,
+    toneClass: pnl === null || pnl === 0 ? "text-[#9CA3AF]" : pnl > 0 ? "text-[#46C99A]" : "text-[#F26A70]",
+    statusLabel: ({partial:"Partiellement clôturé",open:"Position ouverte",cancelled:"Annulé",canceled:"Annulé"})[t.result_status] || (outcome === null ? "Non mesuré" : outcome > 0 ? "Gagnant" : outcome < 0 ? "Perdant" : "Break-even"),
+    result: pnl !== null ? money(pnl,{signDisplay:"always"}) : t.result_status === "open" ? "Ouverte" : "—",
+    rLabel: Number.isFinite(t.r) && outcome !== null ? `${t.r >= 0 ? "+" : ""}${t.r.toFixed(2)}R` : "—",
     account_name: linkedAccount?.name || "",
     account_firm: linkedAccount?.firm || "",
     account: linkedAccount
@@ -188,25 +190,26 @@ export function JournalPage() {
     : byAccountAndDate.filter(t => t.starred)
 
   // KPIs calculés depuis les vraies données
-  const outcomes = filtered.map(t => ({ trade: t, outcome: tradeOutcome(t) })).filter(item => item.outcome !== null)
+  const outcomes = filtered.map(t => ({ trade: t, outcome: t.outcome })).filter(item => item.outcome !== null)
   const wins = outcomes.filter(item => item.outcome > 0)
   const losses = outcomes.filter(item => item.outcome < 0)
   const measuredTrades = filtered.filter(t => typeof t.pnl === "number")
   const monetaryWins = measuredTrades.filter(t => t.pnl > 0)
   const monetaryLosses = measuredTrades.filter(t => t.pnl < 0)
   const totalPnl = measuredTrades.length ? measuredTrades.reduce((s, t) => s + t.pnl, 0) : null
-  const winRate = outcomes.length ? Math.round((wins.length / outcomes.length) * 100) : 0
+  const winRate = outcomes.length ? Math.round((wins.length / outcomes.length) * 100) : null
   const avgWin = monetaryWins.length ? monetaryWins.reduce((s, t) => s + t.pnl, 0) / monetaryWins.length : null
   const avgLoss = monetaryLosses.length ? monetaryLosses.reduce((s, t) => s + t.pnl, 0) / monetaryLosses.length : null
-  const avgR = filtered.length ? filtered.reduce((s, t) => s + (t.r || 0), 0) / filtered.length : 0
+  const rTrades = filtered.filter(t => Number.isFinite(t.r) && t.outcome !== null)
+  const avgR = rTrades.length ? rTrades.reduce((s, t) => s + t.r, 0) / rTrades.length : null
 
   const kpis = [
     { label: "Trades", value: filtered.length.toString(), sub: "", Icon: BarChart3, color: "#4F8CFF" },
-    { label: "Win Rate", value: `${winRate}%`, sub: "", Icon: Target, color: "#46C99A" },
+    { label: "Win Rate", value: winRate === null ? "—" : `${winRate}%`, sub: "", Icon: Target, color: "#46C99A" },
     { label: "Profit net", value: totalPnl === null ? "—" : money(totalPnl,{signDisplay:"always"}), sub: "", Icon: TrendingUp, color: totalPnl === null ? "#7E8798" : totalPnl >= 0 ? "#46C99A" : "#F26A70" },
     { label: "Gain moyen", value: avgWin === null ? "—" : money(avgWin,{signDisplay:"always"}), sub: "", Icon: ArrowUpRight, color: avgWin === null ? "#7E8798" : "#46C99A" },
     { label: "Perte moyenne", value: avgLoss === null ? "—" : money(avgLoss), sub: "", Icon: ArrowDownRight, color: avgLoss === null ? "#7E8798" : "#F26A70" },
-    { label: "R Multiple moyen", value: `${avgR.toFixed(2)}R`, sub: "", Icon: Ruler, color: "#7C4DFF" },
+    { label: "R Multiple moyen", value: avgR === null ? "—" : `${avgR.toFixed(2)}R`, sub: "", Icon: Ruler, color: "#7C4DFF" },
   ]
 
   const detailTabs = ["Aperçu", "Notes", "Statistiques"]
@@ -214,6 +217,7 @@ export function JournalPage() {
   if (loading) return (
     <div className="flex h-full items-center justify-center text-[#9CA3AF]">Chargement…</div>
   )
+  if (loadError) return <div role="alert" className="pe-card p-6"><p>{loadError}</p><button className="btn-primary mt-4" onClick={load}>Réessayer</button></div>
 
   return (
     <div className="flex h-full flex-col lg:flex-row lg:overflow-hidden">
@@ -433,23 +437,7 @@ export function JournalPage() {
 
                   {selectedTrade.checklist_results?.length > 0 && <div className="mb-4 rounded-xl border border-white/[0.06] bg-[#0F1117] p-3"><div className="mb-2 flex items-center justify-between gap-2"><span className="text-[10px] font-medium text-[#9CA3AF]">Check-list du trade</span><span className="text-[9px] text-[#B58BFF]">{selectedTrade.checklist_results.filter(item=>item.checked).length}/{selectedTrade.checklist_results.length} respectées</span></div><div className="space-y-1.5">{selectedTrade.checklist_results.map(item=><div key={item.id} className="flex items-center gap-2"><span className={`grid h-4 w-4 shrink-0 place-items-center rounded ${item.checked ? "bg-[#46C99A] text-[#06130C]" : "bg-[#F26A70]/10 text-[#F26A70]"}`}>{item.checked ? <Check className="h-2.5 w-2.5"/> : "×"}</span><span className={`text-[10px] ${item.checked ? "text-[#B5BBC9]" : "text-[#7E8798]"}`}>{item.label}</span></div>)}</div></div>}
 
-                  {/* Mini chart */}
-                  <div className="mb-4">
-                    <p className="text-[10px] font-medium text-[#9CA3AF] mb-2">Mini graphique</p>
-                    <div className="bg-[#0F1117] rounded-lg border border-[#1E2430] overflow-hidden">
-                      <ResponsiveContainer width="100%" height={70}>
-                        <AreaChart data={miniChartData}>
-                          <defs>
-                            <linearGradient id="miniGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor={t.chartColor} stopOpacity={0.3} />
-                              <stop offset="95%" stopColor={t.chartColor} stopOpacity={0} />
-                            </linearGradient>
-                          </defs>
-                          <Area type="monotone" dataKey="v" stroke={t.chartColor} strokeWidth={1.5} fill="url(#miniGrad)" />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
+                  <p className="mb-4 rounded-lg border border-[#1E2430] p-3 text-[10px] text-[#9CA3AF]">L’historique des bougies n’est pas fourni avec ce trade. Ajoute une capture de ton graphique ci-dessous.</p>
 
                   <div className="mb-4"><p className="text-[10px] font-medium text-[#9CA3AF] mb-2">Captures d'écran</p>{selectedTrade.screenshots?.length?<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{selectedTrade.screenshots.map((path,i)=><PrivateTradeImage key={path} path={path} alt={`Capture ${i+1}`} className="aspect-video w-full rounded-lg border border-[#1E2430] object-cover"/>)}</div>:<button type="button" onClick={()=>openEditTrade(selectedTrade)} className="w-full rounded-lg border border-dashed border-[#1E2430] p-3 text-center text-[10px] text-[#6B7280] hover:border-[#7C4DFF]/40 hover:text-[#B58BFF]"><Camera className="w-4 h-4 mx-auto mb-1"/>Ajouter des captures à ce trade</button>}</div>
                 </div>
@@ -465,7 +453,7 @@ export function JournalPage() {
                   <p className="text-[11px] text-white">{selectedTrade.emotion || "—"}</p>
                   <p className="text-[10px] font-medium text-[#9CA3AF] mt-3 mb-2">Plan respecté</p>
                   <p className={`text-[11px] font-medium ${selectedTrade.plan_respected ? "text-[#46C99A]" : "text-[#F26A70]"}`}>
-                    {selectedTrade.plan_respected ? "✓ Oui" : "✗ Non"}
+                    {selectedTrade.plan_respected === true ? "✓ Oui" : selectedTrade.plan_respected === false ? "✗ Non" : "Non renseigné"}
                   </p>
                 </div>
               )}
@@ -494,6 +482,7 @@ export function JournalPage() {
       {/* Modal: Nouveau trade */}
       {openForm && <TradeFormModal form={form} setForm={setForm} accounts={accounts} user={user} checklist={activeChecklist} checklistChecks={checklistChecks} setChecklistChecks={setChecklistChecks} editingTrade={editingTrade} saving={saving} onClose={()=>{if(!saving){setOpenForm(false);setEditingTrade(null)}}} onSave={saveTrade}/>}
       {importOpen && <TradeCsvImportModal accounts={accounts} existingTrades={tradeList} onClose={()=>setImportOpen(false)} onImported={load}/>}
+      {confirmationDialog}
     </div>
   )
 }

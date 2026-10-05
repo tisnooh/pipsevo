@@ -1,4 +1,13 @@
-import { calculateTradeAnalytics, groupTradesByWeekday, measuredTradePnl } from "./tradeAnalytics";
+import { calculateTradeAnalytics, groupTradesByWeekday, measuredTradePnl, tradeOutcome } from "./tradeAnalytics";
+
+test("unusable historical pricing is unknown money but retains a valid price outcome", () => {
+  const trade = { pnl: 0, entry: 100, exit_price: 102, direction: "long", result_status: "closed", provider_metadata: { pnl_source: "derived_tick_cost", instrument_pricing: { tickCost: [{ tickCost: 0 }] } } };
+  expect(measuredTradePnl(trade)).toBeNull();
+  expect(tradeOutcome(trade)).toBe(1);
+  expect(tradeOutcome({ ...trade, entry: null })).toBeNull();
+  expect(tradeOutcome({ ...trade, result_status: "open" })).toBeNull();
+  expect(measuredTradePnl({ pnl: 90, result_status: "open" })).toBeNull();
+});
 
 describe("statistiques synchronisées avec le journal", () => {
   const accounts = [
@@ -17,6 +26,12 @@ describe("statistiques synchronisées avec le journal", () => {
 
   test("affiche un état non mesuré quand aucune réponse n'existe", () => {
     expect(calculateTradeAnalytics([{ pnl: 10, plan_respected: null }], accounts).planRate).toBeNull();
+  });
+
+  test("ne confond pas des positions ouvertes avec un win rate de zéro", () => {
+    const stats = calculateTradeAnalytics([{ pnl: null, result_status: "open" }], accounts);
+    expect(stats.winrate).toBeNull();
+    expect(stats.pnl).toBeNull();
   });
 
   test("calcule la performance des comptes depuis la période filtrée", () => {

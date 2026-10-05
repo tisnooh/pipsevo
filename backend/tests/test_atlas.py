@@ -1,6 +1,31 @@
 from atlas import build_atlas_context, build_atlas_prompt, build_coaching_briefing, build_deterministic_coach_answer, build_pretrade_readiness, measured_trade_pnl
 
 
+def test_historical_zero_tick_cost_is_not_measured_pnl():
+    trade = {"pnl": 0, "result_status": "closed", "provider_metadata": {
+        "pnl_source": "derived_tick_cost", "instrument_pricing": {"tickCost": [{"tickCost": 0}]},
+    }}
+    assert measured_trade_pnl(trade) is None
+    trade["provider_metadata"]["instrument_pricing"]["tickCost"][0]["tickCost"] = 1
+    assert measured_trade_pnl(trade) == 0
+    trade["result_status"] = "open"
+    assert measured_trade_pnl(trade) is None
+
+
+def test_provider_prompt_has_a_bounded_context_budget():
+    prompt = build_atlas_prompt("Review", "overall", {"notes": "x" * 200000, "evidence": [{"notes": "y" * 20000} for _ in range(1000)]})
+    assert len(prompt) < 22000
+    assert '"context_truncated":true' in prompt
+
+
+def test_provider_context_omits_long_keys_explicitly_without_collisions():
+    context = {"focus_trade": {"checklist_results": [{"x" * 128 + "a": True, "x" * 128 + "b": False}], "notes": "Valid note"}}
+    prompt = build_atlas_prompt("Review", "post_trade", context)
+    assert '"context_truncated":true' in prompt
+    assert "Valid note" in prompt
+    assert "x" * 128 not in prompt
+
+
 def test_atlas_metrics_distinguish_missing_values_from_zero():
     trades = [
         {"id": "1", "date": "2026-09-01", "instrument": "ES", "pnl": 100, "r": 1, "setup": "FVG", "session": "NY", "plan_respected": True},

@@ -58,6 +58,8 @@ def measured_trade_pnl(trade: dict) -> float | None:
     pnl = _number(trade.get("pnl"))
     if pnl is None:
         return None
+    if str(trade.get("result_status") or "").lower() in {"open", "cancelled", "canceled"}:
+        return None
     metadata = trade.get("provider_metadata")
     pnl_source = (
         str(metadata.get("pnl_source") or "").strip().lower()
@@ -69,6 +71,13 @@ def measured_trade_pnl(trade: dict) -> float | None:
         or trade.get("integration_account_id")
         or trade.get("source_provider")
     )
+    pricing = metadata.get("instrument_pricing") if isinstance(metadata, dict) else None
+    if pnl_source == "derived_tick_cost" and isinstance(pricing, dict):
+        costs = pricing.get("tickCost")
+        if isinstance(costs, list) and not any(
+            (_number(row.get("tickCost")) or 0) > 0 for row in costs if isinstance(row, dict)
+        ):
+            return None
     if provider_trade and (
         pnl_source == "unavailable" or (pnl == 0 and not pnl_source)
     ):
@@ -330,12 +339,13 @@ def build_atlas_prompt(question: str, context_tag: str, context: dict) -> str:
     guidance = CONTEXT_GUIDANCE.get(context_tag, CONTEXT_GUIDANCE["overall"])
     provider_context = _provider_safe_context(context)
     return (
-        f"Question du trader : {question}\n"
-        f"Angle demandé : {context_tag}\n\n"
+        f"Question du trader : {question[:1000]}\n"
+        f"Angle demandé : {context_tag[:64]}\n\n"
         f"Consigne pour cet angle : {guidance}\n\n"
         "Données PipsEvo fiables (JSON) :\n"
         f"{json.dumps(provider_context, ensure_ascii=False, separators=(',', ':'))}\n\n"
         "Règles d'interprétation : une valeur null signifie non mesurée. "
+        "Si context_truncated=true, certaines données ont été omises pour limiter la taille : signale cette limite. "
         "Ne transforme jamais une donnée absente en zéro. Ne désigne un meilleur ou pire "
         "setup/session que parmi les groupes où eligible_for_comparison=true. "
         "Une association observée entre émotion, discipline et P&L ne prouve jamais une causalité. "
@@ -398,7 +408,56 @@ def _provider_safe_context(context: dict) -> dict:
                 if isinstance(row, dict)
             ]
         safe["coaching_briefing"] = safe_briefing
-    return safe
+    return _bounded_provider_context(safe)
+
+
+def _bounded_provider_context(context: dict) -> dict:
+    """Bound stored user text and collections before JSON/provider processing."""
+    budget = 16000
+    nodes = 1200
+    truncated = False
+
+    def visit(value, depth=0):
+        nonlocal budget, nodes, truncated
+        nodes -= 1
+        if nodes < 0 or depth > 8 or budget <= 0:
+            truncated = True
+            return None
+        if isinstance(value, str):
+            clipped = value[:min(2048, budget)]
+            budget -= len(clipped)
+            truncated |= len(clipped) < len(value)
+            return clipped
+        if isinstance(value, list):
+            truncated |= len(value) > 50
+            result = []
+            for item in value[:50]:
+                if nodes <= 0 or budget <= 0:
+                    truncated = True
+                    break
+                result.append(visit(item, depth + 1))
+            return result
+        if isinstance(value, dict):
+            truncated |= len(value) > 64
+            result = {}
+            for key, item in list(value.items())[:64]:
+                if nodes <= 0 or budget <= 0:
+                    truncated = True
+                    break
+                name = str(key)
+                if len(name) > 128:
+                    truncated = True
+                    continue
+                budget -= len(name)
+                result[name] = visit(item, depth + 1)
+            return result
+        if isinstance(value, float) and not math.isfinite(value):
+            return None
+        return value
+
+    result = visit(context)
+    result["context_truncated"] = truncated
+    return result
 
 
 def _period_bounds(period: str, local_date: str | None) -> tuple[date, date]:

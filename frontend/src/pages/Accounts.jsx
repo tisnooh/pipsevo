@@ -8,6 +8,7 @@ import { useAppSettings } from "@/hooks/useAppSettings";
 import CsvExportButton from "@/components/CsvExportButton";
 import AccountSetupFlow from "@/components/AccountSetupFlow";
 import { listenForAppDataChanges } from "@/lib/appDataEvents";
+import { useConfirmDialog } from "@/components/ConfirmDialog";
 
 const blank = { name: "Combine", firm: "", market_type: "futures", balance: 50000, initial_balance: 50000, profit_target: 3000, max_drawdown: 2000, daily_loss_limit: 1000, status: "active" };
 
@@ -17,6 +18,7 @@ const apiErrorMessage = (error, fallback) => {
 };
 
 export default function Accounts() {
+  const { confirm, confirmationDialog } = useConfirmDialog();
   const { user } = useAuth();
   const { settings, money } = useAppSettings();
   const [list, setList] = useState([]);
@@ -57,7 +59,13 @@ export default function Accounts() {
     finally { setSaving(false); }
   };
   const remove = async (account) => {
-    if (!window.confirm(`Supprimer « ${account.name} » et tous ses trades ? Cette action est définitive.`)) return;
+    const accepted = await confirm({
+      title: `Supprimer « ${account.name} » ?`,
+      description: "Le compte et tous ses trades seront supprimés définitivement.",
+      confirmLabel: "Supprimer définitivement",
+      destructive: true,
+    });
+    if (!accepted) return;
     setDeleting(account.id);
     try { await accounts.delete(account.id); toast.success("Compte supprimé"); await load(); }
     catch (e) { toast.error(apiErrorMessage(e, "Suppression impossible")); }
@@ -76,6 +84,7 @@ export default function Accounts() {
       </article>})}</div>}
     {setupOpen && <div className="fixed inset-0 z-50 flex items-end bg-black/80 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4" onClick={()=>setSetupOpen(false)}><section onClick={event=>event.stopPropagation()} className="card-elev max-h-[96vh] w-full overflow-y-auto rounded-b-none p-5 sm:max-w-4xl sm:rounded-pe-lg sm:p-7"><AccountSetupFlow welcome={setupWelcome} onCancel={()=>setSetupOpen(false)} onComplete={async()=>{setSetupOpen(false);setSetupWelcome(false);await load();}}/></section></div>}
     {open && <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={close}><form onClick={e=>e.stopPropagation()} onSubmit={save} className="card-elev p-5 sm:p-7 w-full max-w-lg space-y-4 max-h-[92vh] overflow-y-auto"><div className="flex justify-between items-center"><div><h2 className="text-xl font-bold">{editing ? "Modifier le compte" : "Nouveau compte"}</h2><p className="text-xs text-[#7E8798] mt-1">Les montants servent au calcul du risque et des objectifs.</p></div><button type="button" onClick={close} aria-label="Fermer" className="grid w-9 h-9 place-items-center rounded-xl hover:bg-white/5"><X className="w-4 h-4"/></button></div><Fld label="Nom du compte" value={form.name} onChange={v=>setForm({...form,name:v})}/><label className="block text-xs text-[#9CA3AF]">Prop firm<select required value={form.firm} onChange={e=>{const firm=availableFirms.find(item=>item.name===e.target.value);setForm({...form,firm:e.target.value,market_type:firm?.markets.includes(form.market_type)?form.market_type:firm?.markets[0]||form.market_type})}} className="w-full mt-2 bg-[#0C1122] border border-[#6571CF]/20 rounded-xl px-4 py-3 outline-none focus:border-[#8075ED]">{availableFirms.map(f=><option key={f.name} value={f.name}>{f.name}</option>)}</select></label><label className="block text-xs text-[#9CA3AF]">Type de marché<select required value={form.market_type || "futures"} onChange={e=>setForm({...form,market_type:e.target.value})} className="w-full mt-2 bg-[#0C1122] border border-[#6571CF]/20 rounded-xl px-4 py-3 outline-none focus:border-[#8075ED]">{(availableFirms.find(item=>item.name===form.firm)?.markets || marketKeys(traderType)).map(market=><option key={market} value={market}>{market === "futures" ? "Futures" : "CFD / Forex"}</option>)}</select></label><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Fld label={`Solde actuel (${settings.currency})`} type="number" min="0" value={form.balance} onChange={v=>setForm({...form,balance:v})}/><Fld label={`Solde initial (${settings.currency})`} type="number" min="1" value={form.initial_balance} onChange={v=>setForm({...form,initial_balance:v})}/><Fld label={`Profit target (${settings.currency})`} type="number" min="1" value={form.profit_target} onChange={v=>setForm({...form,profit_target:v})}/><Fld label={`Max drawdown (${settings.currency})`} type="number" min="1" value={form.max_drawdown} onChange={v=>setForm({...form,max_drawdown:v})}/><div className="sm:col-span-2"><Fld label={`Limite de perte quotidienne (${settings.currency})`} type="number" min="0" value={form.daily_loss_limit || 0} onChange={v=>setForm({...form,daily_loss_limit:v})}/></div></div><div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2"><button type="button" onClick={close} className="btn-ghost">Annuler</button><button disabled={saving} className="btn-primary disabled:opacity-50">{saving ? "Enregistrement…" : editing ? "Enregistrer les modifications" : "Créer le compte"}</button></div></form></div>}
+    {confirmationDialog}
   </div>;
 }
 const Metric=({icon:Icon,label,value,color})=><div className="rounded-pe-md bg-black/25 border border-white/[0.06] p-3"><div className="text-pe-caption text-[#7E8798] uppercase flex items-center gap-1"><Icon className="w-3.5 h-3.5" style={{color}}/>{label}</div><div className="font-numeric font-bold mt-1">{value}</div></div>;

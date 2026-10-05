@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { payouts, accounts as accAPI, dashboard } from "@/lib/api";
 import { toast } from "sonner";
 import { Plus, Banknote, Calendar, TrendingUp, Trash2, RefreshCw, X } from "lucide-react";
@@ -7,8 +7,11 @@ import CsvExportButton from "@/components/CsvExportButton";
 import { calculateSafeWithdrawal } from "@/lib/riskEngine";
 import { localDateKey } from "@/lib/tradeCalendar";
 import { listenForAppDataChanges } from "@/lib/appDataEvents";
+import { useConfirmDialog } from "@/components/ConfirmDialog";
+import { apiErrorMessage } from "@/lib/apiError";
 
 export default function Payouts() {
+  const { confirm, confirmationDialog } = useConfirmDialog();
   const { settings, money, date } = useAppSettings();
   const [list, setList] = useState([]);
   const [accs, setAccs] = useState([]);
@@ -23,6 +26,7 @@ export default function Payouts() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState("");
   const [error, setError] = useState("");
+  const mutationPending = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -32,30 +36,45 @@ export default function Payouts() {
         setForm(f => f.account_id ? f : ({ ...f, account_id: a.data[0].id }));
         setSafeAccountId(current => current || a.data[0].id);
       }
-    } catch (e) { setError(e.response?.data?.detail || "Impossible de charger les payouts."); }
+    } catch (e) { setError(apiErrorMessage(e,"Impossible de charger les payouts.")); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); return listenForAppDataChanges(load, ["accounts", "trades", "payouts", "dashboard"]); }, [load]);
 
   const create = async (e) => {
     e.preventDefault();
+    if (mutationPending.current) return;
     if (!form.account_id) return toast.error("Ajoute d’abord un compte");
-    const selectedAccount = accs.find(account => account.id === form.account_id);
-    const safety = calculateSafeWithdrawal(selectedAccount, safetyBuffer);
-    if (safety && Number(form.amount) > safety.safeAmount && !window.confirm(`Ce retrait dépasse l’estimation de sécurité (${money(safety.safeAmount)}). Les règles exactes de ta prop firm ne sont pas vérifiées automatiquement. Continuer ?`)) return;
+    const payload = { ...form, amount: Number(form.amount) };
+    if (!Number.isFinite(payload.amount) || payload.amount <= 0) return toast.error("Indique un montant positif valide");
+    mutationPending.current = true;
     setSaving(true);
     try {
-      await payouts.create({ ...form, amount: +form.amount });
+      const selectedAccount = accs.find(account => account.id === payload.account_id);
+      const safety = calculateSafeWithdrawal(selectedAccount, safetyBuffer);
+      if (safety && payload.amount > safety.safeAmount) {
+        const accepted = await confirm({
+          title: "Retrait supérieur à l’estimation prudente",
+          description: `Ce retrait dépasse l’estimation de sécurité (${money(safety.safeAmount)}). Les règles exactes de ta prop firm ne sont pas vérifiées automatiquement.`,
+          confirmLabel: "Continuer malgré tout",
+        });
+        if (!accepted) return;
+      }
+      await payouts.create(payload);
       toast.success("Payout enregistré"); setOpen(false); setForm(f=>({...f,amount:1000,note:"",date:today})); await load();
-    } catch (e) { toast.error(e.response?.data?.detail || "Enregistrement impossible"); }
-    finally { setSaving(false); }
+    } catch (e) { toast.error(apiErrorMessage(e,"Enregistrement impossible")); }
+    finally { mutationPending.current = false; setSaving(false); }
   };
   const remove = async (payout) => {
-    if (!window.confirm(`Supprimer le payout de ${money(payout.amount)} ?`)) return;
+    if (mutationPending.current) return;
+    mutationPending.current = true;
     setDeleting(payout.id);
-    try { await payouts.delete(payout.id); toast.success("Payout supprimé"); await load(); }
-    catch (e) { toast.error(e.response?.data?.detail || "Suppression impossible"); }
-    finally { setDeleting(""); }
+    try {
+      const accepted = await confirm({ title: "Supprimer ce payout ?", description: `Le payout de ${money(payout.amount)} sera supprimé définitivement.`, confirmLabel: "Supprimer", destructive: true });
+      if (!accepted) return;
+      await payouts.delete(payout.id); toast.success("Payout supprimé"); await load();
+    } catch (e) { toast.error(apiErrorMessage(e,"Suppression impossible")); }
+    finally { mutationPending.current = false; setDeleting(""); }
   };
 
   const estimated = +sim.daily * +sim.days;
@@ -140,6 +159,7 @@ export default function Payouts() {
           </form>
         </div>
       )}
+      {confirmationDialog}
     </div>
   );
 }

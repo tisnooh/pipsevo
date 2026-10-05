@@ -1,5 +1,15 @@
 import { buildCsv, buildFullExportFiles, buildZip, EXPORT_SCHEMAS } from "./dataExport";
 
+test.each([" =1+2", "\t=1+2", "\r\n@SUM(1)", "\u0000-1+2", "+cmd", "-12"])("neutralise les formules après les espaces ou contrôles : %s", value => {
+  expect(buildCsv([{ value }], [["value", "value"]])).toContain(`"'${value}"`);
+});
+
+test("conserve les nombres et la structure CSV Analytics", () => {
+  const csv = buildCsv([{ pnl: -12, setup: '=HYPERLINK("x")' }], [["pnl", "pnl"], ["setup", "setup"]], ",");
+  expect(csv).toContain('"pnl","setup"');
+  expect(csv).toContain('"-12","\'=HYPERLINK(""x"")"');
+});
+
 test("génère un CSV UTF-8 compatible Excel et protège contre les formules", () => {
   const csv = buildCsv([{ name: "=HYPERLINK(\"x\")", balance: -125.5 }], [["Nom", "name"], ["Solde", "balance"]]);
   expect(csv.charCodeAt(0)).toBe(0xFEFF);

@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo import ASCENDING, DESCENDING
+from pymongo import ASCENDING, DESCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError
 import os
 import logging
@@ -21,6 +21,7 @@ import asyncio
 import requests
 
 from atlas import build_atlas_context, build_atlas_prompt, build_coaching_briefing, build_deterministic_coach_answer, build_pretrade_readiness, measured_trade_pnl
+from atlas_quota import reserve_analysis
 from atlas_provider import AtlasProviderConfig, AtlasProviderFailure, generate_atlas_answer
 from admin import build_admin_router
 from admin.client import AdminConfigurationError, AdminDataError, SupabaseAdminClient
@@ -111,6 +112,10 @@ async def request_context(request: Request, call_next):
     request.state.request_id = request_id
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     return response
 
 
@@ -211,6 +216,19 @@ async def ensure_database_indexes():
         unique=True,
         name="newsletter_delivery_unique",
     )
+    await db.public_rate_limits.create_index(
+        [("scope", ASCENDING), ("key_hash", ASCENDING), ("window_start", ASCENDING)],
+        unique=True,
+        name="public_rate_limit_window_unique",
+    )
+    await db.public_rate_limits.create_index(
+        [("expires_at", ASCENDING)],
+        expireAfterSeconds=0,
+        name="public_rate_limit_expiry",
+    )
+    await db.atlas_quotas.create_index(
+        [("expires_at", ASCENDING)], expireAfterSeconds=0, name="atlas_quota_expiry",
+    )
 
 
 def now_utc():
@@ -241,21 +259,8 @@ async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depen
     if not creds:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # Compatibilité temporaire : les anciens JWT Mongo restent valides pendant
-    # le basculement, puis les nouveaux jetons sont validés par Supabase Auth.
-    legacy_user = None
-    try:
-        payload = pyjwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
-        user_id = payload["sub"]
-        legacy_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
-    except Exception:
-        pass
-    if legacy_user:
-        normalized = {**legacy_user, "role": normalize_role(legacy_user.get("role")), "status": legacy_user.get("status", "active")}
-        if normalized["status"] != "active":
-            raise HTTPException(status_code=403, detail="Ce compte est suspendu.")
-        return normalized
-
+    # Supabase is the sole authority for identity, roles and account lifecycle.
+    # Retained migration records must never authorize a backend request.
     if not SUPABASE_URL or not SUPABASE_PUBLISHABLE_KEY:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -595,6 +600,62 @@ def _contact_ip_hash(request: Request) -> str:
     return hashlib.sha256(f"{secret}:{address}".encode("utf-8")).hexdigest()
 
 
+def _bounded_env_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(value, maximum))
+
+
+def _public_rate_limit_key(scope: str, identity: str) -> str:
+    secret = os.environ.get("PUBLIC_RATE_LIMIT_SECRET") or JWT_SECRET
+    return hashlib.sha256(f"{secret}:{scope}:{identity}".encode("utf-8")).hexdigest()
+
+
+async def _enforce_public_rate_limit(
+    *,
+    scope: str,
+    identity: str,
+    max_requests: int,
+    window_seconds: int,
+) -> None:
+    """Atomically enforce a fixed-window limit without storing raw identities."""
+    now = datetime.now(timezone.utc)
+    epoch = int(now.timestamp())
+    window_epoch = epoch - (epoch % window_seconds)
+    window_start = datetime.fromtimestamp(window_epoch, tz=timezone.utc)
+    query = {
+        "scope": scope,
+        "key_hash": _public_rate_limit_key(scope, identity),
+        "window_start": window_start,
+    }
+    update = {
+        "$inc": {"count": 1},
+        "$setOnInsert": {
+            "created_at": now,
+            "expires_at": window_start + timedelta(seconds=window_seconds * 2),
+        },
+    }
+    try:
+        bucket = await db.public_rate_limits.find_one_and_update(
+            query,
+            update,
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+    except DuplicateKeyError:
+        # Two first requests can race on the unique bucket. Retry the increment
+        # against the winner instead of allowing either request through freely.
+        bucket = await db.public_rate_limits.find_one_and_update(
+            query,
+            {"$inc": {"count": 1}},
+            return_document=ReturnDocument.AFTER,
+        )
+    if not bucket or int(bucket.get("count", 0)) > max_requests:
+        raise HTTPException(429, "Trop de tentatives. Réessaie dans quelques minutes.")
+
+
 @api.post("/support", status_code=status.HTTP_202_ACCEPTED)
 @api.post("/contact", status_code=status.HTTP_202_ACCEPTED, include_in_schema=False)
 async def contact(body: ContactIn, request: Request):
@@ -769,9 +830,28 @@ def _email_preferences_response(preferences: Dict[str, Any], status_value: str) 
 
 
 @api.post("/newsletter/subscribe", status_code=status.HTTP_202_ACCEPTED)
-async def newsletter_subscribe(body: NewsletterSubscribeIn):
+async def newsletter_subscribe(body: NewsletterSubscribeIn, request: Request):
     """Start a double-opt-in subscription without revealing subscriber state."""
     email = body.email.strip().lower()
+    window_seconds = _bounded_env_int("NEWSLETTER_RATE_LIMIT_WINDOW_SECONDS", 900, 60, 86400)
+    await _enforce_public_rate_limit(
+        scope="newsletter-ip",
+        identity=_contact_ip_hash(request),
+        max_requests=_bounded_env_int("NEWSLETTER_RATE_LIMIT_IP_MAX", 5, 1, 100),
+        window_seconds=window_seconds,
+    )
+    await _enforce_public_rate_limit(
+        scope="newsletter-email",
+        identity=email,
+        max_requests=_bounded_env_int("NEWSLETTER_RATE_LIMIT_EMAIL_MAX", 3, 1, 20),
+        window_seconds=window_seconds,
+    )
+    await _enforce_public_rate_limit(
+        scope="newsletter-global",
+        identity="global",
+        max_requests=_bounded_env_int("NEWSLETTER_RATE_LIMIT_GLOBAL_MAX", 200, 10, 10000),
+        window_seconds=window_seconds,
+    )
     existing = await db.newsletter_subscribers.find_one({"email": email})
     now = datetime.now(timezone.utc)
     last_sent = existing.get("confirmation_sent_at") if existing else None
@@ -1088,43 +1168,12 @@ async def send_newsletter_campaign(
 
 @api.post("/auth/register")
 async def register(body: RegisterIn):
-    if not await admin_service.setting("registration_enabled", True):
-        raise HTTPException(503, "Les inscriptions sont temporairement fermées.")
-    existing = await db.users.find_one({"email": body.email.lower()})
-    if existing:
-        raise HTTPException(400, "Email already registered")
-    user_id = str(uuid.uuid4())
-    doc = {
-        "id": user_id,
-        "email": body.email.lower(),
-        "name": body.name or body.email.split("@")[0],
-        "password_hash": hash_pw(body.password),
-        "created_at": now_utc(),
-        "onboarded": False,
-        "plan": "free",
-        "trader_type": None,
-        "prop_firms": [],
-        "rules": {},
-        "journal_preferences": {},
-    }
-    try:
-        await db.users.insert_one(doc)
-    except DuplicateKeyError:
-        # The unique email index also protects against two simultaneous signups.
-        raise HTTPException(400, "Email already registered")
-    token = make_token(user_id)
-    return {"token": token, "user": {k: v for k, v in doc.items() if k not in ("password_hash", "_id")}}
+    raise HTTPException(410, "L’authentification historique est désactivée. Utilise la connexion Supabase de PipsEvo.")
 
 
 @api.post("/auth/login")
-async def login(body: LoginIn):
-    user = await db.users.find_one({"email": body.email.lower()})
-    if not user or not verify_pw(body.password, user.get("password_hash", "")):
-        raise HTTPException(401, "Invalid credentials")
-    token = make_token(user["id"])
-    user.pop("_id", None)
-    user.pop("password_hash", None)
-    return {"token": token, "user": user}
+async def login(body: LoginIn, request: Request):
+    raise HTTPException(410, "L’authentification historique est désactivée. Utilise la connexion Supabase de PipsEvo.")
 
 
 @api.get("/auth/me")
@@ -1542,7 +1591,7 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
             supabase_select("accounts", token, {"user_id": f"eq.{user['id']}", "select": "*", "limit": "50"}),
             supabase_select("trades", token, {"user_id": f"eq.{user['id']}", "select": "*", "order": "date.desc", "limit": "100"}),
             supabase_select("payouts", token, {"user_id": f"eq.{user['id']}", "select": "*", "order": "date.desc", "limit": "20"}),
-            supabase_select("ai_reports", token, {"user_id": f"eq.{user['id']}", "select": "id", "created_at": f"gte.{since}", "limit": "11"}),
+            supabase_select("ai_reports", token, {"user_id": f"eq.{user['id']}", "select": "id,created_at", "created_at": f"gte.{since}", "limit": "11"}),
         )
         if len(recent_reports) >= 10:
             raise HTTPException(429, "Atlas daily beta limit reached (10 analyses / 24h)")
@@ -1551,7 +1600,8 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
         trades = await db.trades.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(100)
         payouts = await db.payouts.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(20)
         since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-        if await db.ai_reports.count_documents({"user_id": user["id"], "created_at": {"$gte": since}}) >= 10:
+        recent_reports = await db.ai_reports.find({"user_id": user["id"], "created_at": {"$gte": since}}, {"created_at": 1}).to_list(11)
+        if len(recent_reports) >= 10:
             raise HTTPException(429, "Atlas daily beta limit reached (10 analyses / 24h)")
 
     if not trades:
@@ -1588,7 +1638,10 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
         }
         context["focus_trade"] = focus_evidence
         evidence = [focus_evidence, *[row for row in evidence if str(row.get("trade_id")) != body.trade_id]]
-    user_prompt = build_atlas_prompt(body.question.strip(), body.context_tag or "overall", context)
+    await reserve_analysis(db, _public_rate_limit_key("atlas", user["id"]), recent_reports)
+    user_prompt = None
+    if ATLAS_PROVIDER_CONFIG.provider != "deterministic":
+        user_prompt = build_atlas_prompt(body.question.strip(), body.context_tag or "overall", context)
 
     started_at = asyncio.get_running_loop().time()
     atlas_status = "success"
@@ -1785,10 +1838,15 @@ api.include_router(build_admin_router(get_current_user, admin_service))
 app.include_router(api)
 app.add_middleware(BacktestBodyLimit)
 
+cors_origins = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ORIGINS", "*").split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_credentials="*" not in cors_origins,
+    allow_origins=cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

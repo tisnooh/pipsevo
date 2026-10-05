@@ -1,7 +1,7 @@
 import { api } from "@/lib/api";
 
 export const adminApi = {
-  session: () => api.get("/admin/session"),
+  session: () => api.get("/admin/session", { timeout: 45000 }),
   overview: (days = 30) => api.get("/admin/overview", { params: { days } }),
   users: (params) => api.get("/admin/users", { params }),
   user: (id) => api.get(`/admin/users/${id}`),

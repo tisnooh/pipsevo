@@ -519,7 +519,23 @@ def test_tradelocker_ignores_cancelled_orders_and_derives_realized_pnl(monkeypat
     assert batch.trades[0].raw_payload["pnl_source"] == "derived_tick_cost"
     assert [item.execution_type for item in batch.executions] == ["open", "close"]
     assert batch.executions[1].realized_pnl == Decimal("50")
-    assert batch.next_cursor["normalization_version"] == 2
+    assert batch.next_cursor["normalization_version"] == 3
+
+
+@pytest.mark.parametrize("cost", ["0", "-2", "NaN", "Infinity"])
+def test_tradelocker_rejects_unusable_tick_cost_instead_of_false_zero(cost):
+    result = TradeLockerConnector._realized_pnl(
+        "long", Decimal("100"), Decimal("101"), Decimal("2"),
+        {"tickSize": [{"tickSize": "0.01"}], "tickCost": [{"tickCost": cost}]},
+    )
+    assert result is None
+
+
+def test_tradelocker_valid_flat_trade_is_measured_zero():
+    assert TradeLockerConnector._realized_pnl(
+        "short", Decimal("100"), Decimal("100"), Decimal("2"),
+        {"tickSize": [{"tickSize": "0.01"}], "tickCost": [{"tickCost": "1"}]},
+    ) == 0
 
 
 def test_tradelocker_syncs_explicit_total_objective_when_broker_exposes_it():

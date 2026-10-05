@@ -1,10 +1,13 @@
 import { tradeDateKey } from "./tradeCalendar";
 
 export function measuredTradePnl(trade) {
+  if (["open", "cancelled", "canceled"].includes(String(trade?.result_status || "").toLowerCase())) return null;
   const pnl = trade?.pnl === null || trade?.pnl === undefined || trade?.pnl === "" ? null : Number(trade.pnl);
   if (!Number.isFinite(pnl)) return null;
   const source = String(trade?.provider_metadata?.pnl_source || "").toLowerCase();
   const providerTrade = Boolean(trade?.integration_connection_id || trade?.integration_account_id || trade?.source_provider);
+  const costs = trade?.provider_metadata?.instrument_pricing?.tickCost;
+  if (source === "derived_tick_cost" && Array.isArray(costs) && !costs.some(row => Number.isFinite(Number(row?.tickCost)) && Number(row?.tickCost) > 0)) return null;
   if (providerTrade && (source === "unavailable" || (pnl === 0 && !source))) return null;
   return pnl;
 }
@@ -20,7 +23,7 @@ export function tradeOutcome(trade) {
   if (pnl === 0) return 0;
   const entry = Number(trade?.entry ?? trade?.open_price);
   const exit = Number(trade?.exit_price ?? trade?.close_price);
-  if (!Number.isFinite(entry) || !Number.isFinite(exit)) return rawPnl === 0 && pnl !== null ? 0 : null;
+  if (!Number.isFinite(entry) || !Number.isFinite(exit) || entry <= 0 || exit <= 0) return rawPnl === 0 && pnl !== null ? 0 : null;
   const direction = String(trade?.direction || "").toLowerCase();
   let movement = exit - entry;
   if (["short", "sell", "vente"].includes(direction)) movement *= -1;
@@ -46,7 +49,7 @@ export function calculateTradeAnalytics(trades, accounts) {
   const measuredOutcomes = trades.map(trade => ({ trade, outcome: tradeOutcome(trade) })).filter(item => item.outcome !== null);
   const wins = closed.filter(trade => trade.pnl > 0);
   const losses = closed.filter(trade => trade.pnl < 0);
-  const rTrades = trades.filter(trade => typeof trade.r === "number");
+  const rTrades = trades.filter(trade => Number.isFinite(trade.r) && tradeOutcome(trade) !== null);
   const measuredPlan = trades.filter(trade => trade.plan_respected === true || trade.plan_respected === false);
   const group = key => Object.values(closed.reduce((result, trade) => {
     const name = trade[key] || "Non renseigné";
@@ -67,7 +70,7 @@ export function calculateTradeAnalytics(trades, accounts) {
   const grossLoss = Math.abs(sumPnl(losses));
   return {
     pnl: closed.length ? sumPnl(closed) : null,
-    winrate: measuredOutcomes.length ? Math.round(measuredOutcomes.filter(item => item.outcome > 0).length / measuredOutcomes.length * 100) : 0,
+    winrate: measuredOutcomes.length ? Math.round(measuredOutcomes.filter(item => item.outcome > 0).length / measuredOutcomes.length * 100) : null,
     profitFactor: grossLoss ? grossWin / grossLoss : grossWin > 0 ? Infinity : closed.length ? 0 : null,
     avgWin: wins.length ? grossWin / wins.length : null,
     avgLoss: losses.length ? sumPnl(losses) / losses.length : null,

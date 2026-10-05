@@ -7,7 +7,9 @@ import { useAppSettings } from "@/hooks/useAppSettings";
 import TradeCalendar from "@/components/TradeCalendar";
 import { localDateKey, tradeDateKey } from "@/lib/tradeCalendar";
 import { listenForAppDataChanges } from "@/lib/appDataEvents";
-import { calculateTradeAnalytics } from "@/lib/tradeAnalytics";
+import { calculateTradeAnalytics, measuredTradePnl } from "@/lib/tradeAnalytics";
+import { buildCsv, downloadBlob } from "@/lib/dataExport";
+import { apiErrorMessage } from "@/lib/apiError";
 import MobileTradeList from "@/components/MobileTradeList";
 import { journalTradePath } from "@/lib/journalNavigation";
 
@@ -23,7 +25,7 @@ export default function Analytics() {
   const [selectedMonth,setSelectedMonth]=useState(()=>localDateKey(new Date()).slice(0,7));
   const [selectedYear,setSelectedYear]=useState(()=>String(new Date().getFullYear()));
   const [customRange,setCustomRange]=useState({start:"",end:""});
-  const load=useCallback(async()=>{setLoading(true);setError("");try{const[d,t,a]=await Promise.all([dashboard(),tradesAPI.list(),accountsAPI.list()]);setData(d.data);setTrades(t.data);setAccounts(a.data)}catch(e){setError(e.response?.data?.detail||"Impossible de charger les statistiques.")}finally{setLoading(false)}},[]);
+  const load=useCallback(async()=>{setLoading(true);setError("");try{const[d,t,a]=await Promise.all([dashboard(),tradesAPI.list(),accountsAPI.list()]);setData(d.data);setTrades(t.data);setAccounts(a.data)}catch(e){setError(apiErrorMessage(e,"Impossible de charger les statistiques."))}finally{setLoading(false)}},[]);
   useEffect(()=>{load();return listenForAppDataChanges(load,["accounts","trades","analytics","dashboard"])},[load]);
   const availableYears=useMemo(()=>Array.from(new Set([String(new Date().getFullYear()),...trades.map(t=>tradeDateKey(t.date).slice(0,4)).filter(year=>/^\d{4}$/.test(year))])).sort((a,b)=>Number(b)-Number(a)),[trades]);
   const filtered=useMemo(()=>{
@@ -35,9 +37,9 @@ export default function Analytics() {
     return trades.filter(t=>!t.date||tradeDateKey(t.date)>=min);
   },[trades,period,selectedMonth,selectedYear,customRange]);
   const stats=useMemo(()=>calculateTradeAnalytics(filtered,accounts),[filtered,accounts]);
-  const equity=useMemo(()=>{let value=0;return [...filtered].filter(t=>typeof t.pnl==="number").sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(t=>({date:t.date,equity:+(value+=Number(t.pnl)).toFixed(2)}))},[filtered]);
+  const equity=useMemo(()=>{let value=0;return [...filtered].map(t=>({...t,pnl:measuredTradePnl(t)})).filter(t=>t.pnl!==null).sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(t=>({date:t.date,equity:+(value+=t.pnl).toFixed(2)}))},[filtered]);
   const exportLabel=period==="month"?selectedMonth:period==="year"?selectedYear:period==="custom"?`${customRange.start||"debut"}-${customRange.end||"fin"}`:period==="all"?"toute-periode":`${period}j`;
-  const download=()=>{if(!filtered.length)return;const keys=["date","instrument","direction","pnl","r","session","setup","plan_respected","account_id"];const esc=v=>`"${String(v??"").replaceAll('"','""')}"`;const csv=[keys.join(","),...filtered.map(t=>keys.map(k=>esc(t[k])).join(","))].join("\n");const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download=`pipsevo-trades-${exportLabel}.csv`;a.click();URL.revokeObjectURL(url)};
+  const download=()=>{if(!filtered.length)return;const keys=["date","instrument","direction","pnl","r","session","setup","plan_respected","account_id"];const rows=filtered.map(t=>({...t,pnl:measuredTradePnl(t)}));downloadBlob(new Blob([buildCsv(rows,keys.map(key=>[key,key]),",")],{type:"text/csv;charset=utf-8"}),`pipsevo-trades-${exportLabel}.csv`)};
   const metrics=data?.metrics||EMPTY_METRICS;
 
   return <div className="pe-page pe-page-stack max-w-[1800px] mx-auto">
@@ -45,7 +47,7 @@ export default function Analytics() {
     <div className="overflow-x-auto border-b border-white/[0.06]"><div className="flex min-w-max gap-1">{TABS.map(t=><button key={t} onClick={()=>setTab(t)} className={`px-4 py-3 text-sm transition ${tab===t?"text-white border-b-2 border-[#7C4DFF]":"text-[#7E8798] hover:text-white"}`}>{t}</button>)}</div></div>
     {error&&<div className="rounded-2xl border border-[#F26A70]/25 bg-[#F26A70]/10 p-4 text-sm text-[#FF8A8A] flex justify-between"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 text-xs"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
     {loading?<div className="grid md:grid-cols-3 gap-4">{Array.from({length:6}).map((_,i)=><div key={i} className="h-36 card-elev animate-pulse"/>)}</div>:tab==="Calendrier"?<TradeCalendar trades={trades} money={money} formatDate={date}/>:!filtered.length?<Empty/>:<>
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3"><Kpi l="Profit net" v={stats.pnl===null?"—":money(stats.pnl,{signDisplay:"always"})} c={stats.pnl===null?"#7E8798":stats.pnl>=0?"#46C99A":"#F26A70"}/><Kpi l="Win rate" v={`${stats.winrate}%`} c="#46C99A"/><Kpi l="Profit factor" v={stats.profitFactor===null?"—":Number.isFinite(stats.profitFactor)?stats.profitFactor.toFixed(2):"∞"} c={stats.profitFactor===null?"#7E8798":"#B58BFF"}/><Kpi l="Gain moyen" v={stats.avgWin===null?"—":money(stats.avgWin)} c={stats.avgWin===null?"#7E8798":"#46C99A"}/><Kpi l="Perte moyenne" v={stats.avgLoss===null?"—":money(stats.avgLoss)} c={stats.avgLoss===null?"#7E8798":"#F26A70"}/><Kpi l="Plan respecté" v={stats.planRate===null?"—":`${stats.planRate}%`} c={stats.planRate===null?"#7E8798":"#4F8CFF"}/></div>
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3"><Kpi l="Profit net" v={stats.pnl===null?"—":money(stats.pnl,{signDisplay:"always"})} c={stats.pnl===null?"#7E8798":stats.pnl>=0?"#46C99A":"#F26A70"}/><Kpi l="Win rate" v={stats.winrate===null?"—":`${stats.winrate}%`} c={stats.winrate===null?"#7E8798":"#46C99A"}/><Kpi l="Profit factor" v={stats.profitFactor===null?"—":Number.isFinite(stats.profitFactor)?stats.profitFactor.toFixed(2):"∞"} c={stats.profitFactor===null?"#7E8798":"#B58BFF"}/><Kpi l="Gain moyen" v={stats.avgWin===null?"—":money(stats.avgWin)} c={stats.avgWin===null?"#7E8798":"#46C99A"}/><Kpi l="Perte moyenne" v={stats.avgLoss===null?"—":money(stats.avgLoss)} c={stats.avgLoss===null?"#7E8798":"#F26A70"}/><Kpi l="Plan respecté" v={stats.planRate===null?"—":`${stats.planRate}%`} c={stats.planRate===null?"#7E8798":"#4F8CFF"}/></div>
       {tab==="Vue d'ensemble"&&<Overview equity={equity} stats={stats}/>}
       {tab==="Performance"&&<Performance stats={stats} money={money}/>}
       {tab==="Trades"&&<TradesView trades={filtered} money={money} date={date} onSelect={trade=>navigate(journalTradePath(trade.id))}/>}

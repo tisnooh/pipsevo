@@ -9,6 +9,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "./ui/dialog";
 import { localDateKey } from "../lib/tradeCalendar";
+import { useConfirmDialog } from "./ConfirmDialog";
 
 const PROVIDERS = [
   { id: "ctrader", name: "cTrader", mark: "cT", copy: "OAuth officiel et comptes cTrader autorisés en lecture seule." },
@@ -83,6 +84,7 @@ const clearIntegrationQuery = () => {
 };
 
 export default function IntegrationConnections({ compact = false, returnPath = "/app/settings", onConnectionReady }) {
+  const { confirm, confirmationDialog } = useConfirmDialog();
   const connectionReadyRef = useRef(onConnectionReady);
   const [capabilities, setCapabilities] = useState({ providers: [] });
   const [connections, setConnections] = useState([]);
@@ -308,7 +310,8 @@ export default function IntegrationConnections({ compact = false, returnPath = "
   };
 
   const disconnect = async (connection) => {
-    if (!window.confirm("Déconnecter cette source et supprimer ses jetons chiffrés ?")) return;
+    const accepted = await confirm({ title: "Déconnecter cette source ?", description: "Les jetons chiffrés conservés par PipsEvo seront supprimés. Tu devras autoriser de nouveau la plateforme pour reprendre la synchronisation.", confirmLabel: "Déconnecter", destructive: true });
+    if (!accepted) return;
     setActionId(connection.id);
     try {
       await integrationConnections.disconnect(connection.id);
@@ -368,6 +371,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
         <DialogFooter><button onClick={() => setSelectConnection(null)} className="btn-ghost">Plus tard</button><button onClick={saveSelection} disabled={!selectedIds.length || actionId === selectConnection?.id} className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-50">{actionId === selectConnection?.id && <Loader2 className="h-4 w-4 animate-spin"/>}Importer les comptes</button></DialogFooter>
       </DialogContent>
     </Dialog>
+    {confirmationDialog}
   </div>;
 }
 

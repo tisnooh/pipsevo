@@ -1,24 +1,27 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, LoaderCircle, RefreshCw } from "lucide-react";
+import { apiErrorMessage } from "../../lib/apiError";
 
-export const formatDate = (value) => value ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
+export const formatDate = (value) => value && Number.isFinite(new Date(value).getTime()) ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
 export const formatNumber = (value) => new Intl.NumberFormat("fr-FR").format(Number(value || 0));
-export const extractError = (error) => error?.response?.data?.detail || error?.message || "Une erreur est survenue.";
+export const extractError = apiErrorMessage;
 export const confirmAction = (message) => window.confirm(message);
 
 export function useAdminData(loader, dependencies = []) {
   const [state, setState] = useState({ loading: true, data: null, error: "" });
+  const sequence = useRef(0);
   const load = useCallback(async () => {
-    setState((current) => ({ ...current, loading: true, error: "" }));
+    const current = ++sequence.current;
+    setState({ loading: true, data: null, error: "" });
     try {
       const result = await loader();
-      setState({ loading: false, data: result.data, error: "" });
+      if (current === sequence.current) setState({ loading: false, data: result.data, error: "" });
     } catch (error) {
-      setState({ loading: false, data: null, error: extractError(error) });
+      if (current === sequence.current) setState({ loading: false, data: null, error: extractError(error) });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, dependencies);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); return () => { sequence.current += 1; }; }, [load]);
   return { ...state, reload: load };
 }
 

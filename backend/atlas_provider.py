@@ -127,7 +127,7 @@ def _anthropic_completion(config: AtlasProviderConfig, system: str, prompt: str)
         import anthropic
     except ImportError as exc:
         raise AtlasProviderFailure("not_configured", "Le SDK Anthropic n'est pas installé.") from exc
-    client = anthropic.Anthropic(api_key=config.api_key)
+    client = anthropic.Anthropic(api_key=config.api_key, timeout=config.timeout_seconds, max_retries=0)
     try:
         message = client.messages.create(
             model=config.model,
