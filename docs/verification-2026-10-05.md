@@ -66,7 +66,9 @@ Objectifs, règles de challenge, émotions, plan de trading, notes et captures n
 
 Le journal de production inspecté contenait initialement deux échecs et une réservation ancienne en statut `sending`. Après publication, une connexion normale a repris cette réservation ; l'envoi SMTP a à nouveau échoué. Le journal affiche finalement trois échecs, sans envoi bloqué ni succès. Le mécanisme de reprise fonctionne, mais la livraison réelle n'est pas certifiée.
 
-Les instances Free de Render bloquent les ports SMTP `25`, `465` et `587` ([documentation officielle](https://render.com/docs/free#other-limitations)). Cela pourrait expliquer les échecs Gmail SMTP si ce service utilise cette offre ; l'offre effective et les logs restent à vérifier dans un tableau de bord Render authentifié. Aucun changement de fournisseur, offre payante, mot de passe ou secret n'a été effectué. La distinction SMTP/HTTPS et les limites de déduplication sont détaillées dans `docs/email-system.md`.
+Le tableau de bord Render authentifié confirme désormais que `pipsevo-backend` utilise une instance **Free**. Les logs du 5 octobre à 07:48:40 affichent `OSError: [Errno 101] Network is unreachable` pendant `socket.create_connection`, avant l'authentification SMTP. Les instances Free bloquent les ports SMTP `25`, `465` et `587` ([documentation officielle](https://render.com/docs/free#other-limitations)). Le transport Gmail SMTP du backend ne peut donc pas fonctionner avec cette offre : changer le mot de passe ou pousser à nouveau le code ne débloque pas ces ports.
+
+La solution doit être choisie par le propriétaire : envoi HTTPS via l'API Gmail avec une autorisation OAuth dédiée, ou fournisseur d'envoi HTTPS avec une identité d'expédition vérifiée. Aucun changement de fournisseur, permission Google supplémentaire, offre payante, mot de passe ou secret n'a été effectué. Le SMTP Supabase Auth reste un transport séparé, à tester indépendamment. La distinction SMTP/HTTPS et les limites de déduplication sont détaillées dans `docs/email-system.md`.
 
 ## Contrôles navigateur et publication
 
@@ -76,4 +78,6 @@ Le commit initial de corrections `054c1fddec7f89e8bbffbef77618d0b8d8bb9249` a é
 
 Le complément `43e07935af165466e8a47935bd3919445e3f2655` a aussi été poussé : déploiement Vercel de production `READY`, SHA exact et alias vérifiés. Le backend expose le nouveau champ de suivi des envois interrompus et répond `200` au healthcheck. Le journal des mails a été vérifié sur le vrai site, avec les trois échecs décrits ci-dessus.
 
-Les substitutions de dépendances frontend décrites dans ce document devront à leur tour être contrôlées après publication. Aucun test destructif sur les utilisateurs, comptes de trading ou données de production n'a été effectué.
+Les substitutions de dépendances frontend ont été publiées dans `aee28a569e6abf0d131ca1ec0295846793e8c97a`. Le déploiement Vercel `dpl_eun9J3EqGAseYzEeEwzQznMA7jbC` est `READY`, cible `production`, SHA exact et alias `pipsevo.vercel.app` vérifiés. L'accueil répond `200` et conserve les en-têtes `nosniff` et `DENY`. Les hashes locaux mentionnés plus haut ne servent pas à identifier un bundle distant compilé avec d'autres variables d'environnement.
+
+Render confirme le déploiement serveur `dep-db1jjegae00c73fjr7o0` en état `Live`, avec le commit exact `43e07935af165466e8a47935bd3919445e3f2655` ; le healthcheck répond `200` avec API et base `ok`. La mise à jour frontend suivante ne modifie pas le backend. Aucun test destructif sur les utilisateurs, comptes de trading ou données de production n'a été effectué.

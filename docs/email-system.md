@@ -23,6 +23,10 @@ Vérifier d'abord l'offre de calcul du service : les instances **Free** de Rende
 
 Le SMTP de Supabase Auth est un flux séparé, exécuté par Supabase : son fonctionnement ne prouve pas que le backend Render peut joindre Gmail.
 
+Contrôle du 5 octobre 2026 : le tableau de bord authentifié confirme l'offre Free de `pipsevo-backend`. L'envoi de bienvenue échoue à l'ouverture de la connexion réseau avec `OSError: [Errno 101] Network is unreachable`, avant toute authentification SMTP. Les instructions SMTP ci-dessous ne sont pas utilisables pour ce service dans son offre actuelle. Ne pas changer le mot de passe d'application pour corriger ce blocage et ne pas présenter la configuration présente comme un service d'envoi opérationnel.
+
+Pour conserver l'adresse Gmail sur un transport HTTPS, l'[API Gmail permet l'envoi de messages MIME](https://developers.google.com/workspace/gmail/api/guides/sending). Cette solution nécessite une autorisation OAuth d'envoi distincte de la connexion Google à PipsEvo ; le mot de passe d'application SMTP ne remplace pas cette autorisation. Ce transport n'est pas encore implémenté ni activé dans PipsEvo. L'autre choix est le transport Resend HTTPS déjà implémenté, après configuration d'une identité d'expédition autorisée et d'une clé serveur. Le choix du fournisseur et toute nouvelle permission restent à valider par le propriétaire.
+
 Ajouter les variables suivantes dans l'environnement du backend :
 
 ```dotenv
