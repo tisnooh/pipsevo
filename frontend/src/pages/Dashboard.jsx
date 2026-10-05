@@ -136,7 +136,7 @@ export default function Dashboard() {
   const accent = activeTemplate.accent === "blue" ? "#4F8DFF" : "#8067F4";
   const accentSoft = activeTemplate.accent === "blue" ? "rgba(79,141,255,.18)" : "rgba(128,103,244,.18)";
   const panel = "rounded-xl border border-[#6571CF]/20 bg-[#0D1120] shadow-[inset_0_1px_0_rgba(255,255,255,.025)]";
-  const control = "h-9 rounded-lg border border-[#6971C9]/20 bg-[#0C1122] px-3 text-xs text-[#C9CDD5] outline-none transition hover:border-[#7780E0]/35 focus:border-[#8075ED]";
+  const control = "pe-control !min-h-9 !h-9 !px-3 !text-xs outline-none transition hover:border-[#7780E0]/35 focus:border-[#8075ED]";
 
   return (
     <div className="pe-page max-w-[1800px] mx-auto space-y-4">
@@ -391,10 +391,10 @@ function TradeCalendarPanel({ calendar, accent, money, onPrevious, onNext, onTod
             key={cell.key}
             onClick={() => onSelect(cell)}
             disabled={!cell.inMonth}
-            className={`relative min-h-[58px] rounded-lg border p-1.5 text-left transition sm:min-h-[92px] sm:p-2.5 ${!cell.inMonth ? "cursor-default border-transparent bg-transparent opacity-25" : hasTrades ? positive ? "border-[#46C99A]/30 bg-[#46C99A]/[0.08] hover:border-[#46C99A]/55" : negative ? "border-[#F26A70]/30 bg-[#F26A70]/[0.08] hover:border-[#F26A70]/55" : "border-[#6571CF]/18 bg-[#6571CF]/[0.06] hover:border-[#727DDE]/35" : "border-[#6571CF]/12 bg-[#090E1C] hover:border-[#727DDE]/28"}`}
+            className={`relative min-h-[58px] rounded-lg border p-1.5 text-left transition sm:min-h-[92px] sm:p-2.5 ${!cell.inMonth ? "cursor-default border-transparent bg-transparent" : hasTrades ? positive ? "border-[#46C99A]/30 bg-[#46C99A]/[0.08] hover:border-[#46C99A]/55" : negative ? "border-[#F26A70]/30 bg-[#F26A70]/[0.08] hover:border-[#F26A70]/55" : "border-[#6571CF]/20 bg-[#6571CF]/[0.06] hover:border-[#727DDE]/35" : "pe-calendar-cell hover:border-[#727DDE]/30"}`}
             aria-label={`${cell.key}, ${cell.trades.length} trades, ${cell.pnl === null ? "P&L indisponible" : money(cell.pnl)}`}
           >
-            <div className="font-numeric text-right text-[9px] text-[#7F899E] sm:text-[10px]">{cell.inMonth ? cell.day : ""}</div>
+            <div className="font-numeric text-right text-[9px] text-[#7F899E] sm:text-[10px]">{cell.day}{!cell.inMonth && <span className="sr-only"> (hors du mois sélectionné)</span>}</div>
             {hasTrades && <div className="mt-1 text-center sm:mt-3"><div className={`font-numeric truncate text-[8px] font-semibold sm:text-xs ${positive ? "text-[#46C99A]" : negative ? "text-[#F26A70]" : "text-[#9C8EF0]"}`}>{cell.pnl === null ? "—" : money(cell.pnl, { signDisplay: "always", maximumFractionDigits: 0 })}</div><div className="mt-1 hidden text-[8px] text-[#69758B] sm:block">{cell.trades.length} trade{cell.trades.length > 1 ? "s" : ""}</div><span className="mx-auto mt-1 block h-1 w-1 rounded-full sm:hidden" style={{ background: positive ? "#46C99A" : negative ? "#F26A70" : accent }} /></div>}
           </button>;
         })}
@@ -494,7 +494,7 @@ function GaugeKpi({ label, value, display, detail, accent, id, testid, amount = 
       </div>
       <svg viewBox="0 0 120 66" className="h-[54px] w-[88px]" role="img" aria-label={`${label} : ${display}`}>
         <defs><linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#536BFF"/><stop offset="100%" stopColor={accent}/></linearGradient></defs>
-        <path d="M10 56 A50 50 0 0 1 110 56" pathLength="100" fill="none" stroke="#1D263A" strokeWidth="10" strokeLinecap="round" />
+        <path d="M10 56 A50 50 0 0 1 110 56" pathLength="100" fill="none" stroke="var(--pe-chart-track)" strokeWidth="10" strokeLinecap="round" />
         <path d="M10 56 A50 50 0 0 1 110 56" pathLength="100" fill="none" stroke={`url(#${gradientId})`} strokeWidth="10" strokeLinecap="round" strokeDasharray="100" strokeDashoffset={100 - safeValue} />
         <circle cx="10" cy="56" r="2" fill="#536BFF" />
         <circle cx="110" cy="56" r="2" fill={accent} opacity={safeValue > 98 ? 1 : .18} />
@@ -512,7 +512,7 @@ function RingKpi({ label, value, display, detail, accent, id }) {
       <div className="min-w-0"><div className="font-numeric text-xl font-semibold tracking-[-.025em] text-[#F3F5FA] sm:text-2xl">{display}</div><div className="mt-2 text-[9px] leading-4 text-[#687288]">{detail}</div></div>
       <svg viewBox="0 0 52 52" className="h-[58px] w-[58px] -rotate-90" role="img" aria-label={`${label} : ${display}`}>
         <defs><linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#4F8DFF"/><stop offset="100%" stopColor={accent}/></linearGradient></defs>
-        <circle cx="26" cy="26" r="20" pathLength="100" fill="none" stroke="#1D263A" strokeWidth="7" />
+        <circle cx="26" cy="26" r="20" pathLength="100" fill="none" stroke="var(--pe-chart-track)" strokeWidth="7" />
         <circle cx="26" cy="26" r="20" pathLength="100" fill="none" stroke={`url(#${gradientId})`} strokeWidth="7" strokeLinecap="round" strokeDasharray="100" strokeDashoffset={100 - safeValue} />
       </svg>
     </div>
@@ -525,10 +525,10 @@ function MiniGauge({ value, display, suffix, accent, id }) {
   return <div className="text-center">
     <svg viewBox="0 0 120 72" className="mx-auto h-[70px] w-[112px]" role="img" aria-label={`Score de discipline : ${display}${suffix}`}>
       <defs><linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#4F8DFF"/><stop offset="100%" stopColor={accent}/></linearGradient></defs>
-      <path d="M10 60 A50 50 0 0 1 110 60" pathLength="100" fill="none" stroke="#1D263A" strokeWidth="9" strokeLinecap="round" />
+      <path d="M10 60 A50 50 0 0 1 110 60" pathLength="100" fill="none" stroke="var(--pe-chart-track)" strokeWidth="9" strokeLinecap="round" />
       <path d="M10 60 A50 50 0 0 1 110 60" pathLength="100" fill="none" stroke={`url(#${gradientId})`} strokeWidth="9" strokeLinecap="round" strokeDasharray="100" strokeDashoffset={100 - safeValue} />
-      <text x="60" y="58" textAnchor="middle" fill="#F3F5FA" fontSize="24" fontWeight="700">{display}</text>
-      <text x="83" y="58" fill="#7F899E" fontSize="8">{suffix}</text>
+      <text x="60" y="58" textAnchor="middle" fill="var(--pe-text)" fontSize="24" fontWeight="700">{display}</text>
+      <text x="83" y="58" fill="var(--pe-text-muted)" fontSize="8">{suffix}</text>
     </svg>
   </div>;
 }
@@ -536,7 +536,7 @@ function MiniGauge({ value, display, suffix, accent, id }) {
 function DisciplineRow({ label, value, progress, accent }) {
   return <div>
     <div className="flex items-center justify-between gap-2 text-[10px]"><span className="text-[#747D91]">{label}</span><span className="font-numeric text-[#CBD0DC]">{value}</span></div>
-    <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#1C2538]"><div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${clamp(progress)}%`, background: accent }} /></div>
+    <div className="mt-1.5 h-1 overflow-hidden rounded-full" style={{ background: "var(--pe-chart-track)" }}><div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${clamp(progress)}%`, background: accent }} /></div>
   </div>;
 }
 

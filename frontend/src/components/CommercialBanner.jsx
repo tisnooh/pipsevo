@@ -13,7 +13,7 @@ export default function CommercialBanner({ placement = "app" }) {
       ? { badge: "Offre de lancement", text: `${launch.title} ${launch.detail}`, cta: "Débloquer Pro" }
       : { badge: "PipsEvo", text: "Choisis le plan adapté à ton trading.", cta: "Voir les offres" };
 
-  return <aside className="flex flex-col gap-3 rounded-2xl border border-[#7C4DFF]/25 bg-gradient-to-r from-[#7C4DFF]/10 via-[#111426] to-[#4F8CFF]/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" aria-label={content.badge}>
+  return <aside className="pe-commercial-banner flex flex-col gap-3 rounded-2xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between" aria-label={content.badge}>
     <div className="flex min-w-0 items-start gap-3 sm:items-center">
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#7C4DFF]/15 text-[#C8AEFF]"><Sparkles className="h-4 w-4"/></span>
       <p className="text-xs leading-relaxed text-[#B5BBC9]"><strong className="mr-2 text-white">{content.badge}</strong>{content.text}</p>

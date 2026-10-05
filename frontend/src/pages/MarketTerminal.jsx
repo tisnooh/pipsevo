@@ -10,11 +10,11 @@ const MARKET_GROUPS = {
   cfd: [
     { id: "eurusd", label: "EUR/USD", symbol: "OANDA:EURUSD" },
     { id: "gold-cfd", label: "Or CFD", symbol: "OANDA:XAUUSD" },
-    { id: "nasdaq-cfd", label: "Nasdaq CFD", symbol: "NASDAQ:NDX" },
+    { id: "nasdaq-cfd", label: "Nasdaq CFD", symbol: "OANDA:NAS100USD" },
     { id: "bitcoin-cfd", label: "Bitcoin CFD", symbol: "BINANCE:BTCUSDT" },
   ],
   futures: [
-    { id: "nasdaq-futures", label: "Nasdaq Futures", symbol: "NASDAQ:NDX", directSymbol: "CME_MINI:NQ1!", proxyLabel: "Indice Nasdaq" },
+    { id: "nasdaq-futures", label: "Nasdaq Futures", symbol: "OANDA:NAS100USD", directSymbol: "CME_MINI:NQ1!", proxyLabel: "Nasdaq 100 CFD OANDA (pas le contrat NQ)" },
     { id: "sp-futures", label: "S&P Futures", symbol: "SP:SPX", directSymbol: "CME_MINI:ES1!", proxyLabel: "Indice S&P 500" },
     { id: "gold-futures", label: "Or Futures", symbol: "OANDA:XAUUSD", directSymbol: "COMEX:GC1!", proxyLabel: "Or spot" },
     { id: "oil-futures", label: "Pétrole Futures", symbol: "TVC:USOIL", directSymbol: "NYMEX:CL1!", proxyLabel: "Pétrole US" },

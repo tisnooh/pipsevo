@@ -204,12 +204,12 @@ export function JournalPage() {
   const avgR = rTrades.length ? rTrades.reduce((s, t) => s + t.r, 0) / rTrades.length : null
 
   const kpis = [
-    { label: "Trades", value: filtered.length.toString(), sub: "", Icon: BarChart3, color: "#4F8CFF" },
-    { label: "Win Rate", value: winRate === null ? "—" : `${winRate}%`, sub: "", Icon: Target, color: "#46C99A" },
-    { label: "Profit net", value: totalPnl === null ? "—" : money(totalPnl,{signDisplay:"always"}), sub: "", Icon: TrendingUp, color: totalPnl === null ? "#7E8798" : totalPnl >= 0 ? "#46C99A" : "#F26A70" },
-    { label: "Gain moyen", value: avgWin === null ? "—" : money(avgWin,{signDisplay:"always"}), sub: "", Icon: ArrowUpRight, color: avgWin === null ? "#7E8798" : "#46C99A" },
-    { label: "Perte moyenne", value: avgLoss === null ? "—" : money(avgLoss), sub: "", Icon: ArrowDownRight, color: avgLoss === null ? "#7E8798" : "#F26A70" },
-    { label: "R Multiple moyen", value: avgR === null ? "—" : `${avgR.toFixed(2)}R`, sub: "", Icon: Ruler, color: "#7C4DFF" },
+    { label: "Trades", value: filtered.length.toString(), sub: "", Icon: BarChart3, color: "var(--pe-blue)" },
+    { label: "Win Rate", value: winRate === null ? "—" : `${winRate}%`, sub: "", Icon: Target, color: "var(--pe-profit)" },
+    { label: "Profit net", value: totalPnl === null ? "—" : money(totalPnl,{signDisplay:"always"}), sub: "", Icon: TrendingUp, color: totalPnl === null ? "var(--pe-text-muted)" : totalPnl >= 0 ? "var(--pe-profit)" : "var(--pe-risk)" },
+    { label: "Gain moyen", value: avgWin === null ? "—" : money(avgWin,{signDisplay:"always"}), sub: "", Icon: ArrowUpRight, color: avgWin === null ? "var(--pe-text-muted)" : "var(--pe-profit)" },
+    { label: "Perte moyenne", value: avgLoss === null ? "—" : money(avgLoss), sub: "", Icon: ArrowDownRight, color: avgLoss === null ? "var(--pe-text-muted)" : "var(--pe-risk)" },
+    { label: "R Multiple moyen", value: avgR === null ? "—" : `${avgR.toFixed(2)}R`, sub: "", Icon: Ruler, color: "var(--pe-brand)" },
   ]
 
   const detailTabs = ["Aperçu", "Notes", "Statistiques"]

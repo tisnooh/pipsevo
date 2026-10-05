@@ -222,7 +222,7 @@ export default function AppShell() {
                     <stop offset="100%" stopColor="#B58BFF" />
                   </linearGradient>
                 </defs>
-                <path d="M14 54 A42 42 0 0 1 98 54" stroke="#1E2430" strokeWidth="7" fill="none" strokeLinecap="round" />
+                <path d="M14 54 A42 42 0 0 1 98 54" stroke="var(--pe-chart-track)" strokeWidth="7" fill="none" strokeLinecap="round" />
                 <path
                   d="M14 54 A42 42 0 0 1 98 54"
                   stroke="url(#gauge-a)"
@@ -252,7 +252,7 @@ export default function AppShell() {
             <div className="mt-1 text-[9px] leading-[1.45] text-[#9CA3AF]">{BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Les fonctions essentielles sont gratuites. Les outils avancés arrivent au lancement.":"Compare Essential et Pro sans engagement."}</div>
             <button
               onClick={() => { closeMobile(); nav("/pricing"); }}
-              className="mt-2 w-full rounded-lg bg-gradient-to-r from-[#7C4DFF] to-[#5A2DFF] py-1.5 text-[10px] font-semibold transition hover:opacity-90"
+              className="pe-on-accent mt-2 w-full rounded-lg bg-gradient-to-r from-[#7C4DFF] to-[#5A2DFF] py-1.5 text-[10px] font-semibold transition hover:opacity-90"
               data-testid="sidebar-upgrade"
             >
               {BILLING_CONFIG.currentPhase===COMMERCIAL_PHASES.BETA?"Voir la roadmap →":"Voir les tarifs →"}
@@ -391,7 +391,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
 
       <div ref={profileRef} className="relative shrink-0">
       <button onClick={()=>setProfileOpen(v=>!v)} aria-expanded={profileOpen} aria-controls="app-profile-menu" aria-label="Ouvrir le menu du profil" className="flex items-center gap-1.5 rounded-xl border border-[#6571CF]/20 bg-[#0C1122] px-1.5 py-1 transition hover:border-[#8075ED]/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:gap-2 md:px-2 md:py-1.5">
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] text-[10px] font-bold md:h-7 md:w-7 md:text-xs">
+        <div className="pe-on-accent flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#7C4DFF] to-[#4F8CFF] text-[10px] font-bold md:h-7 md:w-7 md:text-xs">
           {(user?.name || user?.email || "U")[0].toUpperCase()}
         </div>
         <div className="hidden max-w-32 truncate whitespace-nowrap text-sm font-medium lg:max-w-48 sm:block" data-testid="top-username">

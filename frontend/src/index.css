@@ -34,6 +34,12 @@
   --pe-profit: #46C99A;
   --pe-risk: #F26A70;
   --pe-warning: #FFB547;
+  --pe-control-background: #0C1122;
+  --pe-card-background: linear-gradient(180deg, rgba(17, 22, 42, .96), rgba(13, 17, 32, .98));
+  --pe-card-shadow: inset 0 1px 0 rgba(255,255,255,.025), 0 14px 38px rgba(0,0,0,.16);
+  --pe-nav-background: rgba(7, 10, 20, .95);
+  --pe-chart-track: #1D263A;
+  --pe-chart-grid: rgba(255,255,255,.065);
   --pe-radius-sm: 0.625rem;
   --pe-radius-md: 0.625rem;
   --pe-radius-lg: 0.75rem;
@@ -56,7 +62,7 @@ html.light {
   --border-2: #C9D2E2;
   --text: #172033;
   --muted: #647086;
-  --muted-2: #8791A4;
+  --muted-2: #647086;
   --pe-canvas: #F4F6FB;
   --pe-canvas-deep: #EEF2F8;
   --pe-surface: #FFFFFF;
@@ -66,12 +72,18 @@ html.light {
   --pe-border-strong: rgba(79, 93, 132, 0.31);
   --pe-text: #172033;
   --pe-text-muted: #647086;
-  --pe-text-subtle: #8791A4;
+  --pe-text-subtle: #647086;
   --pe-brand: #6548D8;
   --pe-blue: #3475E6;
   --pe-profit: #168461;
   --pe-risk: #D84452;
   --pe-warning: #B97300;
+  --pe-control-background: #F8FAFD;
+  --pe-card-background: linear-gradient(180deg, #FFFFFF, #FAFBFE);
+  --pe-card-shadow: inset 0 1px 0 #fff, 0 10px 28px rgba(54,66,96,.07);
+  --pe-nav-background: rgba(255,255,255,.96);
+  --pe-chart-track: #DFE5EF;
+  --pe-chart-grid: rgba(79,93,132,.14);
 }
 
 @layer base {
@@ -314,7 +326,7 @@ input[type="time"] {
   min-width: 0;
 }
 .pe-eyebrow {
-  color: #9C8EF0;
+  color: var(--pe-brand);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 0.6875rem;
   font-weight: 600;
@@ -382,8 +394,8 @@ input[type="time"] {
   min-width: 0;
   border: 1px solid var(--pe-border);
   border-radius: var(--pe-radius-xl);
-  background: linear-gradient(180deg, rgba(17, 22, 42, 0.96), rgba(13, 17, 32, 0.98));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025), 0 14px 38px rgba(0, 0, 0, 0.16);
+  background: var(--pe-card-background);
+  box-shadow: var(--pe-card-shadow);
 }
 .pe-card-pad { padding: var(--pe-card-padding); }
 .pe-card-header {
@@ -406,7 +418,7 @@ input[type="time"] {
   min-height: var(--pe-control);
   border: 1px solid var(--pe-border-strong);
   border-radius: var(--pe-radius-md);
-  background: #0C1122;
+  background: var(--pe-control-background);
   color: var(--pe-text);
   padding-inline: 1rem;
   font-size: 0.875rem;
@@ -445,7 +457,7 @@ input[type="time"] {
   -webkit-overflow-scrolling: touch;
   border: 1px solid var(--pe-border);
   border-radius: var(--pe-radius-xl);
-  background: linear-gradient(180deg, rgba(13, 17, 32, 0.98), rgba(9, 14, 28, 0.98));
+  background: var(--pe-card-background);
 }
 .pe-table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
 .pe-table th {
@@ -1259,6 +1271,43 @@ html.light .pe-announcement span { color: var(--pe-text-muted); }
 html.light .pe-app-shell { color: var(--pe-text); background: radial-gradient(circle at 74% -12%, rgba(79,141,255,.13), transparent 28rem), radial-gradient(circle at 34% 4%, rgba(128,103,244,.08), transparent 24rem), var(--pe-canvas-deep); }
 html.light .pe-app-sidebar { border-color: var(--pe-border); background: rgba(255,255,255,.94); box-shadow: 18px 0 40px rgba(60,72,105,.08); }
 html.light .pe-app-topbar { border-color: var(--pe-border); background: rgba(255,255,255,.86); }
+/* Application components share the same theme, including native controls and SVGs. */
+.pe-app-mobile-nav { background: var(--pe-nav-background); border-color: var(--pe-border); }
+.pe-app-shell select, .pe-app-shell option { color: var(--pe-text); }
+.pe-app-shell option { background: var(--pe-control-background); }
+html.light .pe-app-shell option { color-scheme: light; }
+.pe-commercial-banner {
+  border-color: color-mix(in srgb, var(--pe-brand) 30%, transparent);
+  background: linear-gradient(105deg, color-mix(in srgb, var(--pe-brand) 12%, var(--pe-surface)), var(--pe-surface), color-mix(in srgb, var(--pe-blue) 10%, var(--pe-surface)));
+}
+.pe-calendar-cell { border-color: var(--pe-border); background: var(--pe-surface-soft); }
+.pe-app-shell [class*="border-[#6571CF]/"] { border-color: var(--pe-border); }
+html.light .pe-app-shell [class*="border-[#1E2430]"], html.light .pe-app-shell [class~="border-[#252938]"] { border-color: var(--pe-border); }
+.pe-app-shell .recharts-default-tooltip { background: var(--pe-surface-elevated) !important; border-color: var(--pe-border-strong) !important; color: var(--pe-text) !important; box-shadow: var(--pe-card-shadow) !important; }
+.pe-app-shell .recharts-tooltip-label { color: var(--pe-text) !important; }
+.pe-app-shell .recharts-cartesian-axis-tick-value { fill: var(--pe-text-muted); }
+.pe-app-shell .recharts-cartesian-grid line { stroke: var(--pe-chart-grid); }
+.pe-app-shell .recharts-reference-line line { stroke: var(--pe-border-strong); }
+html.light .pe-app-shell [class~="!text-white"],
+html.light .pe-app-shell [class~="text-[#C9CDD5]"], html.light .pe-app-shell [class~="text-[#CBD0DC]"],
+html.light .pe-app-shell [class~="text-[#E7E7E8]"], html.light .pe-app-shell [class~="text-[#DDF8EE]"],
+html.light .pe-app-shell [class~="text-[#FFE3E5]"], html.light .pe-app-shell [class~="text-[#DDE5FF]"] { color: var(--pe-text) !important; }
+html.light .pe-app-shell [class~="text-[#747D91]"], html.light .pe-app-shell [class~="text-[#747D92]"],
+html.light .pe-app-shell [class~="text-[#6F7580]"], html.light .pe-app-shell [class~="text-[#777D88]"],
+html.light .pe-app-shell [class~="text-[#737985]"], html.light .pe-app-shell [class~="text-[#7F899E]"],
+html.light .pe-app-shell [class~="text-[#8B95A9]"], html.light .pe-app-shell [class~="text-[#8690A5]"],
+html.light .pe-app-shell [class~="text-[#8D96AA]"], html.light .pe-app-shell [class~="text-[#8B93A7]"],
+html.light .pe-app-shell [class~="text-[#747E93]"], html.light .pe-app-shell [class~="text-[#667188]"],
+html.light .pe-app-shell [class~="text-[#78839A]"], html.light .pe-app-shell [class~="text-[#5F6A80]"],
+html.light .pe-app-shell [class~="text-[#7F8799]"], html.light .pe-app-shell [class~="text-[#8E95A6]"] { color: var(--pe-text-muted) !important; }
+html.light .pe-app-shell [class~="text-[#B58BFF]"], html.light .pe-app-shell [class~="text-[#C8AEFF]"],
+html.light .pe-app-shell [class~="text-[#9C8EF0]"], html.light .pe-app-shell [class~="text-[#A885FF]"],
+html.light .pe-app-shell [class~="text-[#A78BFA]"], html.light .pe-app-shell [class~="text-[#C7C0FF]"],
+html.light .pe-app-shell [class~="text-[#AAA1D8]"], html.light .pe-app-shell [class~="text-[#9B8DE1]"],
+html.light .pe-app-shell [class~="text-[#B7A8FF]"], html.light .pe-app-shell [class~="text-[#A492F0]"] { color: var(--pe-brand) !important; }
+html.light .pe-app-shell [class~="text-[#46C99A]"], html.light .pe-app-shell [class~="!text-[#46C99A]"] { color: var(--pe-profit) !important; }
+html.light .pe-app-shell [class~="text-[#F26A70]"], html.light .pe-app-shell [class~="!text-[#F26A70]"] { color: var(--pe-risk) !important; }
+html.light .pe-app-shell [class~="text-[#4F8DFF]"], html.light .pe-app-shell [class~="text-[#85A9FF]"] { color: var(--pe-blue) !important; }
 html.light .pe-app-content::before { background-image: linear-gradient(rgba(75,89,130,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(75,89,130,.045) 1px, transparent 1px); }
 html.light .pe-public-header, html.light .pe-public-announcement { border-color: var(--pe-border) !important; background: rgba(255,255,255,.92) !important; color: #5f6b80 !important; box-shadow: 0 8px 28px rgba(52,65,96,.06); }
 html.light .pe-public-auth-action { border-color: rgba(101,72,216,.34) !important; background: rgba(101,72,216,.09) !important; color: #593cc9 !important; }
@@ -1388,6 +1437,12 @@ html.light .pipsevo-atmosphere__vignette { background: radial-gradient(ellipse a
 html.light [data-testid="landing-hero"]::after { background: linear-gradient(180deg, rgba(244,246,251,0) 0%, var(--pe-canvas-deep) 100%); }
 html.light [class~="from-[#17102C]"] { --tw-gradient-from: #f3efff var(--tw-gradient-from-position) !important; --tw-gradient-to: rgba(243,239,255,0) var(--tw-gradient-to-position) !important; }
 html.light [class~="to-[#090C16]"] { --tw-gradient-to: #eef2f8 var(--tw-gradient-to-position) !important; }
+
+/* Keep foregrounds white on filled actions, after the legacy neutral-token bridge. */
+html.light .btn-primary, html.light .btn-primary *,
+html.light .pe-on-accent, html.light .pe-on-accent *,
+html.light [class~="bg-[#7C4DFF]"], html.light [class~="bg-[#7C4DFF]"] *,
+html.light [class~="bg-[#6F56D9]"], html.light [class~="bg-[#6F56D9]"] * { color: #FFFFFF !important; }
 
 @media (max-width: 767px) {
   .pe-theme-toggle-global { bottom: max(.75rem, env(safe-area-inset-bottom)); }
