@@ -61,4 +61,12 @@ for (const route of ['/login', '/auth/callback', '/admin/users/test-user', '/app
 }
 assert.ok(!rewrite.test('/api/sync-due'), 'cron proxy must not be rewritten to HTML');
 assert.equal(deployment.outputDirectory, 'build');
-console.log('Build toolchain, public environment boundary and SPA routing checks passed.');
+import('../vite.config.mjs').then(({ default: buildConfig }) => {
+  const resolved = buildConfig({ mode: 'production', command: 'build' });
+  assert.deepEqual(resolved.envPrefix, [], 'automatic VITE_* exports must remain disabled');
+  const browserEnv = JSON.parse(resolved.define['process.env']);
+  for (const key of Object.keys(browserEnv)) {
+    assert.ok(key === 'NODE_ENV' || PUBLIC_KEYS.includes(key), `${key} is not reviewed for browser exposure`);
+  }
+  console.log('Build toolchain, public environment boundary and SPA routing checks passed.');
+}).catch(error => { console.error(error); process.exitCode = 1; });

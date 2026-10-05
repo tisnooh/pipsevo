@@ -7,6 +7,9 @@ const root = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig(({ mode, command }) => ({
   plugins: [react()],
+  // Disable Vite's automatic VITE_* exports; the reviewed legacy allowlist
+  // below is the only user-configurable environment surface in the browser.
+  envPrefix: [],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   // Existing Vercel REACT_APP_* configuration remains valid, but private
   // credentials and unknown keys are never added to the legacy browser object.

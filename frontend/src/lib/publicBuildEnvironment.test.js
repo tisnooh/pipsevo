@@ -15,6 +15,7 @@ describe('public build environment boundary', () => {
       SUPABASE_SERVICE_ROLE_KEY: secret,
       ATLAS_ANTHROPIC_API_KEY: secret,
       CRON_SECRET: secret,
+      VITE_UNKNOWN_SECRET: secret,
       REACT_APP_UNKNOWN_SECRET: secret,
       REACT_APP_BACKEND_URL: 'https://api.example.test',
     }, 'production');
