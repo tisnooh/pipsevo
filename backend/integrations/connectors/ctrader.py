@@ -53,7 +53,7 @@ class CTraderConnector(TradingConnector):
     platforms = ("ctrader",)
     auth_type = "oauth2"
     # Re-read previously imported history once after normalization changes.
-    normalization_revision = 2
+    normalization_revision = 3
 
     def __init__(self, client_id: str, client_secret: str, redirect_uri: str):
         self.client_id = client_id
@@ -181,6 +181,9 @@ class CTraderConnector(TradingConnector):
     async def sync_recent(self, account: IntegrationAccount, access: dict, cursor: dict) -> SyncBatch:
         previous = cursor.get("last_execution_at")
         start = datetime.fromisoformat(previous.replace("Z", "+00:00")) - timedelta(minutes=5) if previous else datetime.now(timezone.utc) - timedelta(days=7)
+        open_started = cursor.get("open_position_started_at")
+        if open_started:
+            start = min(start, datetime.fromisoformat(open_started.replace("Z", "+00:00")))
         return await self._sync(account, access, start)
 
     async def _sync(self, account: IntegrationAccount, access: dict, start: datetime) -> SyncBatch:
@@ -258,6 +261,10 @@ class CTraderConnector(TradingConnector):
         trades = [self._group_trade(key, rows, symbols) for key, rows in grouped.items()]
         trades = [trade for trade in trades if trade is not None]
         latest = max((item.executed_at for item in executions), default=end)
+        earliest_open = min(
+            (item.open_time for item in trades if item.close_time is None),
+            default=None,
+        )
         from ..models import AccountSnapshot
         snapshot = AccountSnapshot(
             balance=Decimal(str(trader.get("balance", 0))) / Decimal(10 ** int(trader.get("moneyDigits", 2))),
@@ -273,6 +280,8 @@ class CTraderConnector(TradingConnector):
             snapshot=snapshot,
             next_cursor={
                 "last_execution_at": latest.isoformat(),
+                **({"open_position_started_at": earliest_open.isoformat()}
+                   if earliest_open else {}),
                 **({"normalization_revision": self.normalization_revision}
                    if not (window_partial or history_partial) else {}),
             },
@@ -363,7 +372,12 @@ class CTraderConnector(TradingConnector):
         rows = sorted(rows, key=lambda row: int(row.get("executionTimestamp", 0)))
         if not rows:
             return None
-        opened = rows[0]
+        opened = next((row for row in rows if not row.get("closePositionDetail")), None)
+        # An incremental overlap may contain only closing fills of a trade
+        # already imported. Do not overwrite it with a false opening price,
+        # reversed direction or incomplete commission total.
+        if opened is None:
+            return None
         open_side: Literal["long", "short"] = (
             "long"
             if str(opened.get("tradeSide")).upper() in {"BUY", "1"}
@@ -381,7 +395,7 @@ class CTraderConnector(TradingConnector):
             row
             for row in rows
             if not row.get("closePositionDetail") and direction(row) == open_side
-        ] or [opened]
+        ]
         closing = [
             row
             for row in rows

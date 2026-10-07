@@ -110,6 +110,7 @@ def test_ctrader_snapshot_resolves_currency_and_keeps_partial_fills(monkeypatch)
     assert batch.executions[0].commission == Decimal("-2")
     assert len(batch.trades) == 1
     assert batch.next_cursor["normalization_revision"] == connector.normalization_revision
+    assert batch.next_cursor["open_position_started_at"] == batch.trades[0].open_time.isoformat()
 
 
 @pytest.mark.parametrize("conversion_fee", ["31", "-31"])
@@ -152,3 +153,23 @@ def test_ctrader_conversion_costs_do_not_cancel_between_partial_closes():
     ]
     trade = CTraderConnector._group_trade("position", [opened, *closing], {"3": "EURUSD"})
     assert trade.fees == Decimal("0.36")
+
+
+def test_ctrader_closing_only_overlap_cannot_replace_complete_trade():
+    closed = {"dealId": "2", "symbolId": "3", "executionTimestamp": "1791360000000",
+              "filledVolume": "100", "executionPrice": 1.1, "tradeSide": "SELL",
+              "closePositionDetail": {"grossProfit": "100", "moneyDigits": 2}}
+    assert CTraderConnector._group_trade("position", [closed], {"3": "EURUSD"}) is None
+
+
+def test_ctrader_incremental_sync_keeps_long_running_open_position_context(monkeypatch):
+    connector = CTraderConnector("client", "secret", "https://example.test/callback")
+    account = IntegrationAccount(id="account", connection_id="connection", user_id="user",
+                                 provider="ctrader", platform="ctrader", external_account_id="42")
+    sync = AsyncMock()
+    monkeypatch.setattr(connector, "_sync", sync)
+    asyncio.run(connector.sync_recent(account, {"access_token": "test-token"}, {
+        "last_execution_at": "2026-10-07T12:00:00+00:00",
+        "open_position_started_at": "2026-09-01T08:00:00+00:00",
+    }))
+    assert sync.await_args.args[2] == datetime(2026, 9, 1, 8, tzinfo=timezone.utc)

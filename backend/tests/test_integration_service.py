@@ -339,13 +339,14 @@ def test_multi_account_sync_persists_provider_currency():
 @pytest.mark.parametrize("cursor,expected_type", [
     ({"last_execution_at": "2026-10-07T12:00:00+00:00"}, "historical"),
     ({"normalization_revision": 1}, "historical"),
-    ({"normalization_revision": 2}, "incremental"),
+    ({"normalization_revision": 2}, "historical"),
+    ({"normalization_revision": CTraderConnector.normalization_revision}, "incremental"),
 ])
 def test_ctrader_normalization_revision_refreshes_history_once(cursor, expected_type):
     async def scenario():
         service, repository, _ = build_service()
         connector = CTraderConnector("client", "secret", "https://example.test/callback")
-        batch = SyncBatch(trades=[], next_cursor={"normalization_revision": 2})
+        batch = SyncBatch(trades=[], next_cursor={"normalization_revision": connector.normalization_revision})
         connector.sync_historical = AsyncMock(return_value=batch)
         connector.sync_recent = AsyncMock(return_value=batch)
         service.registry.register(connector)
@@ -367,7 +368,7 @@ def test_ctrader_normalization_revision_refreshes_history_once(cursor, expected_
         assert next(iter(repository.runs.values()))["sync_type"] == expected_type
         assert connector.sync_historical.await_count == (expected_type == "historical")
         assert connector.sync_recent.await_count == (expected_type == "incremental")
-        assert repository.update_integration_account.await_args.args[2]["sync_cursor"] == {"normalization_revision": 2}
+        assert repository.update_integration_account.await_args.args[2]["sync_cursor"] == {"normalization_revision": connector.normalization_revision}
 
     asyncio.run(scenario())
 
