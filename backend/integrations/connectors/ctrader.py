@@ -368,7 +368,8 @@ class CTraderConnector(TradingConnector):
             return "long" if str(row.get("tradeSide")).upper() in {"BUY", "1"} else "short"
 
         def quantity(row: dict) -> Decimal:
-            return Decimal(str(abs(row.get("filledVolume") or 0))) / Decimal("100")
+            # int64 values may be strings in ProtoJSON. Convert before abs().
+            return abs(Decimal(str(row.get("filledVolume") or 0))) / Decimal("100")
 
         opening = [
             row

@@ -95,3 +95,19 @@ def test_ctrader_snapshot_resolves_currency_and_keeps_partial_fills(monkeypatch)
     assert len(batch.executions) == 1
     assert batch.executions[0].commission == Decimal("-2")
     assert len(batch.trades) == 1
+
+
+def test_ctrader_groups_protojson_int64_strings_without_losing_pnl():
+    # ProtoJSON encodes int64 fields as decimal strings, including volumes.
+    opened = {"dealId": "1", "positionId": "2", "orderId": "10", "symbolId": "3",
+              "executionTimestamp": "1791360000000", "filledVolume": "1000000",
+              "executionPrice": 1.1, "tradeSide": "BUY", "commission": "-350", "moneyDigits": 2}
+    closed = {**opened, "dealId": "4", "orderId": "11", "executionTimestamp": "1791363600000",
+              "executionPrice": 1.11, "tradeSide": "SELL",
+              "closePositionDetail": {"grossProfit": "10000", "swap": "-50", "moneyDigits": 2}}
+    trade = CTraderConnector._group_trade("2", [opened, closed], {"3": "EURUSD"})
+    assert trade.volume == Decimal("10000")
+    assert trade.close_time is not None
+    assert trade.gross_profit == Decimal("100")
+    assert trade.commission == Decimal("-7")
+    assert trade.swap == Decimal("-0.5")
