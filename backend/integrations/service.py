@@ -243,9 +243,12 @@ class IntegrationService:
             )
         user_id = str(state_row["user_id"])
         provider = self._generic_provider(provider_id, "beta")
+        stage = "provider_authentication"
         try:
             result = await provider.complete_auth(code=code)
+            stage = "persist_authentication"
             connection = await self._persist_authentication(user_id, provider, result)
+            stage = "initial_sync"
             initial_sync = await self._initial_sync_for_single_account(
                 user_id, connection["id"]
             )
@@ -265,6 +268,15 @@ class IntegrationService:
             }
         except Exception as exc:
             safe = self._safe_error(exc)
+            # Do not log exception messages, payloads, URLs or tracebacks here:
+            # OAuth errors can include codes, secrets or account information.
+            logger.warning(
+                "trading_oauth_failed provider=%s stage=%s code=%s error_type=%s",
+                provider_id,
+                stage,
+                safe.code,
+                type(exc).__name__,
+            )
             await self.repository.audit(
                 user_id, f"{provider_id}_oauth_failed", "failure", metadata={"error_code": safe.code}
             )

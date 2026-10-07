@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 from pydantic import SecretStr
 
 from integrations.config import IntegrationConfig
+from integrations.connectors.ctrader import CTraderConnector
 from integrations.errors import IntegrationError
 from integrations.models import (
     DetectedAccount,
@@ -245,6 +246,26 @@ def build_service():
         repository,
         provider,
     )
+
+
+def test_oauth_diagnostic_does_not_log_credentials(caplog):
+    async def scenario():
+        service, repository, _ = build_service()
+        connector = CTraderConnector("client", "private-secret", "https://example.test/callback")
+        connector.complete_auth = AsyncMock(side_effect=ValueError("private-secret private-code private-token"))
+        service.registry.register(connector)
+        repository.consume_oauth_state = AsyncMock(return_value={"user_id": "user-1"})
+        try:
+            await service.complete_oauth("ctrader", "private-code", "private-state")
+            assert False, "OAuth failure must be surfaced"
+        except IntegrationError as exc:
+            assert exc.code == "provider_unavailable"
+
+    asyncio.run(scenario())
+    assert "stage=provider_authentication" in caplog.text
+    assert "error_type=ValueError" in caplog.text
+    for secret in ("private-secret", "private-code", "private-token", "private-state"):
+        assert secret not in caplog.text
 
 
 def test_connect_sync_reconnect_and_disconnect_flow():

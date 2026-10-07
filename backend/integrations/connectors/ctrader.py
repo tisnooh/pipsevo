@@ -63,6 +63,8 @@ class CTraderConnector(TradingConnector):
             "GET",
             "https://openapi.ctrader.com/apps/token",
             provider_name=self.provider_id,
+            provider_authentication=True,
+            headers={"Accept": "application/json"},
             params={
                 "grant_type": "authorization_code",
                 "code": code,
@@ -71,7 +73,7 @@ class CTraderConnector(TradingConnector):
                 "client_secret": self.client_secret,
             },
         )
-        expires = datetime.now(timezone.utc) + timedelta(seconds=int(data.get("expiresIn", 0) or 0))
+        expires = self._token_expiry(data)
         access = {
             "access_token": data["accessToken"],
             "refresh_token": data.get("refreshToken"),
@@ -100,6 +102,8 @@ class CTraderConnector(TradingConnector):
             "GET",
             "https://openapi.ctrader.com/apps/token",
             provider_name=self.provider_id,
+            provider_authentication=True,
+            headers={"Accept": "application/json"},
             params={
                 "grant_type": "refresh_token",
                 "refresh_token": refresh,
@@ -107,12 +111,32 @@ class CTraderConnector(TradingConnector):
                 "client_secret": self.client_secret,
             },
         )
-        expires = datetime.now(timezone.utc) + timedelta(seconds=int(data.get("expiresIn", 0) or 0))
+        expires = self._token_expiry(data)
         return {
             "access_token": data["accessToken"],
             "refresh_token": data.get("refreshToken") or refresh,
             "expires_at": expires.isoformat(),
         }
+
+    @staticmethod
+    def _token_expiry(data: Any) -> datetime:
+        # cTrader can report an OAuth failure in a successful HTTP response.
+        # Never expose its description: it may contain credentials or tokens.
+        if isinstance(data, dict) and data.get("errorCode"):
+            raise IntegrationError(
+                "provider_request_rejected",
+                "cTrader a refusé l’autorisation. Vérifie la configuration puis reconnecte le compte.",
+                400,
+            )
+        if not isinstance(data, dict) or not isinstance(data.get("accessToken"), str) or not data["accessToken"].strip():
+            raise IntegrationError("provider_invalid_response", "cTrader a renvoyé une autorisation inexploitable.", 502)
+        try:
+            seconds = int(data.get("expiresIn", 0))
+            if seconds <= 0:
+                raise ValueError("invalid expiry")
+            return datetime.now(timezone.utc) + timedelta(seconds=seconds)
+        except (TypeError, ValueError, OverflowError):
+            raise IntegrationError("provider_invalid_response", "cTrader a renvoyé une autorisation inexploitable.", 502) from None
 
     async def list_accounts(self, access: dict) -> list[DetectedAccount]:
         payload = await self._session(
@@ -127,7 +151,7 @@ class CTraderConnector(TradingConnector):
                 server_name="cTrader Live" if row.get("isLive") else "cTrader Demo",
                 account_number_masked=f"•••• {str(row['ctidTraderAccountId'])[-4:]}",
                 account_type="real" if row.get("isLive") else "demo",
-                display_name=row.get("traderLogin") or f"cTrader {str(row['ctidTraderAccountId'])[-4:]}",
+                display_name=str(row["traderLogin"]) if row.get("traderLogin") is not None else f"cTrader {str(row['ctidTraderAccountId'])[-4:]}",
                 provider_metadata={"is_live": bool(row.get("isLive"))},
             )
             for row in rows
