@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
+import pytest
 from pydantic import SecretStr
 
 from integrations.config import IntegrationConfig
@@ -331,6 +332,42 @@ def test_multi_account_sync_persists_provider_currency():
         assert next(iter(repository.trades.values()))["provider_currency"] == "EUR"
         assert repository.update_integration_account.await_args.args[2]["currency"] == "EUR"
         assert repository.create_snapshot.await_args.args[0]["currency"] == "EUR"
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("cursor,expected_type", [
+    ({"last_execution_at": "2026-10-07T12:00:00+00:00"}, "historical"),
+    ({"normalization_revision": 1}, "historical"),
+    ({"normalization_revision": 2}, "incremental"),
+])
+def test_ctrader_normalization_revision_refreshes_history_once(cursor, expected_type):
+    async def scenario():
+        service, repository, _ = build_service()
+        connector = CTraderConnector("client", "secret", "https://example.test/callback")
+        batch = SyncBatch(trades=[], next_cursor={"normalization_revision": 2})
+        connector.sync_historical = AsyncMock(return_value=batch)
+        connector.sync_recent = AsyncMock(return_value=batch)
+        service.registry.register(connector)
+        connection = await repository.create_connection({
+            "user_id": "user-1", "platform": "ctrader", "provider": "ctrader",
+            "connection_status": "connected", "sync_status": "idle",
+        })
+        await service._store_access(connection, "user-1", "ctrader", {"access_token": "test-token"})
+        repository.get_integration_account = AsyncMock(return_value={
+            "id": "integration-account-1", "connection_id": connection["id"],
+            "user_id": "user-1", "account_id": "core-account-1", "provider": "ctrader",
+            "platform": "ctrader", "external_account_id": "external-account-1",
+            "last_successful_sync_at": "2026-10-07T12:00:00+00:00", "sync_cursor": cursor,
+        })
+        repository.claim_sync_lock = AsyncMock(return_value=True)
+        repository.release_sync_lock = AsyncMock()
+        repository.update_integration_account = AsyncMock()
+        await service.sync_integration_account("user-1", "integration-account-1")
+        assert next(iter(repository.runs.values()))["sync_type"] == expected_type
+        assert connector.sync_historical.await_count == (expected_type == "historical")
+        assert connector.sync_recent.await_count == (expected_type == "incremental")
+        assert repository.update_integration_account.await_args.args[2]["sync_cursor"] == {"normalization_revision": 2}
 
     asyncio.run(scenario())
 

@@ -914,7 +914,16 @@ class IntegrationService:
             raise IntegrationError(
                 "sync_already_running", "Une synchronisation est déjà en cours.", 409
             )
-        initial = trigger == "initial_import" or not account.last_successful_sync_at
+        normalization_revision = getattr(provider, "normalization_revision", None)
+        needs_history_refresh = (
+            normalization_revision is not None
+            and account.sync_cursor.get("normalization_revision") != normalization_revision
+        )
+        initial = (
+            trigger == "initial_import"
+            or not account.last_successful_sync_at
+            or needs_history_refresh
+        )
         started = time.monotonic()
         now = datetime.now(timezone.utc).isoformat()
         run = await self.repository.create_sync_run(

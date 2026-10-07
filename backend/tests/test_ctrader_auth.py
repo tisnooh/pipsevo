@@ -10,6 +10,7 @@ import pytest
 from integrations.connectors.ctrader import CTraderConnector
 from integrations.errors import IntegrationError
 from integrations.models import IntegrationAccount
+from integrations.normalization import normalize_trade
 
 
 def test_ctrader_oauth_requests_read_only_scope():
@@ -108,19 +109,46 @@ def test_ctrader_snapshot_resolves_currency_and_keeps_partial_fills(monkeypatch)
     assert len(batch.executions) == 1
     assert batch.executions[0].commission == Decimal("-2")
     assert len(batch.trades) == 1
+    assert batch.next_cursor["normalization_revision"] == connector.normalization_revision
 
 
-def test_ctrader_groups_protojson_int64_strings_without_losing_pnl():
+@pytest.mark.parametrize("conversion_fee", ["31", "-31"])
+def test_ctrader_groups_protojson_int64_strings_without_losing_pnl(conversion_fee):
     # ProtoJSON encodes int64 fields as decimal strings, including volumes.
     opened = {"dealId": "1", "positionId": "2", "orderId": "10", "symbolId": "3",
               "executionTimestamp": "1791360000000", "filledVolume": "1000000",
               "executionPrice": 1.1, "tradeSide": "BUY", "commission": "-350", "moneyDigits": 2}
     closed = {**opened, "dealId": "4", "orderId": "11", "executionTimestamp": "1791363600000",
               "executionPrice": 1.11, "tradeSide": "SELL",
-              "closePositionDetail": {"grossProfit": "10000", "swap": "-50", "moneyDigits": 2}}
+              "closePositionDetail": {"grossProfit": "10000", "swap": "-50", "pnlConversionFee": conversion_fee, "moneyDigits": 2}}
     trade = CTraderConnector._group_trade("2", [opened, closed], {"3": "EURUSD"})
     assert trade.volume == Decimal("10000")
     assert trade.close_time is not None
     assert trade.gross_profit == Decimal("100")
     assert trade.commission == Decimal("-7")
     assert trade.swap == Decimal("-0.5")
+    assert trade.fees == Decimal("0.31")
+    normalized = normalize_trade(trade, account_id="account", connection_id="connection", provider="ctrader", external_account_id="external")
+    assert normalized.net_profit == Decimal("92.19")
+
+
+def test_ctrader_close_amounts_use_their_own_money_precision():
+    row = {"moneyDigits": 0, "commission": "2", "closePositionDetail": {
+        "moneyDigits": 2, "grossProfit": "1000", "pnlConversionFee": "5",
+    }}
+    assert CTraderConnector._money(row, row["commission"]) == Decimal("2")
+    assert CTraderConnector._close_money(row, "grossProfit") == Decimal("10")
+    assert CTraderConnector._close_money(row, "pnlConversionFee") == Decimal("0.05")
+
+
+def test_ctrader_conversion_costs_do_not_cancel_between_partial_closes():
+    opened = {"dealId": "1", "symbolId": "3", "executionTimestamp": "1791360000000",
+              "filledVolume": "200", "executionPrice": 1.1, "tradeSide": "BUY", "moneyDigits": 2}
+    closing = [
+        {**opened, "dealId": "2", "filledVolume": "100", "tradeSide": "SELL",
+         "closePositionDetail": {"pnlConversionFee": "31", "moneyDigits": 2}},
+        {**opened, "dealId": "3", "filledVolume": "100", "tradeSide": "SELL",
+         "closePositionDetail": {"pnlConversionFee": "-5", "moneyDigits": 2}},
+    ]
+    trade = CTraderConnector._group_trade("position", [opened, *closing], {"3": "EURUSD"})
+    assert trade.fees == Decimal("0.36")

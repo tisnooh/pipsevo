@@ -52,6 +52,8 @@ class CTraderConnector(TradingConnector):
     provider_id = "ctrader"
     platforms = ("ctrader",)
     auth_type = "oauth2"
+    # Re-read previously imported history once after normalization changes.
+    normalization_revision = 2
 
     def __init__(self, client_id: str, client_secret: str, redirect_uri: str):
         self.client_id = client_id
@@ -269,7 +271,11 @@ class CTraderConnector(TradingConnector):
             trades=trades,
             executions=executions,
             snapshot=snapshot,
-            next_cursor={"last_execution_at": latest.isoformat()},
+            next_cursor={
+                "last_execution_at": latest.isoformat(),
+                **({"normalization_revision": self.normalization_revision}
+                   if not (window_partial or history_partial) else {}),
+            },
             partial_error=window_partial or history_partial,
             warning_code=(
                 "history_window_limit"
@@ -421,9 +427,7 @@ class CTraderConnector(TradingConnector):
             close_price=weighted_price(closing) if fully_closed else None,
             gross_profit=sum(
                 (
-                    CTraderConnector._money(
-                        row, (row.get("closePositionDetail") or {}).get("grossProfit")
-                    )
+                    CTraderConnector._close_money(row, "grossProfit")
                     for row in closing
                 ),
                 Decimal("0"),
@@ -437,11 +441,13 @@ class CTraderConnector(TradingConnector):
             ),
             swap=sum(
                 (
-                    CTraderConnector._money(
-                        row, (row.get("closePositionDetail") or {}).get("swap")
-                    )
+                    CTraderConnector._close_money(row, "swap")
                     for row in closing
                 ),
+                Decimal("0"),
+            ),
+            fees=sum(
+                (abs(CTraderConnector._close_money(row, "pnlConversionFee")) for row in closing),
                 Decimal("0"),
             ),
             market_type="cfd",
@@ -455,6 +461,14 @@ class CTraderConnector(TradingConnector):
             digits = (row.get("closePositionDetail") or {}).get("moneyDigits")
         digits = int(digits if digits is not None else 2)
         return Decimal(str(value or 0)) / Decimal(10**digits)
+
+    @staticmethod
+    def _close_money(row: dict, field: str) -> Decimal:
+        detail = row.get("closePositionDetail") or {}
+        digits = detail.get("moneyDigits")
+        if digits is None:
+            digits = row.get("moneyDigits")
+        return CTraderConnector._money({"moneyDigits": digits}, detail.get(field))
 
     async def _session(self, token: str, operations: list[tuple[int, dict, int]], live: bool = True) -> list[dict]:
         if websockets is None:
