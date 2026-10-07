@@ -947,6 +947,7 @@ class IntegrationService:
                 "sync_type": "historical" if initial else "incremental",
             },
         )
+        stage = "mark_syncing"
         try:
             await self.repository.update_integration_account(
                 account.id,
@@ -958,7 +959,9 @@ class IntegrationService:
                     "last_error_message": None,
                 },
             )
+            stage = "refresh_access"
             access = await self._fresh_access(connection, provider)
+            stage = "provider_read"
             batch: SyncBatch | None = None
             for attempt in range(self.config.sync_retry_attempts):
                 try:
@@ -986,6 +989,7 @@ class IntegrationService:
                     await asyncio.sleep(self._retry_delay(attempt))
             if batch is None:
                 raise ProviderUnavailableError()
+            stage = "normalize"
             purged_execution_count = 0
             if connection.provider == "tradelocker" and hasattr(
                 self.repository, "prune_non_filled_executions"
@@ -1014,6 +1018,7 @@ class IntegrationService:
                 next_cursor=batch.next_cursor,
                 partial_error=batch.partial_error,
             )
+            stage = "persist_trades"
             for record in batch.trades:
                 await self.repository.upsert_trade_event(
                     {
@@ -1049,6 +1054,7 @@ class IntegrationService:
                     result.imported_count += 1
                 else:
                     result.updated_count += 1
+            stage = "persist_executions"
             for execution in batch.executions:
                 await self.repository.upsert_execution(
                     {
@@ -1078,6 +1084,7 @@ class IntegrationService:
                         "raw_metadata": execution.raw_payload,
                     }
                 )
+            stage = "persist_snapshot"
             if batch.snapshot:
                 await self.repository.create_snapshot(
                     {
@@ -1104,6 +1111,7 @@ class IntegrationService:
                         user_id,
                         str(batch.snapshot.balance),
                     )
+            stage = "complete_sync"
             completed = datetime.now(timezone.utc).isoformat()
             status = "partial_error" if batch.partial_error else "success"
             provider_metadata = dict(account.provider_metadata or {})
@@ -1250,11 +1258,13 @@ class IntegrationService:
                 },
             )
             logger.warning(
-                "trading_sync_failed provider=%s connection_id=%s integration_account_id=%s trigger=%s error_code=%s duration_ms=%s",
+                "trading_sync_failed provider=%s connection_id=%s integration_account_id=%s trigger=%s stage=%s error_type=%s error_code=%s duration_ms=%s",
                 connection.provider,
                 connection.id,
                 account.id,
                 trigger,
+                stage,
+                type(exc).__name__,
                 safe.code,
                 round((time.monotonic() - started) * 1000),
             )

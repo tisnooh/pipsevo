@@ -297,6 +297,7 @@ def test_provider_read_diagnostic_keeps_type_without_secret_payload(caplog):
 
     asyncio.run(scenario())
     assert "trading_provider_read_failed provider=tradelocker error_type=ValueError" in caplog.text
+    assert "stage=provider_read" in caplog.text
     assert "private-token" not in caplog.text
     assert "private-secret" not in caplog.text
     assert "private-account-data" not in caplog.text
