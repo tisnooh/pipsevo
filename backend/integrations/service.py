@@ -1038,6 +1038,7 @@ class IntegrationService:
                 payload = {
                     "user_id": user_id,
                     "platform": connection.platform,
+                    "provider_currency": batch.snapshot.currency if batch.snapshot else account.currency,
                     "provider_metadata": next(
                         (
                             item.raw_payload
@@ -1155,6 +1156,7 @@ class IntegrationService:
                     "last_error_message": None,
                     "balance": str(batch.snapshot.balance) if batch.snapshot and batch.snapshot.balance is not None else (str(account.balance) if account.balance is not None else None),
                     "equity": str(batch.snapshot.equity) if batch.snapshot and batch.snapshot.equity is not None else (str(account.equity) if account.equity is not None else None),
+                    "currency": batch.snapshot.currency if batch.snapshot and batch.snapshot.currency else account.currency,
                     "provider_metadata": provider_metadata,
                 },
             )

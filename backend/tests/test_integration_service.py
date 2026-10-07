@@ -11,6 +11,7 @@ from integrations.config import IntegrationConfig
 from integrations.connectors.ctrader import CTraderConnector
 from integrations.errors import IntegrationError
 from integrations.models import (
+    AccountSnapshot,
     DetectedAccount,
     IntegrationConnection,
     MT5Credentials,
@@ -301,6 +302,37 @@ def test_provider_read_diagnostic_keeps_type_without_secret_payload(caplog):
     assert "private-token" not in caplog.text
     assert "private-secret" not in caplog.text
     assert "private-account-data" not in caplog.text
+
+
+def test_multi_account_sync_persists_provider_currency():
+    async def scenario():
+        service, repository, _ = build_service()
+        connector = ExpiredConnector()
+        connector.sync_historical = AsyncMock(return_value=SyncBatch(
+            trades=[FakeProvider.trade("deal-eur")],
+            snapshot=AccountSnapshot(balance="1200", currency="EUR", captured_at=datetime.now(timezone.utc)),
+        ))
+        service.registry.register(connector)
+        connection = await repository.create_connection({
+            "user_id": "user-1", "platform": "tradelocker", "provider": "tradelocker",
+            "connection_status": "connected", "sync_status": "idle",
+        })
+        await service._store_access(connection, "user-1", "tradelocker", {"access_token": "test-token"})
+        repository.get_integration_account = AsyncMock(return_value={
+            "id": "integration-account-1", "connection_id": connection["id"],
+            "user_id": "user-1", "account_id": "core-account-1", "provider": "tradelocker",
+            "platform": "tradelocker", "external_account_id": "external-account-1",
+        })
+        repository.claim_sync_lock = AsyncMock(return_value=True)
+        repository.release_sync_lock = AsyncMock()
+        repository.update_integration_account = AsyncMock()
+        repository.create_snapshot = AsyncMock()
+        await service.sync_integration_account("user-1", "integration-account-1")
+        assert next(iter(repository.trades.values()))["provider_currency"] == "EUR"
+        assert repository.update_integration_account.await_args.args[2]["currency"] == "EUR"
+        assert repository.create_snapshot.await_args.args[0]["currency"] == "EUR"
+
+    asyncio.run(scenario())
 
 
 def test_connect_sync_reconnect_and_disconnect_flow():
