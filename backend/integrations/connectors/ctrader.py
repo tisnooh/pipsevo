@@ -15,7 +15,7 @@ from urllib.parse import urlencode
 
 from pydantic import SecretStr
 
-from ..errors import IntegrationError
+from ..errors import IntegrationError, public_provider_error
 from ..models import (
     AuthenticationResult,
     AuthTokens,
@@ -487,6 +487,12 @@ class CTraderConnector(TradingConnector):
                     payload_type,
                     provider_code if provider_code in READ_ERROR_CODES else "unknown",
                 )
+                if provider_code == "RET_ACCOUNT_DISABLED":
+                    raise IntegrationError(
+                        "provider_account_disabled",
+                        public_provider_error("provider_account_disabled"),
+                        409,
+                    )
                 raise IntegrationError("provider_error", "cTrader a refusé la requête de lecture.", 502)
             if raw.get("clientMsgId") == client_id or raw.get("payloadType") == expected:
                 return raw.get("payload") or {}

@@ -54,6 +54,10 @@ SAFE_PROVIDER_ERRORS = {
     "account_not_selected": "Sélectionne au moins un compte avant de synchroniser.",
     "sync_already_running": "Une synchronisation est déjà en cours.",
     "provider_invalid_response": "La plateforme a renvoyé une réponse inexploitable.",
+    "provider_account_disabled": (
+        "Ce compte est désactivé chez le broker. Son import cTrader est indisponible ; "
+        "vérifie son statut auprès de ta prop firm. Les autres comptes restent connectés."
+    ),
     "tradelocker_credentials_required": (
         "Utilise les identifiants TradeLocker fournis par ton broker ou ta prop firm : "
         "email, mot de passe et serveur. La connexion Google ou Apple du profil "

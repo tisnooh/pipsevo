@@ -72,6 +72,19 @@ def test_ctrader_protocol_error_logs_only_a_safe_identifier(caplog):
     assert "private-secret" not in caplog.text
 
 
+def test_ctrader_disabled_account_is_explicit_without_expiring_other_accounts():
+    socket = AsyncMock()
+    socket.recv.return_value = json.dumps({"payloadType": 2142, "payload": {
+        "errorCode": "RET_ACCOUNT_DISABLED", "description": "private-account-data",
+    }})
+    with pytest.raises(IntegrationError) as caught:
+        asyncio.run(CTraderConnector._send(socket, 2102, {}, 2103))
+    assert caught.value.code == "provider_account_disabled"
+    assert caught.value.status_code == 409
+    assert "désactivé" in caught.value.public_message
+    assert "private-account-data" not in caught.value.public_message
+
+
 def test_ctrader_snapshot_resolves_currency_and_keeps_partial_fills(monkeypatch):
     connector = CTraderConnector("client", "secret", "https://example.test/callback")
     start = datetime.now(timezone.utc)
