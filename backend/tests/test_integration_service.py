@@ -268,6 +268,40 @@ def test_oauth_diagnostic_does_not_log_credentials(caplog):
         assert secret not in caplog.text
 
 
+def test_provider_read_diagnostic_keeps_type_without_secret_payload(caplog):
+    async def scenario():
+        service, repository, _ = build_service()
+        connector = ExpiredConnector()
+        connector.sync_historical = AsyncMock(
+            side_effect=ValueError("private-token private-secret private-account-data")
+        )
+        service.registry.register(connector)
+        connection = await repository.create_connection({
+            "user_id": "user-1", "platform": "tradelocker", "provider": "tradelocker",
+            "connection_status": "connected", "sync_status": "idle",
+        })
+        await service._store_access(connection, "user-1", "tradelocker", {"access_token": "private-token"})
+        repository.get_integration_account = AsyncMock(return_value={
+            "id": "integration-account-1", "connection_id": connection["id"],
+            "user_id": "user-1", "account_id": "core-account-1", "provider": "tradelocker",
+            "platform": "tradelocker", "external_account_id": "external-account-1",
+        })
+        repository.claim_sync_lock = AsyncMock(return_value=True)
+        repository.release_sync_lock = AsyncMock()
+        repository.update_integration_account = AsyncMock()
+        try:
+            await service.sync_integration_account("user-1", "integration-account-1")
+            assert False, "The invalid provider data must fail safely"
+        except IntegrationError as exc:
+            assert exc.code == "provider_unavailable"
+
+    asyncio.run(scenario())
+    assert "trading_provider_read_failed provider=tradelocker error_type=ValueError" in caplog.text
+    assert "private-token" not in caplog.text
+    assert "private-secret" not in caplog.text
+    assert "private-account-data" not in caplog.text
+
+
 def test_connect_sync_reconnect_and_disconnect_flow():
     async def scenario():
         service, repository, provider = build_service()

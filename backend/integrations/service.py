@@ -970,6 +970,14 @@ class IntegrationService:
                     break
                 except Exception as exc:
                     safe_retry = self._safe_error(exc)
+                    # Keep the original exception type before mapping it to a
+                    # public error. Never log the exception text or input data.
+                    logger.warning(
+                        "trading_provider_read_failed provider=%s error_type=%s attempt=%s",
+                        connection.provider,
+                        type(exc).__name__,
+                        attempt + 1,
+                    )
                     if (
                         attempt + 1 == self.config.sync_retry_attempts
                         or not self._retryable(safe_retry)
