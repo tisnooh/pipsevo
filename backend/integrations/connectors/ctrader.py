@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import importlib
 import json
+import logging
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -26,6 +27,20 @@ from ..models import (
 )
 from ..providers import TradingConnector
 from .http import request_json
+
+logger = logging.getLogger("pipsevo.integrations.ctrader")
+
+# Only fixed, documented error identifiers may appear in diagnostics.
+READ_ERROR_CODES = {
+    "OA_AUTH_TOKEN_EXPIRED", "ACCOUNT_NOT_AUTHORIZED", "RET_NO_SUCH_LOGIN",
+    "ALREADY_LOGGED_IN", "INCORRECT_BOUNDARIES", "RET_ACCOUNT_DISABLED",
+    "CONNECTIONS_LIMIT_EXCEEDED", "CH_CLIENT_AUTH_FAILURE",
+    "CH_CLIENT_NOT_AUTHENTICATED", "CH_CLIENT_ALREADY_AUTHENTICATED",
+    "CH_ACCESS_TOKEN_INVALID", "CH_SERVER_NOT_REACHABLE",
+    "CH_CTID_TRADER_ACCOUNT_NOT_FOUND", "CH_OA_CLIENT_NOT_FOUND",
+    "REQUEST_FREQUENCY_EXCEEDED", "SERVER_IS_UNDER_MAINTENANCE",
+    "CHANNEL_IS_BLOCKED", "INVALID_REQUEST", "SYMBOL_NOT_FOUND",
+}
 
 try:
     websockets: Any = importlib.import_module("websockets")
@@ -180,6 +195,7 @@ class CTraderConnector(TradingConnector):
             (2102, {"ctidTraderAccountId": account_id, "accessToken": token}, 2103),
             (2114, {"ctidTraderAccountId": account_id, "includeArchivedSymbols": True}, 2115),
             (2121, {"ctidTraderAccountId": account_id}, 2122),
+            (2112, {"ctidTraderAccountId": account_id}, 2113),
         ]
         operations.extend(
             (
@@ -203,18 +219,22 @@ class CTraderConnector(TradingConnector):
             for row in responses[1].get("symbol", [])
         }
         trader = responses[2].get("trader", {})
+        assets = {
+            str(row.get("assetId")): row.get("name")
+            for row in responses[3].get("asset", [])
+        }
         deals, history_partial = await self._complete_deal_history(
             token,
             account_id,
             account.account_type != "demo",
             windows,
-            responses[3:],
+            responses[4:],
         )
         executions: list[ProviderExecutionRecord] = []
         grouped: dict[str, list[dict]] = defaultdict(list)
         for deal in deals:
             status = str(deal.get("dealStatus") or deal.get("status") or "").upper()
-            if status and status not in {"FILLED", "2"}:
+            if status and status not in {"FILLED", "2", "PARTIALLY_FILLED", "3"}:
                 continue
             position_id = str(deal.get("positionId") or deal.get("orderId") or deal.get("dealId"))
             grouped[position_id].append(deal)
@@ -240,7 +260,7 @@ class CTraderConnector(TradingConnector):
         snapshot = AccountSnapshot(
             balance=Decimal(str(trader.get("balance", 0))) / Decimal(10 ** int(trader.get("moneyDigits", 2))),
             equity=None,
-            currency=str(trader.get("depositAssetId")) if trader.get("depositAssetId") else None,
+            currency=assets.get(str(trader.get("depositAssetId"))) or account.currency,
             captured_at=end,
             raw_payload=trader,
         )
@@ -429,7 +449,10 @@ class CTraderConnector(TradingConnector):
 
     @staticmethod
     def _money(row: dict, value) -> Decimal:
-        digits = int(row.get("moneyDigits") or (row.get("closePositionDetail") or {}).get("moneyDigits") or 2)
+        digits = row.get("moneyDigits")
+        if digits is None:
+            digits = (row.get("closePositionDetail") or {}).get("moneyDigits")
+        digits = int(digits if digits is not None else 2)
         return Decimal(str(value or 0)) / Decimal(10**digits)
 
     async def _session(self, token: str, operations: list[tuple[int, dict, int]], live: bool = True) -> list[dict]:
@@ -457,6 +480,12 @@ class CTraderConnector(TradingConnector):
         while True:
             raw = json.loads(await asyncio.wait_for(socket.recv(), timeout=30))
             if raw.get("payloadType") == 2142:
+                provider_code = (raw.get("payload") or {}).get("errorCode")
+                logger.warning(
+                    "ctrader_read_request_failed request_type=%s error_code=%s",
+                    payload_type,
+                    provider_code if provider_code in READ_ERROR_CODES else "unknown",
+                )
                 raise IntegrationError("provider_error", "cTrader a refusé la requête de lecture.", 502)
             if raw.get("clientMsgId") == client_id or raw.get("payloadType") == expected:
                 return raw.get("payload") or {}

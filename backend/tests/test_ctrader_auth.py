@@ -1,4 +1,7 @@
 import asyncio
+import json
+from datetime import datetime, timezone
+from decimal import Decimal
 from urllib.parse import parse_qs, urlsplit
 from unittest.mock import AsyncMock
 
@@ -6,6 +9,7 @@ import pytest
 
 from integrations.connectors.ctrader import CTraderConnector
 from integrations.errors import IntegrationError
+from integrations.models import IntegrationAccount
 
 
 def test_ctrader_oauth_requests_read_only_scope():
@@ -54,3 +58,40 @@ def test_ctrader_token_exchange_marks_server_authentication(monkeypatch):
     assert refreshed["access_token"] == "test-token"
     assert all(request["provider_authentication"] is True for request in requests)
     assert all(request["headers"]["Accept"] == "application/json" for request in requests)
+
+
+def test_ctrader_protocol_error_logs_only_a_safe_identifier(caplog):
+    socket = AsyncMock()
+    socket.recv.return_value = json.dumps({"payloadType": 2142, "payload": {
+        "errorCode": "INCORRECT_BOUNDARIES", "description": "private-token private-secret",
+    }})
+    with pytest.raises(IntegrationError):
+        asyncio.run(CTraderConnector._send(socket, 2133, {"accessToken": "private-token"}, 2134))
+    assert "request_type=2133 error_code=INCORRECT_BOUNDARIES" in caplog.text
+    assert "private-token" not in caplog.text
+    assert "private-secret" not in caplog.text
+
+
+def test_ctrader_snapshot_resolves_currency_and_keeps_partial_fills(monkeypatch):
+    connector = CTraderConnector("client", "secret", "https://example.test/callback")
+    start = datetime.now(timezone.utc)
+    deal = {"dealId": 1, "positionId": 2, "symbolId": 3, "dealStatus": "PARTIALLY_FILLED",
+            "filledVolume": 100, "executionTimestamp": int(start.timestamp() * 1000),
+            "executionPrice": 1.2, "tradeSide": "BUY", "commission": -2, "moneyDigits": 0}
+
+    async def fake_session(_token, operations, live=True):
+        assert operations[3][0] == 2112
+        return [{}, {"symbol": [{"symbolId": 3, "symbolName": "EURUSD"}]},
+                {"trader": {"balance": 7994149, "moneyDigits": 2, "depositAssetId": 9}},
+                {"asset": [{"assetId": 9, "name": "EUR"}]},
+                {"deal": [deal], "hasMore": False}]
+
+    monkeypatch.setattr(connector, "_session", fake_session)
+    account = IntegrationAccount(id="account", connection_id="connection", user_id="user",
+                                 provider="ctrader", platform="ctrader", external_account_id="42")
+    batch = asyncio.run(connector._sync(account, {"access_token": "test-token"}, start))
+    assert batch.snapshot.currency == "EUR"
+    assert batch.snapshot.balance == Decimal("79941.49")
+    assert len(batch.executions) == 1
+    assert batch.executions[0].commission == Decimal("-2")
+    assert len(batch.trades) == 1
