@@ -21,4 +21,11 @@ describe("affichage des comptes synchronisés", () => {
   test("préserve le calcul solde moins solde initial pour un compte manuel", () => {
     expect(getAccountDisplayMetrics({ balance: 50490, initial_balance: 50000 }).pnl).toBe(490);
   });
+
+  test("n'affiche pas de scores de risque sans limite configurée ou pour un compte désactivé", () => {
+    const scored = { ...account, health_score: 70, survival_score: 95, max_drawdown: 0 };
+    expect(getAccountDisplayMetrics(scored, [], providerAccount)).toMatchObject({ healthScore: null, survivalScore: null });
+    expect(getAccountDisplayMetrics({ ...scored, max_drawdown: 2000 }, [], { ...providerAccount, status: "error" })).toMatchObject({ healthScore: null, survivalScore: null });
+    expect(getAccountDisplayMetrics({ ...scored, max_drawdown: 2000, current_drawdown: 500 }, [], providerAccount)).toMatchObject({ healthScore: 70, survivalScore: 95, drawdownUsed: 500 });
+  });
 });

@@ -11,11 +11,15 @@ export function getAccountDisplayMetrics(account, accountTrades = [], providerAc
   const currency = providerAccount?.currency
     || accountTrades.find((trade) => trade.provider_currency)?.provider_currency
     || fallbackCurrency;
+  const hasRiskRules = Number(account?.max_drawdown) > 0 && providerAccount?.status !== "error";
 
   return {
     balance: Number(account?.balance || 0),
     currency,
     isSynced,
+    healthScore: hasRiskRules && account?.health_score != null ? Number(account.health_score) : null,
+    survivalScore: hasRiskRules && account?.survival_score != null ? Number(account.survival_score) : null,
+    drawdownUsed: Math.max(0, Number(account?.current_drawdown ?? Math.max(0, Number(account?.initial_balance || 0) - Number(account?.balance || 0)))),
     pnl: isSynced
       ? measuredPnls.length ? measuredPnls.reduce((sum, pnl) => sum + pnl, 0) : null
       : Number(account?.balance || 0) - Number(account?.initial_balance || 0),
