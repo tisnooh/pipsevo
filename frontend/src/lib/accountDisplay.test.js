@@ -1,0 +1,24 @@
+import { getAccountDisplayMetrics } from "./accountDisplay";
+
+describe("affichage des comptes synchronisés", () => {
+  const account = { balance: 79941.49, initial_balance: 79941.49 };
+  const providerAccount = { currency: "EUR", status: "connected" };
+
+  test("calcule le P&L réalisé depuis les clôtures, sans compter une position ouverte", () => {
+    const metrics = getAccountDisplayMetrics(account, [
+      { result_status: "closed", pnl: -47.72, provider_currency: "EUR" },
+      { result_status: "closed", pnl: -10.79, provider_currency: "EUR" },
+      { result_status: "open", pnl: -20.12, provider_currency: "EUR" },
+    ], providerAccount);
+
+    expect(metrics).toMatchObject({ balance: 79941.49, currency: "EUR", pnl: -58.51, isSynced: true });
+  });
+
+  test("laisse le P&L non renseigné quand le compte synchronisé n'a pas de clôture mesurée", () => {
+    expect(getAccountDisplayMetrics(account, [], providerAccount).pnl).toBeNull();
+  });
+
+  test("préserve le calcul solde moins solde initial pour un compte manuel", () => {
+    expect(getAccountDisplayMetrics({ balance: 50490, initial_balance: 50000 }).pnl).toBe(490);
+  });
+});
