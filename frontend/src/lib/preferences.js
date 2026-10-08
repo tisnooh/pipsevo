@@ -52,7 +52,7 @@ export function formatMoney(value, options = {}) {
   const locale = settings.language === "en" ? "en-US" : "fr-FR";
   return new Intl.NumberFormat(locale, {
     style: "currency",
-    currency: settings.currency || "USD",
+    currency: options.currency || settings.currency || "USD",
     minimumFractionDigits: options.minimumFractionDigits ?? 0,
     maximumFractionDigits: options.maximumFractionDigits ?? 2,
     signDisplay: options.signDisplay || "auto",

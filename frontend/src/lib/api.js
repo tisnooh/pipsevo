@@ -5,6 +5,7 @@ import { notifyAppDataChanged } from "@/lib/appDataEvents";
 import { tradeDateKey } from "@/lib/tradeCalendar";
 import { measuredTradePnl, tradeOutcome } from "@/lib/tradeAnalytics";
 import { MAX_TRADE_SCREENSHOT_BYTES, TRADE_SCREENSHOT_TYPES } from "@/lib/tradeMedia";
+import { fetchOwnedTradeHistory } from "@/lib/ownedTradeHistory";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
@@ -272,11 +273,12 @@ const normalizeTrade = (value) => {
 export const trades = {
   list: async (accountId) => {
     const user = await currentAuthUser();
-    let query = supabase.from("trades").select("*").eq("user_id", user.id).order("date", { ascending: false }).order("created_at", { ascending: false });
-    if (accountId) query = query.eq("account_id", accountId);
-    const { data, error } = await query;
-    check(error, "Impossible de charger les trades");
-    return response((data || []).map(normalizeTrade));
+    try {
+      const data = await fetchOwnedTradeHistory(supabase, user.id, accountId);
+      return response(data.map(normalizeTrade));
+    } catch (error) {
+      check(error, "Impossible de charger les trades");
+    }
   },
   create: async (values) => {
     const user = await currentAuthUser();

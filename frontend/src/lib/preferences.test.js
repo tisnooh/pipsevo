@@ -15,6 +15,12 @@ test("la devise suit la langue et la devise sélectionnées", () => {
   expect(formatMoney(1245.5, { settings: { ...DEFAULT_SETTINGS, language: "en", currency: "GBP" } })).toContain("£1,245.5");
 });
 
+test("une devise fournisseur explicite ne devient pas la devise des préférences", () => {
+  const result = formatMoney(-58.51, { currency: "EUR", settings: { ...DEFAULT_SETTINGS, currency: "USD" } });
+  expect(result).toContain("€");
+  expect(result).not.toContain("$US");
+});
+
 test("une date sans heure ne change pas de jour selon le fuseau", () => {
   const settings = { ...DEFAULT_SETTINGS, language: "en", timezone: "America/New_York" };
   expect(formatDate("2026-07-13", { settings })).toBe("07/13/2026");

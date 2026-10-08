@@ -20,7 +20,7 @@ export const EXPORT_SCHEMAS = Object.freeze({
     ["Prop firm", "account_firm"], ["Marché", "market_type"], ["Instrument", "instrument"],
     ["Direction", "direction"], ["Statut", "result_status"], ["Entrée", "entry"], ["Stop loss", "stop"],
     ["Take profit", "take_profit"], ["Sortie", "exit_price"], ["Taille", "size"], ["P&L", "pnl"],
-    ["R multiple", "r"], ["Commission", "commission"], ["Date/heure entrée", "entry_time"],
+    ["Devise", "provider_currency"], ["R multiple", "r"], ["Commission", "commission"], ["Date/heure entrée", "entry_time"],
     ["Date/heure sortie", "exit_time"], ["Durée", "duration"], ["Durée minutes", "duration_minutes"],
     ["Session", "session"], ["Setup", "setup"], ["Setups", "setups"], ["Émotion", "emotion"],
     ["Intensité émotion", "emotion_intensity"], ["Plan respecté", "plan_respected"],

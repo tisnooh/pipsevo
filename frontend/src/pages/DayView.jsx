@@ -4,18 +4,20 @@ import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Too
 import { BookOpen, Brain, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { accounts as accountsAPI, trades as tradesAPI } from "@/lib/api";
 import { CALENDAR_MONTHS_FR, buildTradeCalendarMonth, calendarYears, localDateKey, localMonthKey, shiftMonthKey, tradeDateKey } from "@/lib/tradeCalendar";
-import useAppSettings from "@/hooks/useAppSettings";
+import useTradingCurrency from "@/hooks/useTradingCurrency";
+import TradingCurrencyControl from "@/components/TradingCurrencyControl";
 import { listenForAppDataChanges } from "@/lib/appDataEvents";
 import { tradeOutcome } from "@/lib/tradeAnalytics";
 
 export default function DayView() {
-  const { money } = useAppSettings();
   const [params, setParams] = useSearchParams();
   const requestedDate = params.get("date");
   const initialDate = /^\d{4}-\d{2}-\d{2}$/.test(tradeDateKey(requestedDate)) ? tradeDateKey(requestedDate) : "";
   const [month, setMonth] = useState(() => initialDate.slice(0, 7) || localMonthKey());
   const [selectedDate, setSelectedDate] = useState(initialDate);
-  const [tradeList, setTradeList] = useState([]);
+  const [allTrades, setTradeList] = useState([]);
+  const currencyScope = useTradingCurrency(allTrades);
+  const { trades: tradeList, money } = currencyScope;
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -93,6 +95,7 @@ export default function DayView() {
       <Link to="/app/journal" className="btn-ghost inline-flex items-center justify-center gap-2"><BookOpen className="h-4 w-4"/>Ouvrir le journal</Link>
     </div>
 
+    <TradingCurrencyControl {...currencyScope}/>
     {error && <div className="flex items-center justify-between gap-3 rounded-pe-xl border border-[#F26A70]/25 bg-[#F26A70]/10 p-4 text-sm text-[#FF8A8A]"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2"><RefreshCw className="h-4 w-4"/>Réessayer</button></div>}
 
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_310px]">

@@ -19,11 +19,14 @@ import { measuredTradePnl, tradeOutcome } from "@/lib/tradeAnalytics"
 import { apiErrorMessage } from "@/lib/apiError"
 import PrivateTradeImage from "@/components/PrivateTradeImage"
 import { useConfirmDialog } from "@/components/ConfirmDialog"
+import useTradingCurrency from "@/hooks/useTradingCurrency"
+import TradingCurrencyControl from "@/components/TradingCurrencyControl"
+import { tradeCurrency } from "@/lib/tradeCurrency"
 
 export function JournalPage() {
   const { confirm, confirmationDialog } = useConfirmDialog()
   const { user } = useAuth()
-  const { money } = useAppSettings()
+  const { money: nativeMoney, settings } = useAppSettings()
   const location = useLocation()
   const navigate = useNavigate()
   const { tradeId = "" } = useParams()
@@ -165,12 +168,13 @@ export function JournalPage() {
     win: outcome > 0,
     toneClass: pnl === null || pnl === 0 ? "text-[#9CA3AF]" : pnl > 0 ? "text-[#46C99A]" : "text-[#F26A70]",
     statusLabel: ({partial:"Partiellement clôturé",open:"Position ouverte",cancelled:"Annulé",canceled:"Annulé"})[t.result_status] || (outcome === null ? "Non mesuré" : outcome > 0 ? "Gagnant" : outcome < 0 ? "Perdant" : "Break-even"),
-    result: pnl !== null ? money(pnl,{signDisplay:"always"}) : t.result_status === "open" ? "Ouverte" : "—",
+    provider_currency: tradeCurrency(t, settings.currency),
+    result: pnl !== null ? nativeMoney(pnl,{currency:tradeCurrency(t, settings.currency),signDisplay:"always"}) : t.result_status === "open" ? "Ouverte" : "—",
     rLabel: Number.isFinite(t.r) && outcome !== null ? `${t.r >= 0 ? "+" : ""}${t.r.toFixed(2)}R` : "—",
     account_name: linkedAccount?.name || "",
     account_firm: linkedAccount?.firm || "",
     account: linkedAccount
-      ? `${linkedAccount.firm} $${(linkedAccount.initial_balance / 1000).toFixed(0)}K`
+      ? `${linkedAccount.firm} · ${linkedAccount.name}`
       : "—",
     tags: t.tags || (t.setup ? [t.setup] : []),
     dateLabel: t.date || "—",
@@ -183,11 +187,13 @@ export function JournalPage() {
     const recentEnough = dateFilter || !t.date || (Date.now() - new Date(t.date).getTime()) <= Number(days) * 86400000
     return (!accountFilter || t.account_id === accountFilter) && exactDate && recentEnough
   })
+  const currencyScope = useTradingCurrency(byAccountAndDate)
+  const { money } = currencyScope
   const filtered = activeFilter === "Tous les trades" || activeFilter === "Tous"
-    ? byAccountAndDate
+    ? currencyScope.trades
     : activeFilter === "Positions ouvertes"
-    ? byAccountAndDate.filter(t => t.result_status === "open" || t.exit_price === null || t.exit_price === undefined)
-    : byAccountAndDate.filter(t => t.starred)
+    ? currencyScope.trades.filter(t => t.result_status === "open" || t.exit_price === null || t.exit_price === undefined)
+    : currencyScope.trades.filter(t => t.starred)
 
   // KPIs calculés depuis les vraies données
   const outcomes = filtered.map(t => ({ trade: t, outcome: t.outcome })).filter(item => item.outcome !== null)
@@ -241,6 +247,7 @@ export function JournalPage() {
           </div>
         </div>
 
+        <div className="mb-4"><TradingCurrencyControl {...currencyScope}/></div>
         {/* Filter tabs */}
         <div className="mb-5 grid grid-cols-3 border-b border-[#1E2430]" role="tablist" aria-label="Filtres du journal">
           {["Tous les trades", "Positions ouvertes", "Favoris"].map((tab) => (

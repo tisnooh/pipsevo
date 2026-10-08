@@ -12,6 +12,9 @@ import { buildCsv, downloadBlob } from "@/lib/dataExport";
 import { apiErrorMessage } from "@/lib/apiError";
 import MobileTradeList from "@/components/MobileTradeList";
 import { journalTradePath } from "@/lib/journalNavigation";
+import useTradingCurrency from "@/hooks/useTradingCurrency";
+import TradingCurrencyControl from "@/components/TradingCurrencyControl";
+import { tradingAccountRisk } from "@/lib/tradeCurrency";
 
 const TABS = ["Vue d'ensemble","Performance","Calendrier","Trades","Temps","Risques","Comportement"];
 const EMPTY_METRICS = { winrate:0,profit_factor:0,avg_win:0,avg_loss:0,plan_respect_rate:0 };
@@ -19,7 +22,7 @@ const card = "card-elev p-5";
 
 export default function Analytics() {
   const navigate = useNavigate();
-  const { money, date } = useAppSettings();
+  const { date, settings } = useAppSettings();
   const [data,setData]=useState(null); const [trades,setTrades]=useState([]); const [accounts,setAccounts]=useState([]);
   const [tab,setTab]=useState(TABS[0]); const [period,setPeriod]=useState("30"); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
   const [selectedMonth,setSelectedMonth]=useState(()=>localDateKey(new Date()).slice(0,7));
@@ -28,7 +31,7 @@ export default function Analytics() {
   const load=useCallback(async()=>{setLoading(true);setError("");try{const[d,t,a]=await Promise.all([dashboard(),tradesAPI.list(),accountsAPI.list()]);setData(d.data);setTrades(t.data);setAccounts(a.data)}catch(e){setError(apiErrorMessage(e,"Impossible de charger les statistiques."))}finally{setLoading(false)}},[]);
   useEffect(()=>{load();return listenForAppDataChanges(load,["accounts","trades","analytics","dashboard"])},[load]);
   const availableYears=useMemo(()=>Array.from(new Set([String(new Date().getFullYear()),...trades.map(t=>tradeDateKey(t.date).slice(0,4)).filter(year=>/^\d{4}$/.test(year))])).sort((a,b)=>Number(b)-Number(a)),[trades]);
-  const filtered=useMemo(()=>{
+  const periodTrades=useMemo(()=>{
     if(period==="all")return trades;
     if(period==="month")return trades.filter(t=>tradeDateKey(t.date).startsWith(selectedMonth));
     if(period==="year")return trades.filter(t=>tradeDateKey(t.date).startsWith(selectedYear));
@@ -36,23 +39,27 @@ export default function Analytics() {
     const start=new Date();start.setDate(start.getDate()-Math.max(0,Number(period)-1));const min=localDateKey(start);
     return trades.filter(t=>!t.date||tradeDateKey(t.date)>=min);
   },[trades,period,selectedMonth,selectedYear,customRange]);
+  const currencyScope = useTradingCurrency(periodTrades);
+  const { trades: filtered, money } = currencyScope;
   const stats=useMemo(()=>calculateTradeAnalytics(filtered,accounts),[filtered,accounts]);
+  const risk = tradingAccountRisk(accounts, trades, currencyScope.currency, settings.currency);
   const equity=useMemo(()=>{let value=0;return [...filtered].map(t=>({...t,pnl:measuredTradePnl(t)})).filter(t=>t.pnl!==null).sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(t=>({date:t.date,equity:+(value+=t.pnl).toFixed(2)}))},[filtered]);
   const exportLabel=period==="month"?selectedMonth:period==="year"?selectedYear:period==="custom"?`${customRange.start||"debut"}-${customRange.end||"fin"}`:period==="all"?"toute-periode":`${period}j`;
-  const download=()=>{if(!filtered.length)return;const keys=["date","instrument","direction","pnl","r","session","setup","plan_respected","account_id"];const rows=filtered.map(t=>({...t,pnl:measuredTradePnl(t)}));downloadBlob(new Blob([buildCsv(rows,keys.map(key=>[key,key]),",")],{type:"text/csv;charset=utf-8"}),`pipsevo-trades-${exportLabel}.csv`)};
+  const download=()=>{if(!filtered.length)return;const keys=["date","instrument","direction","pnl","provider_currency","r","session","setup","plan_respected","account_id"];const rows=filtered.map(t=>({...t,pnl:measuredTradePnl(t),provider_currency:currencyScope.currency}));downloadBlob(new Blob([buildCsv(rows,keys.map(key=>[key,key]),",")],{type:"text/csv;charset=utf-8"}),`pipsevo-trades-${exportLabel}.csv`)};
   const metrics=data?.metrics||EMPTY_METRICS;
 
   return <div className="pe-page pe-page-stack max-w-[1800px] mx-auto">
     <div className="pe-page-header"><div><div className="pe-eyebrow">Analyse des données réelles</div><h1 className="pe-page-title mt-2">Statistiques</h1><p className="pe-page-copy mt-1">Explore uniquement les trades enregistrés dans ton journal.</p></div><div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end"><div className="flex flex-wrap items-center gap-2"><div className="hidden h-10 w-10 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.025] text-[#8C73FF] sm:grid"><CalendarDays className="h-4 w-4"/></div><select aria-label="Type de période" value={period} onChange={e=>setPeriod(e.target.value)} className="pe-control min-w-[150px] flex-1 text-xs sm:flex-none"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option><option value="month">Mois précis</option><option value="year">Année précise</option><option value="custom">Dates personnalisées</option><option value="all">Toute la période</option></select>{period==="month"&&<input aria-label="Mois à analyser" type="month" value={selectedMonth} onChange={e=>setSelectedMonth(e.target.value)} className="pe-control min-w-[150px] flex-1 text-xs sm:flex-none"/>}{period==="year"&&<select aria-label="Année à analyser" value={selectedYear} onChange={e=>setSelectedYear(e.target.value)} className="pe-control min-w-[120px] flex-1 text-xs sm:flex-none">{availableYears.map(year=><option key={year} value={year}>{year}</option>)}</select>}{period==="custom"&&<><input aria-label="Date de début" title="Date de début" type="date" value={customRange.start} max={customRange.end||undefined} onChange={e=>setCustomRange(range=>({...range,start:e.target.value}))} className="pe-control min-w-[145px] flex-1 text-xs sm:flex-none"/><input aria-label="Date de fin" title="Date de fin" type="date" value={customRange.end} min={customRange.start||undefined} onChange={e=>setCustomRange(range=>({...range,end:e.target.value}))} className="pe-control min-w-[145px] flex-1 text-xs sm:flex-none"/></>}<button disabled={!filtered.length} onClick={download} title="Exporter les trades filtrés en CSV" className="pe-icon-button disabled:opacity-40"><Download className="w-4 h-4"/></button></div><div className="text-[10px] font-medium text-[#747C8B]">{filtered.length} trade{filtered.length>1?"s":""} dans la sélection</div></div></div>
+    <TradingCurrencyControl {...currencyScope}/>
     <div className="overflow-x-auto border-b border-white/[0.06]"><div className="flex min-w-max gap-1">{TABS.map(t=><button key={t} onClick={()=>setTab(t)} className={`px-4 py-3 text-sm transition ${tab===t?"text-white border-b-2 border-[#7C4DFF]":"text-[#7E8798] hover:text-white"}`}>{t}</button>)}</div></div>
     {error&&<div className="rounded-2xl border border-[#F26A70]/25 bg-[#F26A70]/10 p-4 text-sm text-[#FF8A8A] flex justify-between"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 text-xs"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
-    {loading?<div className="grid md:grid-cols-3 gap-4">{Array.from({length:6}).map((_,i)=><div key={i} className="h-36 card-elev animate-pulse"/>)}</div>:tab==="Calendrier"?<TradeCalendar trades={trades} money={money} formatDate={date}/>:!filtered.length?<Empty/>:<>
+    {loading?<div className="grid md:grid-cols-3 gap-4">{Array.from({length:6}).map((_,i)=><div key={i} className="h-36 card-elev animate-pulse"/>)}</div>:tab==="Calendrier"?<TradeCalendar trades={filtered} money={money} formatDate={date}/>:!filtered.length?<Empty/>:<>
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3"><Kpi l="Profit net" v={stats.pnl===null?"—":money(stats.pnl,{signDisplay:"always"})} c={stats.pnl===null?"#7E8798":stats.pnl>=0?"#46C99A":"#F26A70"}/><Kpi l="Win rate" v={stats.winrate===null?"—":`${stats.winrate}%`} c={stats.winrate===null?"#7E8798":"#46C99A"}/><Kpi l="Profit factor" v={stats.profitFactor===null?"—":Number.isFinite(stats.profitFactor)?stats.profitFactor.toFixed(2):"∞"} c={stats.profitFactor===null?"#7E8798":"#B58BFF"}/><Kpi l="Gain moyen" v={stats.avgWin===null?"—":money(stats.avgWin)} c={stats.avgWin===null?"#7E8798":"#46C99A"}/><Kpi l="Perte moyenne" v={stats.avgLoss===null?"—":money(stats.avgLoss)} c={stats.avgLoss===null?"#7E8798":"#F26A70"}/><Kpi l="Plan respecté" v={stats.planRate===null?"—":`${stats.planRate}%`} c={stats.planRate===null?"#7E8798":"#4F8CFF"}/></div>
-      {tab==="Vue d'ensemble"&&<Overview equity={equity} stats={stats}/>}
+      {tab==="Vue d'ensemble"&&<Overview equity={equity} stats={stats} money={money}/>}
       {tab==="Performance"&&<Performance stats={stats} money={money}/>}
       {tab==="Trades"&&<TradesView trades={filtered} money={money} date={date} onSelect={trade=>navigate(journalTradePath(trade.id))}/>}
       {tab==="Temps"&&<TimeView stats={stats} money={money}/>}
-      {tab==="Risques"&&<RiskView stats={stats} dashboardData={data} money={money}/>}
+      {tab==="Risques"&&<RiskView stats={stats} risk={risk} money={money}/>}
       {tab==="Comportement"&&<BehaviorView stats={stats} metrics={metrics} money={money}/>}
     </>}
   </div>;
@@ -78,5 +85,5 @@ const compactAxis=value=>{const abs=Math.abs(Number(value)||0);if(abs>=1000000)r
 const Ranking=({title,rows,money})=><div className={card}><h2 className="text-sm font-semibold mb-3">{title}</h2>{rows.length?rows.slice(0,8).map(x=><div key={x.name} className="flex justify-between gap-3 border-t border-white/[0.05] py-3 first:border-0"><span className="text-sm truncate">{x.name}</span><span className="font-numeric text-sm" style={{color:x.pnl>=0?"#46C99A":"#F26A70"}}>{money(x.pnl,{signDisplay:"always"})}</span></div>):<p className="py-8 text-center text-xs text-[#7E8798]">Aucune donnée</p>}</div>;
 const TradesView=({trades,money,date,onSelect})=><div className={card}><h2 className="pe-section-title mb-3">Trades de la période</h2><MobileTradeList trades={trades} onSelect={onSelect} formatDate={date} formatMoney={value=>money(value,{minimumFractionDigits:2,maximumFractionDigits:2,signDisplay:"always"})}/><div className="pe-table-shell hidden md:block"><table className="pe-table min-w-[620px]"><thead><tr><th className="text-left">Date</th><th className="text-left">Instrument</th><th className="text-left">Direction</th><th className="text-right">P&amp;L</th><th className="text-right">R</th><th className="text-left">Setup</th></tr></thead><tbody>{trades.map(t=>{const hasPnl=typeof t.pnl==="number";return <tr key={t.id}><td className="text-[#8B93A3]">{date(t.date)}</td><td className="font-medium">{t.instrument}</td><td>{t.direction==="long"?"Achat":"Vente"}</td><td className="font-numeric text-right" style={{color:!hasPnl?"#9CA3AF":t.pnl>=0?"#46C99A":"#F26A70"}}>{hasPnl?money(t.pnl,{minimumFractionDigits:2,maximumFractionDigits:2,signDisplay:"always"}):"—"}</td><td className="font-numeric text-right">{typeof t.r==="number"?`${t.r.toFixed(2)}R`:"—"}</td><td className="text-[#8B93A3]">{t.setup||"—"}</td></tr>})}</tbody></table></div></div>;
 const TimeView=({stats,money})=><div className="grid lg:grid-cols-2 gap-4"><Ranking title="Performance par session" rows={stats.sessions} money={money}/><div className={card}><h2 className="text-sm font-semibold">Lecture de la période</h2><p className="mt-3 text-sm leading-relaxed text-[#8B93A3]">Ta meilleure session est <strong className="text-white">{stats.sessions[0]?.name||"non déterminée"}</strong>. Cette conclusion utilise uniquement les trades de la période sélectionnée.</p></div></div>;
-const RiskView=({stats,dashboardData,money})=><div className="grid md:grid-cols-3 gap-4"><Kpi l="R moyen" v={stats.avgR===null?"—":`${stats.avgR.toFixed(2)}R`} c={stats.avgR===null?"#9CA3AF":stats.avgR>=0?"#46C99A":"#F26A70"}/><Kpi l="Drawdown disponible" v={money(dashboardData?.kpis?.remaining_drawdown||0)} c="#FFB855"/><Kpi l="Respect du plan" v={stats.planRate===null?"—":`${stats.planRate}%`} c={stats.planRate===null?"#7E8798":"#B58BFF"}/></div>;
+const RiskView=({stats,risk,money})=><div className="grid md:grid-cols-3 gap-4"><Kpi l="R moyen" v={stats.avgR===null?"—":`${stats.avgR.toFixed(2)}R`} c={stats.avgR===null?"#9CA3AF":stats.avgR>=0?"#46C99A":"#F26A70"}/><Kpi l="Drawdown disponible" v={risk.remaining===null?"À configurer":money(risk.remaining)} c="#FFB855"/><Kpi l="Respect du plan" v={stats.planRate===null?"—":`${stats.planRate}%`} c={stats.planRate===null?"#7E8798":"#B58BFF"}/></div>;
 const BehaviorView=({stats,money})=><div className="grid lg:grid-cols-3 gap-4"><div className="lg:col-span-2"><Ranking title="Performance par setup" rows={stats.setups} money={money}/></div><div className={`${card} glow-purple`}><div className="flex gap-2 items-center font-semibold"><Sparkles className="w-4 h-4 text-[#B58BFF]"/>Analyse IA</div><p className="mt-3 text-xs leading-relaxed text-[#8B93A3]">Demande à Atlas d’analyser ces résultats et de proposer un plan comportemental.</p><Link to="/app/coach" className="btn-primary block text-center mt-5 text-xs">Ouvrir l’analyse IA</Link></div></div>;
