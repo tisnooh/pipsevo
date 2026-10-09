@@ -1,6 +1,13 @@
 from atlas import build_atlas_context, build_atlas_prompt, build_coaching_briefing, build_deterministic_coach_answer, build_pretrade_readiness, measured_trade_pnl
 
 
+def test_metaapi_legacy_costs_are_not_measured_and_complete_zero_is_valid():
+    trade = {"pnl": 100, "source_provider": "metaapi", "result_status": "closed"}
+    assert measured_trade_pnl(trade) is None
+    trade.update(pnl=0, provider_metadata={"net_pnl_available": True, "pnl_source": "provider"})
+    assert measured_trade_pnl(trade) == 0
+
+
 def test_historical_zero_tick_cost_is_not_measured_pnl():
     trade = {"pnl": 0, "result_status": "closed", "provider_metadata": {
         "pnl_source": "derived_tick_cost", "instrument_pricing": {"tickCost": [{"tickCost": 0}]},

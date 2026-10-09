@@ -387,14 +387,22 @@ class IntegrationService:
             raise IntegrationError("connection_not_found", "Connexion MetaTrader introuvable.", 404)
         connection = IntegrationConnection.model_validate(row)
         access = await self._access(connection)
-        await provider.deploy(access["provider_account_id"])
-        accounts = await provider.list_accounts(access)
-        if not accounts:
-            raise IntegrationError(
-                "provider_configuration_pending",
-                "La connexion MetaTrader est encore en cours. Réessaie dans quelques instants.",
-                409,
+        try:
+            await provider.deploy(access["provider_account_id"])
+            accounts = await provider.list_accounts(access)
+            if not accounts:
+                raise IntegrationError(
+                    "provider_configuration_pending",
+                    "La connexion MetaTrader est encore en cours. Vérifie la configuration chez MetaApi, puis réessaie.",
+                    409,
+                )
+        except Exception as exc:
+            safe = self._safe_error(exc)
+            await self.repository.update_connection(
+                connection.id, user_id,
+                {"last_error_code": safe.code, "last_error_message": safe.public_message},
             )
+            raise safe from None
         await self._persist_detected_accounts(connection, accounts)
         updated = await self.repository.update_connection(
             connection.id,
@@ -402,6 +410,8 @@ class IntegrationService:
             {
                 "connection_status": "connected",
                 "authorized_at": datetime.now(timezone.utc).isoformat(),
+                "last_error_code": None,
+                "last_error_message": None,
             },
         )
         if len(accounts) == 1:
@@ -1027,10 +1037,8 @@ class IntegrationService:
                 next_cursor=batch.next_cursor,
                 partial_error=batch.partial_error,
                 trades_without_net_pnl=sum(
-                    1 for record in batch.trades
-                    if record.close_time is not None and record.close_price is not None
-                    and connection.provider == "tradelocker"
-                    and record.raw_payload.get("net_pnl_available") is not True
+                    1 for trade in normalized
+                    if trade.result_status == "closed" and trade.pnl is None
                 ),
             )
             stage = "persist_trades"
@@ -1135,7 +1143,7 @@ class IntegrationService:
                 automatic_fields = ["trades"]
                 automatic_fields.extend(field for field in ("balance", "equity")
                                         if getattr(batch.snapshot, field) is not None)
-                if batch.trades and not result.trades_without_net_pnl and any(
+                if batch.trades and not batch.partial_error and not result.trades_without_net_pnl and any(
                     record.close_time is not None and record.close_price is not None
                     for record in batch.trades
                 ):
@@ -1159,6 +1167,8 @@ class IntegrationService:
                         "synchronization": {
                             "automatic_fields": automatic_fields,
                             "trades_without_net_pnl": result.trades_without_net_pnl,
+                            "partial_error": batch.partial_error,
+                            "warning_code": batch.warning_code,
                             "manual_fields": [
                                 field
                                 for field in optional_fields

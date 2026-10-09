@@ -18,6 +18,7 @@ jest.mock("../lib/api", () => ({
     capabilities: jest.fn(),
     list: jest.fn(),
     syncAccount: jest.fn(),
+    finalizeMetaApi: jest.fn(),
   },
 }));
 
@@ -83,5 +84,38 @@ describe("IntegrationConnections", () => {
     await act(async () => root.render(<IntegrationConnections />));
     expect(container.querySelector('[role="status"]').textContent).toContain("résultats nets ou de frais complets");
     expect(container.textContent).toContain("Contacte ton broker ou ta prop firm");
+  });
+
+  test("affiche une erreur MetaTrader persistante et interdit les doubles finalisations", async () => {
+    const connection = { id: "m1", provider: "metaapi", connection_status: "pending", integration_accounts: [] };
+    integrationConnections.capabilities.mockResolvedValue({ data: { providers: [] } });
+    integrationConnections.list.mockResolvedValue({ data: [connection] });
+    let rejectFinalize;
+    integrationConnections.finalizeMetaApi.mockImplementation(() => new Promise((_, reject) => { rejectFinalize = reject; }));
+    await act(async () => root.render(<IntegrationConnections />));
+    const button = [...container.querySelectorAll("button")].find(item => item.textContent === "Finaliser");
+    await act(async () => button.click());
+    expect(button.disabled).toBe(true);
+    expect(integrationConnections.finalizeMetaApi).toHaveBeenCalledTimes(1);
+    const message = "Vérifie la configuration chez MetaApi, puis réessaie.";
+    integrationConnections.list.mockResolvedValue({ data: [{ ...connection, last_error_message: message }] });
+    await act(async () => rejectFinalize({ response: { data: { detail: { code: "provider_configuration_pending", message } } } }));
+    expect(container.querySelector('[role="status"]').textContent).toBe(message);
+    expect(toast.error).toHaveBeenCalledWith(message);
+  });
+
+  test("ne présente pas un import initial partiel comme terminé", async () => {
+    const connection = { id: "m1", provider: "metaapi", connection_status: "pending", integration_accounts: [] };
+    integrationConnections.capabilities.mockResolvedValue({ data: { providers: [] } });
+    integrationConnections.list.mockResolvedValue({ data: [connection] });
+    integrationConnections.finalizeMetaApi.mockResolvedValue({ data: {
+      connection, accounts: [{ external_account_id: "provider-account" }],
+      initial_sync: { imported_count: 1, partial_error: true },
+    } });
+    await act(async () => root.render(<IntegrationConnections />));
+    const button = [...container.querySelectorAll("button")].find(item => item.textContent === "Finaliser");
+    await act(async () => button.click());
+    expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining("une partie de l’historique reste à synchroniser"));
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });

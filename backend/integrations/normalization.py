@@ -31,7 +31,7 @@ def normalize_trade(
     fees_cost = abs(record.fees)
     net_profit = record.gross_profit - commission_cost + swap_cost - fees_cost
     gross_profit = record.gross_profit
-    if provider == "tradelocker":
+    if provider in {"tradelocker", "metaapi"}:
         if record.raw_payload.get("gross_pnl_available") is not True:
             gross_profit = None
         if record.raw_payload.get("net_pnl_available") is not True:
@@ -70,8 +70,10 @@ def normalize_trade(
         provider_comment=record.comment,
         magic_number=record.magic_number,
         source=(
-            "mt5_api"
-            if provider in {"fake", "mt5", "metaapi"}
+            ("mt4_api" if record.raw_payload.get("platform") == "mt4" else "mt5_api")
+            if provider == "metaapi"
+            else "mt5_api"
+            if provider in {"fake", "mt5"}
             else f"{provider}_api"
         ),
         market_type="futures" if record.market_type == "futures" else "cfd",

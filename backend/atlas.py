@@ -73,10 +73,10 @@ def measured_trade_pnl(trade: dict) -> float | None:
     )
     if isinstance(metadata, dict) and metadata.get("net_pnl_available") is False:
         return None
-    if trade.get("source_provider") == "tradelocker" and (
+    if trade.get("source_provider") in {"tradelocker", "metaapi"} and (
         not isinstance(metadata, dict) or metadata.get("net_pnl_available") is not True
     ):
-        # Legacy TradeLocker gross calculations assumed missing costs were 0.
+        # Legacy imports assumed that absent costs were zero.
         return None
     pricing = metadata.get("instrument_pricing") if isinstance(metadata, dict) else None
     if pnl_source == "derived_tick_cost" and isinstance(pricing, dict):

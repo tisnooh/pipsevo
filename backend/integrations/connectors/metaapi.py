@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+import re
 import secrets
 from typing import Any, Literal
+from urllib.parse import quote
 
 from ..errors import IntegrationError
 from ..models import (
@@ -25,11 +27,20 @@ class MetaApiConnector(TradingConnector):
     provider_id = "metaapi"
     platforms = ("mt4", "mt5")
     auth_type = "provider_link"
+    normalization_version = 1
 
     def __init__(self, token: str, domain: str = "agiliumtrade.agiliumtrade.ai"):
         self.token = token
         self.domain = domain
         self.provisioning_url = f"https://mt-provisioning-api-v1.{domain}"
+
+    def _client_url(self, region: str) -> str:
+        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", str(region)):
+            raise IntegrationError("provider_invalid_response", "Région MetaApi invalide.", 502)
+        # Provisioning and regional terminal REST APIs use different public
+        # domains. Keep explicitly configured private domains unchanged.
+        domain = "agiliumtrade.ai" if self.domain == "agiliumtrade.agiliumtrade.ai" else self.domain
+        return f"https://mt-client-api-v1.{region}.{domain}"
 
     @property
     def headers(self) -> dict[str, str]:
@@ -142,6 +153,13 @@ class MetaApiConnector(TradingConnector):
         }
 
     async def deploy(self, provider_account_id: str) -> None:
+        row = await self._request(
+            "GET",
+            f"{self.provisioning_url}/users/current/accounts/{provider_account_id}",
+            headers=self.headers,
+        )
+        if str(row.get("state") or "").upper() in {"DEPLOYED", "DEPLOYING"}:
+            return
         await self._request(
             "POST",
             f"{self.provisioning_url}/users/current/accounts/{provider_account_id}/deploy",
@@ -167,7 +185,7 @@ class MetaApiConnector(TradingConnector):
         }:
             return []
         region = row.get("region") or "new-york"
-        client_url = f"https://mt-client-api-v1.{region}.{self.domain}"
+        client_url = self._client_url(region)
         information = await self._request(
             "GET",
             f"{client_url}/users/current/accounts/{provider_id}/account-information",
@@ -206,18 +224,23 @@ class MetaApiConnector(TradingConnector):
                 start = datetime.now(timezone.utc) - timedelta(days=3650)
         else:
             start = datetime.now(timezone.utc) - timedelta(days=3650)
-        return await self._sync(account, access, start)
+        return await self._sync(account, access, start, complete_positions=bool(configured_start))
 
     async def sync_recent(self, account: IntegrationAccount, access: dict, cursor: dict) -> SyncBatch:
+        if cursor.get("normalization_version") != self.normalization_version:
+            return await self.sync_historical(account, access)
         value = cursor.get("last_close_time")
         start = datetime.fromisoformat(value.replace("Z", "+00:00")) - timedelta(minutes=5) if value else datetime.now(timezone.utc) - timedelta(days=7)
-        return await self._sync(account, access, start)
+        return await self._sync(account, access, start, complete_positions=True)
 
-    async def _sync(self, account: IntegrationAccount, access: dict, start: datetime) -> SyncBatch:
+    async def _sync(
+        self, account: IntegrationAccount, access: dict, start: datetime,
+        *, complete_positions: bool = False,
+    ) -> SyncBatch:
         provider_id = access.get("provider_account_id") or account.external_account_id
         metadata = account.provider_metadata or {}
         region = metadata.get("region") or access.get("region") or "new-york"
-        client_url = f"https://mt-client-api-v1.{region}.{self.domain}"
+        client_url = self._client_url(region)
         end = datetime.now(timezone.utc)
         rows: list[dict[str, Any]] = []
         offset = 0
@@ -231,7 +254,7 @@ class MetaApiConnector(TradingConnector):
                 headers=self.headers,
                 params={"offset": offset, "limit": page_limit},
             )
-            page = deals if isinstance(deals, list) else deals.get("deals", [])
+            page = self._deal_rows(deals)
             rows.extend(page)
             if len(page) < page_limit:
                 break
@@ -241,39 +264,69 @@ class MetaApiConnector(TradingConnector):
             f"{client_url}/users/current/accounts/{provider_id}/account-information",
             headers=self.headers,
         )
-        executions: list[ProviderExecutionRecord] = []
         positions: dict[str, list[dict]] = defaultdict(list)
         latest = start
-        for row in rows:
+        incomplete = False
+        for row in self._deduplicate_deals(rows):
             kind = str(row.get("type") or "").upper()
             if kind not in {"DEAL_TYPE_BUY", "DEAL_TYPE_SELL", "BUY", "SELL"}:
                 continue
             executed_at = self._time(row.get("time") or row.get("brokerTime"))
             latest = max(latest, executed_at)
-            position_id = str(row.get("positionId") or row.get("id"))
+            position_id = str(row.get("positionId") or row.get("orderId") or row.get("id") or "")
+            if not position_id:
+                incomplete = True
+                continue
             positions[position_id].append(row)
-            executions.append(
-                ProviderExecutionRecord(
-                    provider_execution_id=str(row.get("id")),
-                    provider_order_id=(
-                        str(row.get("orderId")) if row.get("orderId") else None
-                    ),
-                    provider_position_id=position_id,
-                    symbol=str(row.get("symbol") or "UNKNOWN"),
-                    direction="long" if "BUY" in kind else "short",
-                    quantity=Decimal(str(abs(row.get("volume") or 0))),
-                    price=Decimal(str(row.get("price") or 0)),
-                    executed_at=executed_at,
-                    commission=Decimal(str(row.get("commission") or 0)),
-                    realized_pnl=Decimal(str(row.get("profit") or 0)),
-                    raw_payload=row,
+        # A delta can contain only the exit of an old position. Read its complete
+        # history before replacing an existing journal trade or summing costs.
+        for position_id, position_rows in list(positions.items()):
+            if complete_positions or not any(self._entry_kind(row) == "in" for row in position_rows):
+                history = await self._request(
+                    "GET",
+                    f"{client_url}/users/current/accounts/{provider_id}/history-deals/position/{quote(position_id, safe='')}",
+                    headers=self.headers,
                 )
-            )
-        trades = [
-            trade
-            for position_id, position_rows in positions.items()
-            if (trade := self._group_position(position_id, position_rows)) is not None
-        ]
+                full_rows = self._deal_rows(history)
+                positions[position_id] = self._deduplicate_deals([
+                    *[row for row in full_rows if str(row.get("positionId") or row.get("orderId") or row.get("id") or "") == position_id],
+                    *position_rows,
+                ])
+        executions: list[ProviderExecutionRecord] = []
+        trades: list[ProviderTradeRecord] = []
+        for position_id, position_rows in positions.items():
+            trading_rows = [row for row in position_rows if str(row.get("type") or "").upper() in {
+                "DEAL_TYPE_BUY", "DEAL_TYPE_SELL", "BUY", "SELL",
+            }]
+            trade = self._group_position(position_id, trading_rows)
+            if trade is None:
+                incomplete = True
+            else:
+                trades.append(trade)
+            for row in trading_rows:
+                quantity = self._decimal(row.get("volume"))
+                price = self._decimal(row.get("price"))
+                if not row.get("id") or quantity is None or quantity <= 0 or price is None:
+                    incomplete = True
+                    continue
+                kind = str(row.get("type") or "").upper()
+                executions.append(
+                    ProviderExecutionRecord(
+                        provider_execution_id=str(row.get("id")),
+                        provider_order_id=(
+                            str(row.get("orderId")) if row.get("orderId") else None
+                        ),
+                        provider_position_id=position_id,
+                        symbol=str(row.get("symbol") or "UNKNOWN"),
+                        direction="long" if "BUY" in kind else "short",
+                        quantity=quantity,
+                        price=price,
+                        executed_at=self._time(row.get("time") or row.get("brokerTime")),
+                        commission=self._decimal(row.get("commission")) or Decimal("0"),
+                        realized_pnl=self._decimal(row.get("profit")) or Decimal("0"),
+                        raw_payload=row,
+                    )
+                )
         snapshot = AccountSnapshot(
             balance=self._decimal(information.get("balance")),
             equity=self._decimal(information.get("equity")),
@@ -283,45 +336,81 @@ class MetaApiConnector(TradingConnector):
             captured_at=end,
             raw_payload=information,
         )
-        partial = offset >= 100_000
+        partial = offset >= 100_000 or incomplete
         return SyncBatch(
             trades=trades,
             executions=executions,
             snapshot=snapshot,
-            next_cursor={"last_close_time": latest.isoformat()},
+            next_cursor={
+                "last_close_time": latest.isoformat(),
+                # Do not permanently skip incomplete positions on the next run.
+                "normalization_version": 0 if partial else self.normalization_version,
+            },
             partial_error=partial,
-            warning_code="history_page_limit" if partial else None,
+            warning_code="history_page_limit" if offset >= 100_000 else "history_incomplete" if incomplete else None,
         )
+
+    @staticmethod
+    def _deal_rows(payload: Any) -> list[dict]:
+        rows = payload if isinstance(payload, list) else payload.get("deals") if isinstance(payload, dict) else None
+        if not isinstance(rows, list) or any(
+            not isinstance(row, dict) or row.get("id") is None for row in rows
+        ):
+            raise IntegrationError("provider_invalid_response", "L’historique MetaTrader est incomplet ou inexploitable.", 502)
+        return rows
+
+    @staticmethod
+    def _deduplicate_deals(rows: list[dict]) -> list[dict]:
+        unique: dict[str, dict] = {}
+        for row in rows:
+            if isinstance(row, dict) and row.get("id") is not None:
+                unique[str(row["id"])] = row
+        return list(unique.values())
+
+    @staticmethod
+    def _entry_kind(row: dict) -> str | None:
+        value = str(row.get("entryType", "")).upper()
+        if value in {"DEAL_ENTRY_IN", "IN", "0"}:
+            return "in"
+        if value in {"DEAL_ENTRY_OUT", "OUT", "1", "DEAL_ENTRY_OUT_BY", "OUT_BY", "3"}:
+            return "out"
+        # A netting reversal cannot be represented as a single long/short trade.
+        # Missing entry types also do not prove that a first deal is an entry.
+        return None
 
     @classmethod
     def _group_position(
         cls, position_id: str, rows: list[dict]
     ) -> ProviderTradeRecord | None:
         rows = sorted(
-            rows,
+            cls._deduplicate_deals(rows),
             key=lambda row: cls._time(row.get("time") or row.get("brokerTime")),
         )
         if not rows:
             return None
-        first = rows[0]
+        if any(cls._entry_kind(row) is None for row in rows):
+            return None
+        opening = [row for row in rows if cls._entry_kind(row) == "in"]
+        closing = [row for row in rows if cls._entry_kind(row) == "out"]
+        if not opening:
+            return None
+        first = opening[0]
         first_side: Literal["long", "short"] = (
             "long"
             if "BUY" in str(first.get("type") or "").upper()
             else "short"
         )
 
-        def is_opening(row: dict) -> bool:
-            entry_type = str(row.get("entryType") or "").upper()
-            if entry_type:
-                return entry_type in {"DEAL_ENTRY_IN", "IN", "0"}
-            side = "long" if "BUY" in str(row.get("type") or "").upper() else "short"
-            return side == first_side
-
-        opening = [row for row in rows if is_opening(row)] or [first]
-        closing = [row for row in rows if row not in opening]
-
         def quantity(row: dict) -> Decimal:
-            return Decimal(str(abs(row.get("volume") or 0)))
+            return cls._decimal(row.get("volume")) or Decimal("0")
+
+        if any(quantity(row) <= 0 or cls._decimal(row.get("price")) is None for row in rows):
+            return None
+        opened_volume = sum((quantity(item) for item in opening), Decimal("0"))
+        closed_volume = sum((quantity(item) for item in closing), Decimal("0"))
+        if closed_volume > opened_volume + Decimal("0.00000001"):
+            return None
+        fully_closed = bool(closing) and abs(opened_volume - closed_volume) <= Decimal("0.00000001")
 
         def weighted_price(items: list[dict]) -> Decimal | None:
             total = sum((quantity(item) for item in items), Decimal("0"))
@@ -329,9 +418,7 @@ class MetaApiConnector(TradingConnector):
                 return None
             return sum(
                 (
-                    quantity(item) * Decimal(
-                        str(item.get("price") or item.get("openPrice") or 0)
-                    )
+                    quantity(item) * cls._decimal(item["price"])
                     for item in items
                 ),
                 Decimal("0"),
@@ -340,7 +427,12 @@ class MetaApiConnector(TradingConnector):
         open_price = weighted_price(opening)
         if open_price is None:
             return None
-        close_price = weighted_price(closing)
+        close_price = weighted_price(closing) if fully_closed else None
+        gross = sum((cls._decimal(item.get("profit")) or Decimal("0") for item in rows), Decimal("0"))
+        gross_available = fully_closed and all(cls._decimal(item.get("profit")) is not None for item in rows)
+        missing_costs = [field for field in ("commission", "swap") if any(
+            cls._decimal(item.get(field)) is None for item in rows
+        )]
         return ProviderTradeRecord(
             provider_trade_id=position_id,
             provider_order_id=(
@@ -349,36 +441,40 @@ class MetaApiConnector(TradingConnector):
             provider_position_id=position_id,
             symbol=str(first.get("symbol") or "UNKNOWN"),
             direction=first_side,
-            volume=sum((quantity(item) for item in opening), Decimal("0")),
+            volume=opened_volume,
             open_time=cls._time(first.get("time") or first.get("brokerTime")),
             close_time=(
                 cls._time(closing[-1].get("time") or closing[-1].get("brokerTime"))
-                if closing
+                if fully_closed
                 else None
             ),
             open_price=open_price,
             close_price=close_price,
-            stop_loss=(
-                Decimal(str(first["stopLoss"])) if first.get("stopLoss") else None
-            ),
-            take_profit=(
-                Decimal(str(first["takeProfit"])) if first.get("takeProfit") else None
-            ),
-            gross_profit=sum(
-                (Decimal(str(item.get("profit") or 0)) for item in rows),
-                Decimal("0"),
-            ),
+            stop_loss=cls._decimal(first.get("stopLoss")),
+            take_profit=cls._decimal(first.get("takeProfit")),
+            gross_profit=gross,
             commission=sum(
-                (Decimal(str(item.get("commission") or 0)) for item in rows),
+                (cls._decimal(item.get("commission")) or Decimal("0") for item in rows),
                 Decimal("0"),
             ),
             swap=sum(
-                (Decimal(str(item.get("swap") or 0)) for item in rows),
+                (cls._decimal(item.get("swap")) or Decimal("0") for item in rows),
                 Decimal("0"),
             ),
             comment=next((item.get("comment") for item in reversed(rows) if item.get("comment")), None),
             market_type="cfd",
-            raw_payload={"deals": rows},
+            raw_payload={
+                "deals": rows,
+                "platform": first.get("platform"),
+                "opened_volume": str(opened_volume),
+                "closed_volume": str(closed_volume),
+                "remaining_volume": str(max(opened_volume - closed_volume, Decimal("0"))),
+                "realized_gross_profit": str(gross),
+                "gross_pnl_available": gross_available,
+                "net_pnl_available": gross_available and not missing_costs,
+                "pnl_source": "provider" if gross_available else "unavailable",
+                "missing_cost_fields": missing_costs,
+            },
         )
 
     @staticmethod
@@ -397,7 +493,11 @@ class MetaApiConnector(TradingConnector):
 
     @staticmethod
     def _decimal(value):
-        return Decimal(str(value)) if value is not None else None
+        try:
+            number = Decimal(str(value)) if value is not None else None
+            return number if number is not None and number.is_finite() else None
+        except (InvalidOperation, ValueError, TypeError):
+            return None
 
     @staticmethod
     def _account_type(

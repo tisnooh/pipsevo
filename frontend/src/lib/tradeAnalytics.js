@@ -6,7 +6,7 @@ export function measuredTradePnl(trade) {
   if (!Number.isFinite(pnl)) return null;
   const source = String(trade?.provider_metadata?.pnl_source || "").toLowerCase();
   if (trade?.provider_metadata?.net_pnl_available === false) return null;
-  if (trade?.source_provider === "tradelocker" && trade?.provider_metadata?.net_pnl_available !== true) return null;
+  if (["tradelocker", "metaapi"].includes(trade?.source_provider) && trade?.provider_metadata?.net_pnl_available !== true) return null;
   const providerTrade = Boolean(trade?.integration_connection_id || trade?.integration_account_id || trade?.source_provider);
   const costs = trade?.provider_metadata?.instrument_pricing?.tickCost;
   if (source === "derived_tick_cost" && Array.isArray(costs) && !costs.some(row => Number.isFinite(Number(row?.tickCost)) && Number(row?.tickCost) > 0)) return null;

@@ -71,6 +71,10 @@ const notifyInitialSync = (payload, label = "Compte") => {
     0,
   );
   const count = imported + updated;
+  if (results.some(result => result?.partial_error)) {
+    toast.warning(`${label} connecté, mais une partie de l’historique reste à synchroniser. Vérifie les avertissements dans les sources autorisées.`);
+    return;
+  }
   if (results.some(result => Number(result?.trades_without_net_pnl || 0) > 0)) {
     toast.warning(`${label} connecté. Trades synchronisés, mais les résultats nets ou frais ne sont pas fournis par la plateforme.`);
     return;
@@ -251,6 +255,7 @@ export default function IntegrationConnections({ compact = false, returnPath = "
         onConnectionReady?.({ provider: "metaapi", connection: data.connection });
       }
     } catch (error) {
+      await load();
       toast.error(publicError(error, "La connexion MetaTrader n’est pas encore terminée"));
     } finally { setActionId(null); }
   };
@@ -269,12 +274,13 @@ export default function IntegrationConnections({ compact = false, returnPath = "
         const detail = error?.response?.data?.detail;
         const code = typeof detail === "object" ? detail?.code : null;
         if (code !== "provider_configuration_pending") {
+          await load();
           toast.error(publicError(error, "La connexion MetaTrader a échoué"));
           return;
         }
       }
     }
-    toast.info("La plateforme termine encore la connexion. Le compte apparaîtra automatiquement dès qu’il sera prêt.");
+    toast.info("La connexion n’est pas encore prête. Vérifie la configuration chez MetaApi, puis clique sur Finaliser.");
     await load();
   };
 
@@ -450,5 +456,34 @@ function ConnectionCard({ connection, busyId, onChoose, onSync, onFinalize, onRe
   const [label, color] = statusCopy[connection.connection_status] || statusCopy.pending;
   const accounts = connection.integration_accounts || [];
   const needsReconnect = ["disconnected", "expired", "error"].includes(connection.connection_status);
-  return <article className="rounded-xl border border-[#6571CF]/20 bg-[#0D1120] p-4"><div className="flex flex-col gap-4 lg:flex-row lg:items-start"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{PROVIDERS.find(item => item.id === connection.provider)?.name || connection.provider}</span><span className={`text-[10px] ${color}`}>● {label}</span><span className="rounded border border-[#6571CF]/20 px-1.5 py-0.5 text-[9px] uppercase text-[#697284]">lecture seule</span></div><p className="mt-1 text-xs text-[#737C8D]">{accounts.length} compte{accounts.length > 1 ? "s" : ""} détecté{accounts.length > 1 ? "s" : ""}</p><div className="mt-3 grid gap-2">{accounts.filter(account => ["selected", "connected", "error", "syncing"].includes(account.status)).map(account => <div key={account.id} className="flex flex-col gap-2 rounded-xl border border-[#6571CF]/15 bg-[#090E1C] p-3 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><div className="truncate text-xs font-medium">{account.account_name || `Compte ${account.external_account_id.slice(-4)}`}</div><div className="mt-1 text-[10px] text-[#5F6878]">Dernière synchro : {account.last_successful_sync_at ? new Date(account.last_successful_sync_at).toLocaleString("fr-FR") : "jamais"}</div>{account.last_error_message && <div className="mt-1 text-[10px] text-[#FF8999]">{account.last_error_message}</div>}</div><button onClick={() => onSync(account)} disabled={busyId === account.id || account.status === "syncing" || needsReconnect} className="btn-ghost inline-flex items-center justify-center gap-2 text-xs disabled:opacity-40">{busyId === account.id || account.status === "syncing" ? <Loader2 className="h-3.5 w-3.5 animate-spin"/> : <RefreshCw className="h-3.5 w-3.5"/>}Synchroniser</button></div>)}</div></div><div className="flex flex-col gap-2 sm:flex-row">{connection.connection_status === "pending" && connection.provider === "metaapi" ? <button onClick={onFinalize} className="btn-primary">Finaliser</button> : needsReconnect ? <button onClick={onReconnect} className="btn-primary inline-flex items-center justify-center gap-2"><RefreshCw className="h-4 w-4"/>Reconnecter</button> : <button onClick={onChoose} disabled={!accounts.length} className="btn-ghost disabled:opacity-40">Choisir les comptes</button>}<button onClick={onDisconnect} disabled={busyId === connection.id || connection.connection_status === "disconnected"} className="btn-ghost inline-flex items-center justify-center gap-2 text-[#FF8999] disabled:opacity-40"><Unplug className="h-4 w-4"/>Déconnecter</button></div></div></article>;
+  const busy = busyId === connection.id;
+  return <article className="rounded-xl border border-[#6571CF]/20 bg-[#0D1120] p-4">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-medium">{PROVIDERS.find(item => item.id === connection.provider)?.name || connection.provider}</span>
+          <span className={`text-[10px] ${color}`}>● {label}</span>
+          <span className="rounded border border-[#6571CF]/20 px-1.5 py-0.5 text-[9px] uppercase text-[#697284]">lecture seule</span>
+        </div>
+        <p className="mt-1 text-xs text-[#737C8D]">{accounts.length} compte{accounts.length > 1 ? "s" : ""} détecté{accounts.length > 1 ? "s" : ""}</p>
+        {connection.last_error_message && <p role="status" className="mt-2 text-xs leading-relaxed text-[#FFB855]">{connection.last_error_message}</p>}
+        {accounts.some(account => account.provider_metadata?.synchronization?.partial_error) && <p role="status" className="mt-2 text-xs leading-relaxed text-[#FFB855]">L’historique reçu est incomplet. Certains trades ne peuvent pas encore être reconstitués ; les statistiques ne couvrent pas tout le compte.</p>}
+        <div className="mt-3 grid gap-2">{accounts.filter(account => ["selected", "connected", "error", "syncing"].includes(account.status)).map(account => <div key={account.id} className="flex flex-col gap-2 rounded-xl border border-[#6571CF]/15 bg-[#090E1C] p-3 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs font-medium">{account.account_name || `Compte ${account.external_account_id.slice(-4)}`}</div>
+            <div className="mt-1 text-[10px] text-[#5F6878]">Dernière synchro : {account.last_successful_sync_at ? new Date(account.last_successful_sync_at).toLocaleString("fr-FR") : "jamais"}</div>
+            {account.last_error_message && <div className="mt-1 text-[10px] text-[#FF8999]">{account.last_error_message}</div>}
+          </div>
+          <button onClick={() => onSync(account)} disabled={busyId === account.id || account.status === "syncing" || needsReconnect} className="btn-ghost inline-flex items-center justify-center gap-2 text-xs disabled:opacity-40">{busyId === account.id || account.status === "syncing" ? <Loader2 className="h-3.5 w-3.5 animate-spin"/> : <RefreshCw className="h-3.5 w-3.5"/>}Synchroniser</button>
+        </div>)}</div>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        {connection.connection_status === "pending" && connection.provider === "metaapi"
+          ? <button onClick={onFinalize} disabled={busy} className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-40">{busy && <Loader2 className="h-4 w-4 animate-spin"/>}Finaliser</button>
+          : needsReconnect ? <button onClick={onReconnect} className="btn-primary inline-flex items-center justify-center gap-2"><RefreshCw className="h-4 w-4"/>Reconnecter</button>
+            : <button onClick={onChoose} disabled={!accounts.length} className="btn-ghost disabled:opacity-40">Choisir les comptes</button>}
+        <button onClick={onDisconnect} disabled={busy || connection.connection_status === "disconnected"} className="btn-ghost inline-flex items-center justify-center gap-2 text-[#FF8999] disabled:opacity-40"><Unplug className="h-4 w-4"/>Déconnecter</button>
+      </div>
+    </div>
+  </article>;
 }

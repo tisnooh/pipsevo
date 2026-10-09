@@ -1,5 +1,12 @@
 import { calculateTradeAnalytics, groupTradesByWeekday, measuredTradePnl, tradeOutcome } from "./tradeAnalytics";
 
+test("MetaTrader ne certifie pas les anciens frais absents et accepte un vrai zéro", () => {
+  const trade = { pnl: 100, result_status: "closed", source_provider: "metaapi" };
+  expect(measuredTradePnl(trade)).toBeNull();
+  expect(tradeOutcome(trade)).toBeNull();
+  expect(measuredTradePnl({ ...trade, pnl: 0, provider_metadata: { pnl_source: "provider", net_pnl_available: true } })).toBe(0);
+});
+
 test("unusable historical pricing cannot establish a net winning outcome", () => {
   const trade = { pnl: 0, entry: 100, exit_price: 102, direction: "long", result_status: "closed", provider_metadata: { pnl_source: "derived_tick_cost", instrument_pricing: { tickCost: [{ tickCost: 0 }] } } };
   expect(measuredTradePnl(trade)).toBeNull();

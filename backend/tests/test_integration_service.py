@@ -10,6 +10,7 @@ from pydantic import SecretStr
 
 from integrations.config import IntegrationConfig
 from integrations.connectors.ctrader import CTraderConnector
+from integrations.connectors.metaapi import MetaApiConnector
 from integrations.errors import IntegrationError
 from integrations.models import (
     AccountSnapshot,
@@ -270,6 +271,34 @@ def test_oauth_diagnostic_does_not_log_credentials(caplog):
         assert secret not in caplog.text
 
 
+def test_metaapi_pending_configuration_persists_safe_owner_bound_diagnostic():
+    async def scenario():
+        service, repository, _ = build_service()
+        connector = MetaApiConnector("private-server-token")
+        connector.deploy = AsyncMock()
+        connector.list_accounts = AsyncMock(return_value=[])
+        service.registry.register(connector)
+        connection = await repository.create_connection({
+            "user_id": "user-1", "platform": "mt5", "provider": "metaapi",
+            "connection_status": "pending", "sync_status": "idle",
+        })
+        await service._store_access(connection, "user-1", "metaapi", {"provider_account_id": "provider-account"})
+        with pytest.raises(IntegrationError) as error:
+            await service.finalize_metaapi("user-2", "beta", connection["id"])
+        assert error.value.code == "connection_not_found"
+        connector.deploy.assert_not_awaited()
+        with pytest.raises(IntegrationError) as error:
+            await service.finalize_metaapi("user-1", "beta", connection["id"])
+        assert error.value.code == "provider_configuration_pending"
+        updated = repository.connections[connection["id"]]
+        assert updated["connection_status"] == "pending"
+        assert updated["last_error_code"] == error.value.code
+        assert "MetaApi" in updated["last_error_message"]
+        assert "private-server-token" not in updated["last_error_message"]
+        connector.deploy.assert_awaited_once_with("provider-account")
+    asyncio.run(scenario())
+
+
 def test_provider_read_diagnostic_keeps_type_without_secret_payload(caplog):
     async def scenario():
         service, repository, _ = build_service()
@@ -305,24 +334,25 @@ def test_provider_read_diagnostic_keeps_type_without_secret_payload(caplog):
     assert "private-account-data" not in caplog.text
 
 
-def test_multi_account_sync_persists_provider_currency():
+@pytest.mark.parametrize("provider", ["tradelocker", "metaapi"])
+def test_multi_account_sync_persists_provider_currency(provider):
     async def scenario():
         service, repository, _ = build_service()
-        connector = ExpiredConnector()
+        connector = ExpiredConnector() if provider == "tradelocker" else MetaApiConnector("test-token")
         connector.sync_historical = AsyncMock(return_value=SyncBatch(
             trades=[FakeProvider.trade("deal-eur")],
             snapshot=AccountSnapshot(balance="1200", currency="EUR", captured_at=datetime.now(timezone.utc)),
         ))
         service.registry.register(connector)
         connection = await repository.create_connection({
-            "user_id": "user-1", "platform": "tradelocker", "provider": "tradelocker",
+            "user_id": "user-1", "platform": "mt5" if provider == "metaapi" else "tradelocker", "provider": provider,
             "connection_status": "connected", "sync_status": "idle",
         })
-        await service._store_access(connection, "user-1", "tradelocker", {"access_token": "test-token"})
+        await service._store_access(connection, "user-1", provider, {"access_token": "test-token"})
         repository.get_integration_account = AsyncMock(return_value={
             "id": "integration-account-1", "connection_id": connection["id"],
-            "user_id": "user-1", "account_id": "core-account-1", "provider": "tradelocker",
-            "platform": "tradelocker", "external_account_id": "external-account-1",
+            "user_id": "user-1", "account_id": "core-account-1", "provider": provider,
+            "platform": "mt5" if provider == "metaapi" else "tradelocker", "external_account_id": "external-account-1",
         })
         repository.claim_sync_lock = AsyncMock(return_value=True)
         repository.release_sync_lock = AsyncMock()
