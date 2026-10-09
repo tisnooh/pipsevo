@@ -4,6 +4,7 @@ import { AdminUserDetail } from "./AdminUsers";
 import { adminApi } from "./api";
 import { useAdminSession } from "./AdminAccess";
 import { useAdminData } from "./ui";
+import { toast } from "sonner";
 
 jest.mock("react-router-dom", () => ({
   Link: ({ children }) => <span>{children}</span>,
@@ -68,5 +69,16 @@ describe("TradeLocker administrator retry", () => {
     useAdminSession.mockReturnValue({ role: "admin" });
     await act(async () => root.render(<AdminUserDetail />));
     expect(container.textContent).not.toContain("Synchroniser TradeLocker");
+  });
+
+  it("explains missing financial data instead of claiming a complete result", async () => {
+    const state = useAdminData();
+    state.data.trading_data.data_quality = { total_trades: 8, trades_with_pnl: 0 };
+    adminApi.retryUserSync.mockResolvedValue({ data: { trades_without_net_pnl: 8 } });
+    await act(async () => root.render(<AdminUserDetail />));
+    expect(container.textContent).toContain("0 / 8 trades ont un P&L net vérifiable");
+    await click("Synchroniser TradeLocker");
+    await click("Confirmer la synchronisation");
+    expect(toast.warning).toHaveBeenCalledWith("Trades synchronisés, mais les résultats nets ou frais ne sont pas fournis par la plateforme.");
   });
 });

@@ -328,9 +328,14 @@ def test_multi_account_sync_persists_provider_currency():
         repository.release_sync_lock = AsyncMock()
         repository.update_integration_account = AsyncMock()
         repository.create_snapshot = AsyncMock()
-        await service.sync_integration_account("user-1", "integration-account-1")
+        result = await service.sync_integration_account("user-1", "integration-account-1")
         assert next(iter(repository.trades.values()))["provider_currency"] == "EUR"
+        assert next(iter(repository.trades.values()))["pnl"] is None
+        assert result["trades_without_net_pnl"] == 1
         assert repository.update_integration_account.await_args.args[2]["currency"] == "EUR"
+        sync_metadata = repository.update_integration_account.await_args.args[2]["provider_metadata"]["synchronization"]
+        assert sync_metadata["automatic_fields"] == ["trades", "balance"]
+        assert sync_metadata["trades_without_net_pnl"] == 1
         assert repository.create_snapshot.await_args.args[0]["currency"] == "EUR"
 
     asyncio.run(scenario())

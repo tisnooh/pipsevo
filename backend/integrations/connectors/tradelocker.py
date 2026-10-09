@@ -27,7 +27,7 @@ class TradeLockerConnector(TradingConnector):
     provider_id = "tradelocker"
     platforms = ("tradelocker",)
     auth_type = "jwt"
-    normalization_version = 5
+    normalization_version = 6
 
     def __init__(
         self, demo_url: str, live_url: str, developer_api_key: str | None = None
@@ -148,8 +148,8 @@ class TradeLockerConnector(TradingConnector):
     ) -> SyncBatch:
         # A position can close days after its opening fill. Replaying only the
         # latest five minutes would overwrite it with a close-only "open" trade.
-        # Retain the opening of every still-open / boundary position. Version 5
-        # also repairs instrument pricing previously requested on a TRADE route.
+        # Retain the opening of every still-open / boundary position. Version 6
+        # also records whether all costs needed for net P&L were provided.
         value = (
             cursor.get("replay_from")
             if cursor.get("normalization_version") == self.normalization_version
@@ -304,8 +304,8 @@ class TradeLockerConnector(TradingConnector):
                     quantity=abs(filled),
                     price=price,
                     executed_at=executed,
-                    commission=Decimal(str(row.get("commission") or 0)),
-                    fees=abs(Decimal(str(row.get("fee") or row.get("fees") or 0))),
+                    commission=self._first_decimal(row, "commission") or Decimal("0"),
+                    fees=abs(self._first_decimal(row, "fee", "fees") or Decimal("0")),
                     raw_payload=row,
                 )
             )
@@ -562,6 +562,24 @@ class TradeLockerConnector(TradingConnector):
             if calculated is not None:
                 gross_profit = calculated
                 pnl_source = "derived_tick_cost"
+        # Missing costs are unknown, not zero. The public orders-history
+        # schema does not guarantee commissions, fees or swaps. Never label
+        # a price-derived gross result as a verified net result in that case.
+        cost_fields = {"commission": ("commission",), "fees": ("fee", "fees"), "swap": ("swap",)}
+        cost_values = {
+            field: [next((value for key in keys if (value := cls._decimal_or_none(row.get(key))) is not None), None)
+                    for row in rows]
+            for field, keys in cost_fields.items()
+        }
+        missing_cost_fields = [
+            field for field, values in cost_values.items() if any(value is None for value in values)
+        ]
+        costs = {
+            field: sum((value if field == "swap" else abs(value)
+                        for value in values if value is not None), Decimal("0"))
+            for field, values in cost_values.items()
+        }
+        gross_available = fully_closed and pnl_source != "unavailable"
         return ProviderTradeRecord(
             provider_trade_id=position_id,
             provider_order_id=str(first.get("orderId") or first.get("id")),
@@ -581,22 +599,16 @@ class TradeLockerConnector(TradingConnector):
             open_price=open_price,
             close_price=close_price,
             gross_profit=gross_profit,
-            commission=sum(
-                (abs(Decimal(str(item.get("commission") or 0))) for item in rows),
-                Decimal("0"),
-            ),
-            fees=sum(
-                (
-                    abs(Decimal(str(item.get("fee") or item.get("fees") or 0)))
-                    for item in rows
-                ),
-                Decimal("0"),
-            ),
-            swap=sum((Decimal(str(item.get("swap") or 0)) for item in rows), Decimal("0")),
+            commission=costs["commission"],
+            fees=costs["fees"],
+            swap=costs["swap"],
             market_type="cfd",
             raw_payload={
                 "orders": rows,
                 "pnl_source": pnl_source,
+                "gross_pnl_available": gross_available,
+                "net_pnl_available": gross_available and not missing_cost_fields,
+                "missing_cost_fields": missing_cost_fields,
                 "instrument_pricing": (
                     {
                         "tickSize": pricing.get("tickSize"),

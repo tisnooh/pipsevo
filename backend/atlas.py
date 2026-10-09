@@ -71,6 +71,13 @@ def measured_trade_pnl(trade: dict) -> float | None:
         or trade.get("integration_account_id")
         or trade.get("source_provider")
     )
+    if isinstance(metadata, dict) and metadata.get("net_pnl_available") is False:
+        return None
+    if trade.get("source_provider") == "tradelocker" and (
+        not isinstance(metadata, dict) or metadata.get("net_pnl_available") is not True
+    ):
+        # Legacy TradeLocker gross calculations assumed missing costs were 0.
+        return None
     pricing = metadata.get("instrument_pricing") if isinstance(metadata, dict) else None
     if pnl_source == "derived_tick_cost" and isinstance(pricing, dict):
         costs = pricing.get("tickCost")
@@ -116,37 +123,9 @@ def _date_key(value: Any) -> str:
 
 
 def trade_outcome(trade: dict) -> int | None:
-    """Return 1/-1/0 for win/loss/breakeven, or None when unmeasured.
-
-    Provider trades normally use their net P&L. Legacy synchronized rows may
-    contain a placeholder zero because their provider did not expose monetary
-    P&L yet; for those rows only, the price movement still provides a reliable
-    win/loss outcome.
-    """
-    status = str(trade.get("result_status") or "").strip().lower()
-    if status in {"open", "cancelled", "canceled"}:
-        return None
-    raw_pnl = _number(trade.get("pnl"))
+    """Classify the measured net result; prices alone do not include costs."""
     pnl = measured_trade_pnl(trade)
-    if pnl is not None and pnl != 0:
-        return 1 if pnl > 0 else -1
-    if pnl == 0:
-        return 0
-    entry = _number(trade.get("entry"))
-    if entry is None:
-        entry = _number(trade.get("open_price"))
-    exit_price = _number(trade.get("exit_price"))
-    if exit_price is None:
-        exit_price = _number(trade.get("close_price"))
-    if entry is None or exit_price is None:
-        return 0 if raw_pnl == 0 and pnl is not None else None
-    direction = str(trade.get("direction") or "").strip().lower()
-    movement = exit_price - entry
-    if direction in {"short", "sell", "vente"}:
-        movement = -movement
-    elif direction not in {"long", "buy", "achat"}:
-        return 0 if movement == 0 and pnl is not None else None
-    return 1 if movement > 0 else -1 if movement < 0 else 0
+    return None if pnl is None else 1 if pnl > 0 else -1 if pnl < 0 else 0
 
 
 def build_atlas_context(

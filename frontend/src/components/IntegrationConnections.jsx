@@ -71,6 +71,10 @@ const notifyInitialSync = (payload, label = "Compte") => {
     0,
   );
   const count = imported + updated;
+  if (results.some(result => Number(result?.trades_without_net_pnl || 0) > 0)) {
+    toast.warning(`${label} connecté. Trades synchronisés, mais les résultats nets ou frais ne sont pas fournis par la plateforme.`);
+    return;
+  }
   toast.success(
     count
       ? `${label} connecté. ${count} trade${count > 1 ? "s" : ""} synchronisé${count > 1 ? "s" : ""}.`
@@ -302,8 +306,10 @@ export default function IntegrationConnections({ compact = false, returnPath = "
   const syncAccount = async (account) => {
     setActionId(account.id);
     try {
-      await integrationConnections.syncAccount(account.id);
-      toast.success("Synchronisation terminée");
+      const { data } = await integrationConnections.syncAccount(account.id);
+      if (data.partial_error) toast.warning("Une partie de l’historique reste à synchroniser.");
+      else if (data.trades_without_net_pnl > 0) toast.warning("Trades synchronisés, mais les résultats nets ou frais ne sont pas fournis par la plateforme.");
+      else toast.success("Synchronisation terminée");
       await load();
     } catch (error) { toast.error(publicError(error, "La synchronisation a échoué")); }
     finally { setActionId(null); }
@@ -355,7 +361,9 @@ export default function IntegrationConnections({ compact = false, returnPath = "
       </div>
     </section>
 
-    {!compact && !loading && connections.length > 0 && <section className="card-elev overflow-hidden"><div className="border-b border-white/[0.06] p-5 sm:p-6"><h2 className="font-semibold">Sources autorisées</h2><p className="mt-1 text-xs text-[#737C8D]">La dernière synchronisation et les erreurs restent visibles compte par compte.</p></div><div className="grid gap-3 p-5 sm:p-6">{connections.map(connection => <ConnectionCard key={connection.id} connection={connection} busyId={actionId} onChoose={() => openSelection(connection.id)} onSync={syncAccount} onFinalize={() => finalizeMetaApi(connection)} onReconnect={() => launchProvider(PROVIDERS.find(item => item.id === connection.provider))} onDisconnect={() => disconnect(connection)}/>)}</div></section>}
+    {!compact && !loading && connections.length > 0 && <section className="card-elev overflow-hidden"><div className="border-b border-white/[0.06] p-5 sm:p-6"><h2 className="font-semibold">Sources autorisées</h2><p className="mt-1 text-xs text-[#737C8D]">La dernière synchronisation et les erreurs restent visibles compte par compte.</p>
+      {connections.some(connection => (connection.integration_accounts || []).some(account => account.provider_metadata?.synchronization?.trades_without_net_pnl > 0)) && <p role="status" className="mt-3 text-xs leading-relaxed text-[#FFB855]">Lors du dernier import, au moins un compte n’a pas fourni de résultats nets ou de frais complets. Les trades restent disponibles, mais les résultats non vérifiables sont exclus du P&L net et du win rate. Contacte ton broker ou ta prop firm pour obtenir ces données.</p>}
+    </div><div className="grid gap-3 p-5 sm:p-6">{connections.map(connection => <ConnectionCard key={connection.id} connection={connection} busyId={actionId} onChoose={() => openSelection(connection.id)} onSync={syncAccount} onFinalize={() => finalizeMetaApi(connection)} onReconnect={() => launchProvider(PROVIDERS.find(item => item.id === connection.provider))} onDisconnect={() => disconnect(connection)}/>)}</div></section>}
 
     <Dialog open={Boolean(formProvider)} onOpenChange={open => { if (!open) { setFormProvider(null); setConfiguration(null); setMetaForm(EMPTY_META); setTlForm(EMPTY_TL); } }}>
       <DialogContent className="max-h-[92vh] overflow-y-auto border-[#6571CF]/25 bg-[#090E1C] text-white sm:max-w-xl">

@@ -32,7 +32,7 @@ test("automatically follows an account filter with a single native currency", ()
 
 test("TradeLocker net P&L, win rate and performance use only measured closed results in the native currency", () => {
   const locker = (pnl, result_status = "closed", pnl_source = "provider") => ({
-    pnl, result_status, source_provider: "tradelocker", provider_currency: "GBP", provider_metadata: { pnl_source },
+    pnl, result_status, source_provider: "tradelocker", provider_currency: "GBP", provider_metadata: { pnl_source, net_pnl_available: pnl_source !== "unavailable" },
   });
   const scope = tradingCurrencyScope([
     locker(196), locker(-50), locker(999, "open"), locker(0, "closed", "unavailable"),

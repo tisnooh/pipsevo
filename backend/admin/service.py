@@ -341,6 +341,7 @@ class AdminService:
             },
             "trading_data": {
                 **metrics,
+                "data_quality": context["data_quality"],
                 "best_day": max(day_totals.items(), key=lambda item: item[1], default=(None, None)),
                 "worst_day": min(day_totals.items(), key=lambda item: item[1], default=(None, None)),
                 "rows_limited": len(trades) == 10000,

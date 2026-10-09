@@ -58,7 +58,7 @@ def test_atlas_group_comparison_requires_two_trades():
     assert groups["Single sample"]["eligible_for_comparison"] is False
 
 
-def test_win_rate_uses_price_outcome_for_legacy_provider_zero_pnl():
+def test_win_rate_does_not_infer_net_profit_from_prices_without_costs():
     trades = [
         {
             "id": "short-win",
@@ -84,9 +84,9 @@ def test_win_rate_uses_price_outcome_for_legacy_provider_zero_pnl():
 
     context, _ = build_atlas_context({}, [], trades)
 
-    assert context["metrics"]["wins"] == 2
+    assert context["metrics"]["wins"] == 0
     assert context["metrics"]["losses"] == 0
-    assert context["metrics"]["win_rate_percent"] == 100
+    assert context["metrics"]["win_rate_percent"] is None
     assert context["metrics"]["net_pnl"] is None
     assert context["data_quality"]["trades_with_pnl"] == 0
 
@@ -111,13 +111,28 @@ def test_unavailable_provider_pnl_does_not_expose_partial_fees_as_net_profit():
     assert measured_trade_pnl(trade) is None
 
 
+def test_missing_costs_do_not_turn_gross_profit_into_a_net_result():
+    trade = {"pnl": 50, "source_provider": "tradelocker", "entry": 100,
+             "exit_price": 110, "direction": "long", "provider_metadata": {
+                 "pnl_source": "provider", "net_pnl_available": False,
+             }}
+    context, _ = build_atlas_context({}, [], [trade])
+    assert context["metrics"]["net_pnl"] is None
+    assert context["metrics"]["win_rate_percent"] is None
+    trade["provider_metadata"]["net_pnl_available"] = True
+    trade["pnl"] = -2
+    context, _ = build_atlas_context({}, [], [trade])
+    assert context["metrics"]["net_pnl"] == -2
+    assert context["metrics"]["win_rate_percent"] == 0
+
+
 def test_manual_and_provider_confirmed_zero_remain_measured():
     assert measured_trade_pnl({"pnl": 0}) == 0
     assert measured_trade_pnl(
         {
             "pnl": 0,
             "source_provider": "tradelocker",
-            "provider_metadata": {"pnl_source": "derived_tick_cost"},
+            "provider_metadata": {"pnl_source": "derived_tick_cost", "net_pnl_available": True},
         }
     ) == 0
 

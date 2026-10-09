@@ -234,7 +234,8 @@ def build_admin_router(get_current_user, service: AdminService, integration_serv
         # Return no provider payload or stored authentication information.
         accounts = result.get("accounts", [])
         return {"ok": True, "accounts_synced": len(accounts),
-                "partial_error": any(item.get("partial_error") for item in accounts)}
+                "partial_error": any(item.get("partial_error") for item in accounts),
+                "trades_without_net_pnl": sum(item.get("trades_without_net_pnl", 0) for item in accounts)}
 
     @router.get("/admin/trading-accounts")
     async def trading_accounts(

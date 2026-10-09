@@ -244,12 +244,12 @@ class NormalizedTrade(BaseModel):
     stop_loss: Decimal | None = None
     stop: Decimal | None = None
     take_profit: Decimal | None = None
-    gross_profit: Decimal
+    gross_profit: Decimal | None
     commission: Decimal
     swap: Decimal
     fees: Decimal
-    net_profit: Decimal
-    pnl: Decimal
+    net_profit: Decimal | None
+    pnl: Decimal | None
     provider_comment: str | None = None
     magic_number: int | None = None
     source: str
@@ -275,3 +275,4 @@ class SyncResult(BaseModel):
     error_count: int = 0
     next_cursor: dict[str, Any] = Field(default_factory=dict)
     partial_error: bool = False
+    trades_without_net_pnl: int = 0

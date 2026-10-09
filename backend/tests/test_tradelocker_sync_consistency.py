@@ -85,12 +85,13 @@ def test_never_imports_another_accounts_currency_or_rules(provider):
 def test_opening_zero_does_not_hide_missing_closing_pnl(provider):
     connector, fixture = provider
     fixture["orders"] = [
-        order(1, 99, "buy", "2026-09-01T10:00:00Z", 100, profit=0, commission=-2, fee=-1),
+        order(1, 99, "buy", "2026-09-01T10:00:00Z", 100, profit=0, commission=-2, fee=-1, swap=0),
         order(2, 99, "sell", "2026-09-01T11:00:00Z", 110, commission=3, fee=2, swap=-4),
     ]
     batch = run_sync(connector)
     trade = batch.trades[0]
     assert trade.raw_payload["pnl_source"] == "derived_tick_cost"
+    assert trade.raw_payload["net_pnl_available"] is True
     assert trade.gross_profit == Decimal("50")
     assert trade.commission == 5 and trade.fees == 3 and trade.swap == -4
     normalized = normalize_trade(trade, account_id="account-1", connection_id="connection-1",
@@ -143,7 +144,8 @@ def test_old_accounts_and_incomplete_cursors_get_historical_repair():
     connector._sync = AsyncMock()
     for cursor in ({"normalization_version": 3, "replay_from": "2026-10-01T10:00:00Z"},
                    {"normalization_version": 4, "replay_from": "2026-10-01T10:00:00Z"},
-                   {"normalization_version": 5, "last_execution_at": "2026-10-01T10:00:00Z"}):
+                   {"normalization_version": 5, "replay_from": "2026-10-01T10:00:00Z"},
+                   {"normalization_version": 6, "last_execution_at": "2026-10-01T10:00:00Z"}):
         asyncio.run(connector.sync_recent(account(), {}, cursor))
         assert connector._sync.call_args.args[2] < datetime(2020, 1, 1, tzinfo=timezone.utc)
 
@@ -165,3 +167,34 @@ def test_invalid_numeric_results_fall_back_to_valid_values():
     assert connector._closing_profit({"profit": "NaN", "realizedPnl": "0"}) == 0
     assert connector._first_decimal({"balance": "Infinity", "fallback": "0"}, "balance", "fallback") == 0
     assert connector._closing_profit({"profit": "NaN"}) is None
+
+
+@pytest.mark.parametrize("result_fields", [{}, {"profit": 50}])
+def test_gross_profit_is_not_net_profit_without_explicit_costs(provider, result_fields):
+    connector, fixture = provider
+    fixture["orders"] = [
+        order(1, 99, "buy", "2026-09-01T10:00:00Z", 100),
+        order(2, 99, "sell", "2026-09-01T11:00:00Z", 110, **result_fields),
+    ]
+    trade = run_sync(connector).trades[0]
+    assert trade.gross_profit == 50
+    assert trade.raw_payload["gross_pnl_available"] is True
+    assert trade.raw_payload["net_pnl_available"] is False
+    assert trade.raw_payload["missing_cost_fields"] == ["commission", "fees", "swap"]
+    normalized = normalize_trade(trade, account_id="a", connection_id="c", provider="tradelocker", external_account_id="123")
+    assert normalized.gross_profit == 50
+    assert normalized.pnl is normalized.net_profit is None
+
+
+def test_explicit_zero_costs_are_valid_but_a_missing_or_invalid_cost_is_unknown(provider):
+    connector, fixture = provider
+    fixture["orders"] = [
+        order(1, 99, "buy", "2026-09-01T10:00:00Z", 100, commission=0, fee=0, swap=0),
+        order(2, 99, "sell", "2026-09-01T11:00:00Z", 110, commission=0, fee=0, swap=0),
+    ]
+    assert run_sync(connector).trades[0].raw_payload["net_pnl_available"] is True
+    fixture["orders"][1]["commission"] = "NaN"
+    trade = run_sync(connector).trades[0]
+    assert trade.raw_payload["missing_cost_fields"] == ["commission"]
+    assert trade.raw_payload["net_pnl_available"] is False
+    assert trade.commission == 0

@@ -5,6 +5,8 @@ export function measuredTradePnl(trade) {
   const pnl = trade?.pnl === null || trade?.pnl === undefined || trade?.pnl === "" ? null : Number(trade.pnl);
   if (!Number.isFinite(pnl)) return null;
   const source = String(trade?.provider_metadata?.pnl_source || "").toLowerCase();
+  if (trade?.provider_metadata?.net_pnl_available === false) return null;
+  if (trade?.source_provider === "tradelocker" && trade?.provider_metadata?.net_pnl_available !== true) return null;
   const providerTrade = Boolean(trade?.integration_connection_id || trade?.integration_account_id || trade?.source_provider);
   const costs = trade?.provider_metadata?.instrument_pricing?.tickCost;
   if (source === "derived_tick_cost" && Array.isArray(costs) && !costs.some(row => Number.isFinite(Number(row?.tickCost)) && Number(row?.tickCost) > 0)) return null;
@@ -15,20 +17,9 @@ export function measuredTradePnl(trade) {
 const sumPnl = rows => rows.reduce((sum, trade) => sum + Number(measuredTradePnl(trade) || 0), 0);
 
 export function tradeOutcome(trade) {
-  const status = String(trade?.result_status || "").toLowerCase();
-  if (["open", "cancelled", "canceled"].includes(status)) return null;
-  const rawPnl = trade?.pnl === null || trade?.pnl === undefined || trade?.pnl === "" ? null : Number(trade.pnl);
   const pnl = measuredTradePnl(trade);
-  if (Number.isFinite(pnl) && pnl !== 0) return pnl > 0 ? 1 : -1;
-  if (pnl === 0) return 0;
-  const entry = Number(trade?.entry ?? trade?.open_price);
-  const exit = Number(trade?.exit_price ?? trade?.close_price);
-  if (!Number.isFinite(entry) || !Number.isFinite(exit) || entry <= 0 || exit <= 0) return rawPnl === 0 && pnl !== null ? 0 : null;
-  const direction = String(trade?.direction || "").toLowerCase();
-  let movement = exit - entry;
-  if (["short", "sell", "vente"].includes(direction)) movement *= -1;
-  else if (!["long", "buy", "achat"].includes(direction)) return movement === 0 && pnl !== null ? 0 : null;
-  return movement > 0 ? 1 : movement < 0 ? -1 : 0;
+  // A favorable price move can still lose money after commissions and fees.
+  return pnl === null ? null : pnl > 0 ? 1 : pnl < 0 ? -1 : 0;
 }
 
 export function groupTradesByWeekday(trades) {

@@ -1026,6 +1026,12 @@ class IntegrationService:
                 execution_count=len(batch.executions),
                 next_cursor=batch.next_cursor,
                 partial_error=batch.partial_error,
+                trades_without_net_pnl=sum(
+                    1 for record in batch.trades
+                    if record.close_time is not None and record.close_price is not None
+                    and connection.provider == "tradelocker"
+                    and record.raw_payload.get("net_pnl_available") is not True
+                ),
             )
             stage = "persist_trades"
             for record in batch.trades:
@@ -1126,7 +1132,14 @@ class IntegrationService:
             status = "partial_error" if batch.partial_error else "success"
             provider_metadata = dict(account.provider_metadata or {})
             if batch.snapshot:
-                automatic_fields = ["balance", "equity", "trades", "net_pnl"]
+                automatic_fields = ["trades"]
+                automatic_fields.extend(field for field in ("balance", "equity")
+                                        if getattr(batch.snapshot, field) is not None)
+                if batch.trades and not result.trades_without_net_pnl and any(
+                    record.close_time is not None and record.close_price is not None
+                    for record in batch.trades
+                ):
+                    automatic_fields.append("net_pnl")
                 optional_fields = (
                     "initial_balance",
                     "profit_target",
@@ -1145,6 +1158,7 @@ class IntegrationService:
                         "provider_status": batch.snapshot.provider_status,
                         "synchronization": {
                             "automatic_fields": automatic_fields,
+                            "trades_without_net_pnl": result.trades_without_net_pnl,
                             "manual_fields": [
                                 field
                                 for field in optional_fields

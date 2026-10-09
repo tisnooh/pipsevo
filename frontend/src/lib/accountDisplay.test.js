@@ -25,8 +25,8 @@ describe("affichage des comptes synchronisés", () => {
   test("applique les mêmes règles aux nouveaux comptes TradeLocker et à leur devise native", () => {
     const imported = { id: "new-tradelocker", balance: 10146, initial_balance: 10000, max_drawdown: 0 };
     const metrics = getAccountDisplayMetrics(imported, [
-      { source_provider: "tradelocker", result_status: "closed", pnl: 196, provider_currency: "GBP", provider_metadata: { pnl_source: "provider" } },
-      { source_provider: "tradelocker", result_status: "closed", pnl: -50, provider_currency: "GBP", provider_metadata: { pnl_source: "derived_tick_cost" } },
+      { source_provider: "tradelocker", result_status: "closed", pnl: 196, provider_currency: "GBP", provider_metadata: { pnl_source: "provider", net_pnl_available: true } },
+      { source_provider: "tradelocker", result_status: "closed", pnl: -50, provider_currency: "GBP", provider_metadata: { pnl_source: "derived_tick_cost", net_pnl_available: true } },
       { source_provider: "tradelocker", result_status: "open", pnl: 999, provider_currency: "GBP" },
       { source_provider: "tradelocker", result_status: "closed", pnl: 0, provider_currency: "GBP", provider_metadata: { pnl_source: "unavailable" } },
     ], { provider: "tradelocker", currency: "GBP", status: "connected" }, "EUR");

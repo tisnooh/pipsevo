@@ -1,9 +1,9 @@
 import { calculateTradeAnalytics, groupTradesByWeekday, measuredTradePnl, tradeOutcome } from "./tradeAnalytics";
 
-test("unusable historical pricing is unknown money but retains a valid price outcome", () => {
+test("unusable historical pricing cannot establish a net winning outcome", () => {
   const trade = { pnl: 0, entry: 100, exit_price: 102, direction: "long", result_status: "closed", provider_metadata: { pnl_source: "derived_tick_cost", instrument_pricing: { tickCost: [{ tickCost: 0 }] } } };
   expect(measuredTradePnl(trade)).toBeNull();
-  expect(tradeOutcome(trade)).toBe(1);
+  expect(tradeOutcome(trade)).toBeNull();
   expect(tradeOutcome({ ...trade, entry: null })).toBeNull();
   expect(tradeOutcome({ ...trade, result_status: "open" })).toBeNull();
   expect(measuredTradePnl({ pnl: 90, result_status: "open" })).toBeNull();
@@ -50,14 +50,14 @@ describe("statistiques synchronisées avec le journal", () => {
     expect(days.find(day => day.name === "Mer").pnl).toBe(75);
   });
 
-  test("déduit le résultat par les prix quand le P&L fournisseur est indisponible", () => {
+  test("n'invente pas de résultat net à partir des prix sans P&L fournisseur", () => {
     const stats = calculateTradeAnalytics([
       { pnl: 0, direction: "short", entry: 4154.88, exit_price: 4146, result_status: "closed", integration_connection_id: "c1", provider_metadata: {} },
       { pnl: 0, direction: "long", entry: 30476.6, exit_price: 30479.5, result_status: "closed", integration_connection_id: "c1", provider_metadata: { pnl_source: "unavailable" } },
     ], accounts);
 
-    expect(stats.winrate).toBe(100);
-    expect(stats.wins).toBe(2);
+    expect(stats.winrate).toBeNull();
+    expect(stats.wins).toBe(0);
     expect(stats.losses).toBe(0);
     expect(stats.pnl).toBeNull();
     expect(stats.avgWin).toBeNull();
@@ -67,7 +67,15 @@ describe("statistiques synchronisées avec le journal", () => {
     expect(measuredTradePnl({ pnl: 0 })).toBe(0);
     expect(measuredTradePnl({ pnl: 0, source_provider: "tradelocker", provider_metadata: {} })).toBeNull();
     expect(measuredTradePnl({ pnl: -2.5, source_provider: "tradelocker", provider_metadata: { pnl_source: "unavailable" } })).toBeNull();
-    expect(measuredTradePnl({ pnl: 0, source_provider: "tradelocker", provider_metadata: { pnl_source: "derived_tick_cost" } })).toBe(0);
+    expect(measuredTradePnl({ pnl: 0, source_provider: "tradelocker", provider_metadata: { pnl_source: "derived_tick_cost", net_pnl_available: true } })).toBe(0);
+  });
+
+  test("un mouvement favorable ne garantit pas un gain net après frais", () => {
+    const trade = { pnl: 50, source_provider: "tradelocker", direction: "long", entry: 100, exit_price: 110, provider_metadata: { pnl_source: "provider", net_pnl_available: false } };
+    expect(measuredTradePnl(trade)).toBeNull();
+    expect(tradeOutcome(trade)).toBeNull();
+    expect(tradeOutcome({ ...trade, pnl: -2, provider_metadata: { ...trade.provider_metadata, net_pnl_available: true } })).toBe(-1);
+    expect(measuredTradePnl({ ...trade, provider_metadata: { pnl_source: "derived_tick_cost" } })).toBeNull();
   });
 
   test("affiche un profit factor infini quand tous les P&L mesurés sont gagnants", () => {

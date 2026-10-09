@@ -30,6 +30,12 @@ def normalize_trade(
     swap_cost = record.swap
     fees_cost = abs(record.fees)
     net_profit = record.gross_profit - commission_cost + swap_cost - fees_cost
+    gross_profit = record.gross_profit
+    if provider == "tradelocker":
+        if record.raw_payload.get("gross_pnl_available") is not True:
+            gross_profit = None
+        if record.raw_payload.get("net_pnl_available") is not True:
+            net_profit = None
     closed = record.close_time is not None and record.close_price is not None
     return NormalizedTrade(
         provider_trade_id=record.provider_trade_id,
@@ -55,7 +61,7 @@ def normalize_trade(
         stop_loss=record.stop_loss,
         stop=record.stop_loss,
         take_profit=record.take_profit,
-        gross_profit=record.gross_profit,
+        gross_profit=gross_profit,
         commission=commission_cost,
         swap=swap_cost,
         fees=fees_cost,

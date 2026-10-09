@@ -52,7 +52,7 @@ def test_sync_uses_owner_boundary_and_audits_without_exposing_credentials():
     client, service, integration = fixture()
     response = client.post(PATH, json={"confirmation": True})
     assert response.status_code == 200
-    assert response.json() == {"ok": True, "accounts_synced": 1, "partial_error": False}
+    assert response.json() == {"ok": True, "accounts_synced": 1, "partial_error": False, "trades_without_net_pnl": 0}
     integration.repository.get_connection.assert_awaited_once_with(CONNECTION, OWNER)
     integration.sync_connection.assert_awaited_once_with(OWNER, CONNECTION, "retry")
     service.rate_limit.assert_awaited_once_with("staff-id", "trading_sync", 5)
@@ -81,3 +81,11 @@ def test_partial_import_is_not_reported_as_complete():
     client, _, integration = fixture()
     integration.sync_connection.return_value = {"accounts": [{"partial_error": True}]}
     assert client.post(PATH, json={"confirmation": True}).json()["partial_error"] is True
+
+
+def test_successful_trade_import_reports_missing_financial_data():
+    client, _, integration = fixture()
+    integration.sync_connection.return_value = {"accounts": [{"trades_without_net_pnl": 8}]}
+    result = client.post(PATH, json={"confirmation": True}).json()
+    assert result["trades_without_net_pnl"] == 8
+    assert result["partial_error"] is False
