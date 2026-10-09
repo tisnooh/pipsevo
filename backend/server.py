@@ -1834,7 +1834,7 @@ async def health():
 
 api.include_router(build_integration_router(get_current_user, integration_service))
 api.include_router(build_backtest_router(get_current_user, db, admin_service.feature_enabled))
-api.include_router(build_admin_router(get_current_user, admin_service))
+api.include_router(build_admin_router(get_current_user, admin_service, integration_service))
 app.include_router(api)
 app.add_middleware(BacktestBodyLimit)
 

@@ -1,6 +1,7 @@
-jest.mock("@/lib/api", () => ({ api: {} }), { virtual: true });
+jest.mock("@/lib/api", () => ({ api: { post: jest.fn() } }), { virtual: true });
 
-import { canAdmin, isSuperAdmin, staffRoles } from "./api";
+import { api } from "@/lib/api";
+import { adminApi, canAdmin, isSuperAdmin, staffRoles } from "./api";
 
 describe("admin role helpers", () => {
   test.each(["support", "admin", "super_admin"])("%s can access the admin guard", (role) => {
@@ -17,4 +18,12 @@ describe("admin role helpers", () => {
     expect(isSuperAdmin({ role: "super_admin" })).toBe(true);
     expect(isSuperAdmin({ role: "admin" })).toBe(false);
   });
+});
+
+test("admin synchronization stays owner scoped and explicitly confirmed", () => {
+  adminApi.retryUserSync("owner-id", "connection-id");
+  expect(api.post).toHaveBeenCalledWith(
+    "/admin/users/owner-id/connections/connection-id/sync",
+    { confirmation: true }, { timeout: 180000 },
+  );
 });

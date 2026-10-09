@@ -29,7 +29,8 @@ def order(order_id, position_id, side, date, price, qty=1, **extra):
 @pytest.fixture
 def provider(monkeypatch):
     connector = TradeLockerConnector("https://demo.example", "https://live.example")
-    fixture = {"orders": [], "details": [{"id": "123", "currency": "EUR"}], "requests": []}
+    fixture = {"orders": [], "details": [{"id": "123", "currency": "EUR"}], "requests": [],
+               "routes": [{"id": 7, "type": "TRADE"}, {"id": 9, "type": "INFO"}]}
 
     async def request(method, url, **kwargs):
         fixture["requests"].append((url, kwargs))
@@ -46,8 +47,9 @@ def provider(monkeypatch):
         if url.endswith("/trade/accounts"):
             return {"d": fixture["details"]}
         if url.endswith("/instruments"):
-            return {"d": {"instruments": [{"tradableInstrumentId": 42, "name": "TEST"}]}}
+            return {"d": {"instruments": [{"tradableInstrumentId": 42, "name": "TEST", "routes": fixture["routes"]}]}}
         if url.endswith("/trade/instruments/42"):
+            assert kwargs["params"] == {"routeId": "9"}
             return {"d": {"tickSize": [{"tickSize": "0.5"}], "tickCost": [{"tickCost": "2.5"}]}}
         raise AssertionError(url)
 
@@ -139,10 +141,23 @@ def test_boundary_replay_releases_old_closed_positions(provider):
 def test_old_accounts_and_incomplete_cursors_get_historical_repair():
     connector = TradeLockerConnector("https://demo.example", "https://live.example")
     connector._sync = AsyncMock()
-    for cursor in ({"normalization_version": 3, "last_execution_at": "2026-10-01T10:00:00Z"},
-                   {"normalization_version": 4, "last_execution_at": "2026-10-01T10:00:00Z"}):
+    for cursor in ({"normalization_version": 3, "replay_from": "2026-10-01T10:00:00Z"},
+                   {"normalization_version": 4, "replay_from": "2026-10-01T10:00:00Z"},
+                   {"normalization_version": 5, "last_execution_at": "2026-10-01T10:00:00Z"}):
         asyncio.run(connector.sync_recent(account(), {}, cursor))
         assert connector._sync.call_args.args[2] < datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+
+def test_missing_info_route_does_not_use_order_route_or_invent_pnl(provider):
+    connector, fixture = provider
+    fixture["routes"] = [{"id": 7, "type": "TRADE"}]
+    fixture["orders"] = [
+        order(1, 99, "buy", "2026-09-01T10:00:00Z", 100),
+        order(2, 99, "sell", "2026-09-01T11:00:00Z", 110),
+    ]
+    batch = run_sync(connector)
+    assert batch.trades[0].raw_payload["pnl_source"] == "unavailable"
+    assert not any(url.endswith("/trade/instruments/42") for url, _ in fixture["requests"])
 
 
 def test_invalid_numeric_results_fall_back_to_valid_values():

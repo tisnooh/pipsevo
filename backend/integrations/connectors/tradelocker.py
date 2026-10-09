@@ -27,7 +27,7 @@ class TradeLockerConnector(TradingConnector):
     provider_id = "tradelocker"
     platforms = ("tradelocker",)
     auth_type = "jwt"
-    normalization_version = 4
+    normalization_version = 5
 
     def __init__(
         self, demo_url: str, live_url: str, developer_api_key: str | None = None
@@ -148,8 +148,8 @@ class TradeLockerConnector(TradingConnector):
     ) -> SyncBatch:
         # A position can close days after its opening fill. Replaying only the
         # latest five minutes would overwrite it with a close-only "open" trade.
-        # Version 4 retains the opening of every still-open / boundary position
-        # and forces a historical repair for accounts using an older parser.
+        # Retain the opening of every still-open / boundary position. Version 5
+        # also repairs instrument pricing previously requested on a TRADE route.
         value = (
             cursor.get("replay_from")
             if cursor.get("normalization_version") == self.normalization_version
@@ -289,9 +289,9 @@ class TradeLockerConnector(TradingConnector):
             row["_direction"] = "long" if side in {"buy", "long", "1"} else "short"
             positions[position_id].append(row)
             instrument_id = str(row.get("tradableInstrumentId") or "")
-            route_id = row.get("routeId") or self._trade_route(
-                instrument_by_id.get(instrument_id, {})
-            )
+            # An order's routeId is a TRADE route. Instrument specifications
+            # require the instrument's INFO route (as in the official client).
+            route_id = self._info_route(instrument_by_id.get(instrument_id, {}))
             if instrument_id and route_id is not None:
                 detail_routes[instrument_id] = str(route_id)
             executions.append(
@@ -650,15 +650,14 @@ class TradeLockerConnector(TradingConnector):
         return details
 
     @staticmethod
-    def _trade_route(instrument: dict) -> str | int | None:
+    def _info_route(instrument: dict) -> str | int | None:
         routes = instrument.get("routes") if isinstance(instrument, dict) else None
         if not isinstance(routes, list):
             return None
         for route in routes:
-            if isinstance(route, dict) and str(route.get("type") or "").upper() == "TRADE":
+            if isinstance(route, dict) and str(route.get("type") or "").upper() == "INFO":
                 return route.get("id")
-        first = next((route for route in routes if isinstance(route, dict)), None)
-        return first.get("id") if first else None
+        return None
 
     @classmethod
     def _realized_pnl(

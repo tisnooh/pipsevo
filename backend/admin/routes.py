@@ -17,8 +17,10 @@ from .models import (
     RoleChangeIn,
     SupportMessageIn,
     SupportUpdateIn,
+    TradingSyncIn,
     UserActionIn,
 )
+from integrations.errors import IntegrationError
 from .security import normalize_role, public_staff_user, require_permission, require_staff, sanitize
 from .service import AdminService, iso
 
@@ -43,7 +45,7 @@ def _valid_uuid(value: str, label: str = "Identifiant") -> str:
         raise HTTPException(400, f"{label} invalide.") from exc
 
 
-def build_admin_router(get_current_user, service: AdminService) -> APIRouter:
+def build_admin_router(get_current_user, service: AdminService, integration_service=None) -> APIRouter:
     router = APIRouter(tags=["Administration"])
     staff_user = require_staff(get_current_user)
     support_read = require_permission(get_current_user, "support.read")
@@ -199,6 +201,40 @@ def build_admin_router(get_current_user, service: AdminService) -> APIRouter:
     @router.get("/admin/trading-sync/{connection_id}/runs")
     async def trading_sync_runs(connection_id: str, user=Depends(sync_read)):
         return {"items": await service.sync_runs(_valid_uuid(connection_id, "Connexion"))}
+
+    @router.post("/admin/users/{user_id}/connections/{connection_id}/sync")
+    async def retry_user_sync(
+        user_id: str, connection_id: str, body: TradingSyncIn,
+        request: Request, user=Depends(super_admin),
+    ):
+        _confirmed(body.confirmation)
+        owner_id = _valid_uuid(user_id, "Utilisateur")
+        connection_id = _valid_uuid(connection_id, "Connexion")
+        await service.rate_limit(user["id"], "trading_sync", 5)
+        if integration_service is None:
+            raise HTTPException(503, "La synchronisation n’est pas disponible.")
+        # Keep the owner boundary inside the repository and the sync service.
+        # Never accept credentials, provider URLs or account selections here.
+        connection = await integration_service.repository.get_connection(connection_id, owner_id)
+        if not connection:
+            raise HTTPException(404, "Connexion introuvable pour cet utilisateur.")
+        if connection.get("connection_status") == "disconnected":
+            raise HTTPException(409, "L’utilisateur doit reconnecter cette plateforme.")
+        audit_metadata = {"owner_id": owner_id, "provider": connection.get("provider")}
+        await service.audit(user, "trading_sync.requested", "connection", connection_id,
+                            metadata=audit_metadata, request_id=_request_id(request))
+        try:
+            result = await integration_service.sync_connection(owner_id, connection_id, "retry")
+        except IntegrationError as exc:
+            await service.audit(user, "trading_sync.failed", "connection", connection_id,
+                                metadata={**audit_metadata, "error_code": exc.code}, request_id=_request_id(request))
+            raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.public_message}) from None
+        await service.audit(user, "trading_sync.completed", "connection", connection_id,
+                            metadata=audit_metadata, request_id=_request_id(request))
+        # Return no provider payload or stored authentication information.
+        accounts = result.get("accounts", [])
+        return {"ok": True, "accounts_synced": len(accounts),
+                "partial_error": any(item.get("partial_error") for item in accounts)}
 
     @router.get("/admin/trading-accounts")
     async def trading_accounts(

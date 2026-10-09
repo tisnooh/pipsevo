@@ -40,8 +40,14 @@ export function AdminUserDetail() {
     try { await adminApi.userRole(userId, role); toast.success("Rôle mis à jour."); await state.reload(); }
     catch (error) { toast.error(extractError(error)); } finally { setBusy(false); }
   };
+  const retrySync = async (connectionId) => {
+    if (!confirmAction("Relancer la lecture des comptes déjà autorisés par cet utilisateur ? Aucun ordre ne sera passé et aucun compte supplémentaire ne sera sélectionné.")) return;
+    setBusy(true);
+    try { const result = await adminApi.retryUserSync(userId, connectionId); if (result.data.partial_error) toast.warning("Une partie de l’historique reste à synchroniser."); else toast.success("Synchronisation terminée. Consulte les résultats."); await state.reload(); }
+    catch (error) { toast.error(extractError(error)); } finally { setBusy(false); }
+  };
   const data = state.data;
-  return <Page eyebrow="UTILISATEUR" title={data?.identity?.name || "Fiche utilisateur"} description={data?.identity?.email} actions={<><button className="admin-button secondary" onClick={() => navigate(-1)}>Retour</button><RefreshButton onClick={state.reload} /></>}>
+  return <Page eyebrow="UTILISATEUR" title={data?.identity?.name || "Fiche utilisateur"} description={data?.identity?.email} actions={<><button className="admin-button secondary" onClick={() => navigate(-1)}>Retour</button>{isSuperAdmin(session) && data?.trading?.connections?.filter((item) => item.provider === "tradelocker" && item.connection_status !== "disconnected").map((item) => <button key={item.id} className="admin-button secondary" disabled={busy} onClick={() => retrySync(item.id)}>{busy ? "Synchronisation…" : `Synchroniser TradeLocker ${item.account_number_masked || ""}`}</button>)}<RefreshButton onClick={state.reload} /></>}>
     <LoadState {...state} />
     {data && <>
       <section className="admin-metrics"><Metric label="Comptes" value={data.trading.accounts.length} /><Metric label="Trades" value={data.trading.trades_count} tone="green" /><Metric label="Exécutions" value={data.trading.executions_count ?? 0} /><Metric label="Win rate" value={data.trading_data.win_rate_percent == null ? "—" : `${data.trading_data.win_rate_percent}%`} tone="blue" /><Metric label="P&L net" value={money(data.trading_data.net_pnl)} tone={data.trading_data.net_pnl == null ? undefined : Number(data.trading_data.net_pnl) < 0 ? "red" : "green"} /></section>

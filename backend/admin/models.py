@@ -20,6 +20,10 @@ class RoleChangeIn(StrictModel):
     confirmation: bool
 
 
+class TradingSyncIn(StrictModel):
+    confirmation: bool
+
+
 class SupportUpdateIn(StrictModel):
     status: Literal["open", "in_progress", "waiting_user", "resolved", "closed"] | None = None
     priority: Literal["low", "normal", "high", "urgent"] | None = None
