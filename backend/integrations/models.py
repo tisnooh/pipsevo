@@ -136,6 +136,13 @@ class IntegrationConnection(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
+    @field_validator("account_type", mode="before")
+    @classmethod
+    def normalize_pending_account_type(cls, value: Any) -> Any:
+        # The database permits NULL until the provider has identified the account.
+        # Keep unknown explicit without guessing whether a legacy account is live.
+        return "unknown" if value is None else value
+
 
 class IntegrationAccount(BaseModel):
     id: str

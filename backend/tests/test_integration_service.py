@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from integrations.config import IntegrationConfig
 from integrations.connectors.ctrader import CTraderConnector
@@ -281,6 +281,7 @@ def test_metaapi_pending_configuration_persists_safe_owner_bound_diagnostic():
         connection = await repository.create_connection({
             "user_id": "user-1", "platform": "mt5", "provider": "metaapi",
             "connection_status": "pending", "sync_status": "idle",
+            "account_type": None,
         })
         await service._store_access(connection, "user-1", "metaapi", {"provider_account_id": "provider-account"})
         with pytest.raises(IntegrationError) as error:
@@ -296,6 +297,52 @@ def test_metaapi_pending_configuration_persists_safe_owner_bound_diagnostic():
         assert "MetaApi" in updated["last_error_message"]
         assert "private-server-token" not in updated["last_error_message"]
         connector.deploy.assert_awaited_once_with("provider-account")
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("account_type", [None, "unknown", "demo", "real"])
+def test_connection_accepts_unknown_legacy_account_type(account_type):
+    connection = IntegrationConnection.model_validate({
+        "id": "connection", "user_id": "user", "platform": "mt5",
+        "provider": "metaapi", "account_type": account_type,
+        "connection_status": "pending", "sync_status": "idle",
+    })
+    assert connection.account_type == (account_type or "unknown")
+
+
+def test_connection_rejects_invalid_account_type():
+    with pytest.raises(ValidationError):
+        IntegrationConnection.model_validate({
+            "id": "connection", "user_id": "user", "platform": "mt5",
+            "provider": "metaapi", "account_type": "invalid",
+            "connection_status": "pending", "sync_status": "idle",
+        })
+
+
+@pytest.mark.parametrize("access_error", [
+    IntegrationError("connection_expired", "Reconnecte la plateforme.", 409),
+    ValueError("private-token private-secret"),
+])
+def test_metaapi_access_failure_persists_safe_diagnostic(access_error):
+    async def scenario():
+        service, repository, _ = build_service()
+        connector = MetaApiConnector("private-server-token")
+        connector.deploy = AsyncMock()
+        service.registry.register(connector)
+        connection = await repository.create_connection({
+            "user_id": "user-1", "platform": "mt5", "provider": "metaapi",
+            "connection_status": "pending", "sync_status": "idle",
+            "account_type": None,
+        })
+        service._access = AsyncMock(side_effect=access_error)
+        with pytest.raises(IntegrationError) as error:
+            await service.finalize_metaapi("user-1", "beta", connection["id"])
+        updated = repository.connections[connection["id"]]
+        assert updated["last_error_code"] == error.value.code
+        assert updated["last_error_message"] == error.value.public_message
+        assert "private-token" not in updated["last_error_message"]
+        assert "private-secret" not in updated["last_error_message"]
+        connector.deploy.assert_not_awaited()
     asyncio.run(scenario())
 
 

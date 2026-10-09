@@ -386,8 +386,8 @@ class IntegrationService:
         if not row or row.get("provider") != "metaapi":
             raise IntegrationError("connection_not_found", "Connexion MetaTrader introuvable.", 404)
         connection = IntegrationConnection.model_validate(row)
-        access = await self._access(connection)
         try:
+            access = await self._access(connection)
             await provider.deploy(access["provider_account_id"])
             accounts = await provider.list_accounts(access)
             if not accounts:
