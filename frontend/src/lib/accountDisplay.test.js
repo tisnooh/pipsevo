@@ -22,6 +22,17 @@ describe("affichage des comptes synchronisés", () => {
     expect(getAccountDisplayMetrics({ balance: 50490, initial_balance: 50000 }).pnl).toBe(490);
   });
 
+  test("applique les mêmes règles aux nouveaux comptes TradeLocker et à leur devise native", () => {
+    const imported = { id: "new-tradelocker", balance: 10146, initial_balance: 10000, max_drawdown: 0 };
+    const metrics = getAccountDisplayMetrics(imported, [
+      { source_provider: "tradelocker", result_status: "closed", pnl: 196, provider_currency: "GBP", provider_metadata: { pnl_source: "provider" } },
+      { source_provider: "tradelocker", result_status: "closed", pnl: -50, provider_currency: "GBP", provider_metadata: { pnl_source: "derived_tick_cost" } },
+      { source_provider: "tradelocker", result_status: "open", pnl: 999, provider_currency: "GBP" },
+      { source_provider: "tradelocker", result_status: "closed", pnl: 0, provider_currency: "GBP", provider_metadata: { pnl_source: "unavailable" } },
+    ], { provider: "tradelocker", currency: "GBP", status: "connected" }, "EUR");
+    expect(metrics).toMatchObject({ currency: "GBP", pnl: 146, isSynced: true, healthScore: null, survivalScore: null });
+  });
+
   test("n'affiche pas de scores de risque sans limite configurée ou pour un compte désactivé", () => {
     const scored = { ...account, health_score: 70, survival_score: 95, max_drawdown: 0 };
     expect(getAccountDisplayMetrics(scored, [], providerAccount)).toMatchObject({ healthScore: null, survivalScore: null });

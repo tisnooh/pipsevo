@@ -30,6 +30,19 @@ test("automatically follows an account filter with a single native currency", ()
   expect(tradingCurrencyScope([], "EUR", "USD").currency).toBe("USD");
 });
 
+test("TradeLocker net P&L, win rate and performance use only measured closed results in the native currency", () => {
+  const locker = (pnl, result_status = "closed", pnl_source = "provider") => ({
+    pnl, result_status, source_provider: "tradelocker", provider_currency: "GBP", provider_metadata: { pnl_source },
+  });
+  const scope = tradingCurrencyScope([
+    locker(196), locker(-50), locker(999, "open"), locker(0, "closed", "unavailable"),
+    { pnl: 1000, provider_currency: "USD", result_status: "closed" },
+  ], "GBP", "EUR");
+  const stats = calculateTradeAnalytics(scope.trades, []);
+  expect(stats).toMatchObject({ pnl: 146, winrate: 50, wins: 1, losses: 1, avgWin: 196, avgLoss: -50 });
+  expect(stats.profitFactor).toBeCloseTo(3.92);
+});
+
 test("drawdown includes only configured accounts in the selected currency", () => {
   const accounts = [
     { id: "eur", max_drawdown: 2000, current_drawdown: 500, balance: 80000, initial_balance: 80000 },

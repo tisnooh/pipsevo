@@ -1,0 +1,152 @@
+import asyncio
+from datetime import datetime, timezone
+from decimal import Decimal
+from unittest.mock import AsyncMock
+
+import pytest
+
+from integrations.connectors.tradelocker import TradeLockerConnector
+from integrations.models import IntegrationAccount
+from integrations.normalization import normalize_trade
+
+
+def account():
+    return IntegrationAccount(
+        id="integration-1", connection_id="connection-1", user_id="owner-1",
+        account_id="account-1", provider="tradelocker", platform="tradelocker",
+        external_account_id="123", currency="USD", provider_metadata={"acc_num": 2},
+    )
+
+
+def order(order_id, position_id, side, date, price, qty=1, **extra):
+    return {
+        "id": order_id, "positionId": position_id, "tradableInstrumentId": 42,
+        "routeId": 7, "side": side, "status": "Filled", "filledQty": qty,
+        "avgPrice": price, "createdDate": date, **extra,
+    }
+
+
+@pytest.fixture
+def provider(monkeypatch):
+    connector = TradeLockerConnector("https://demo.example", "https://live.example")
+    fixture = {"orders": [], "details": [{"id": "123", "currency": "EUR"}], "requests": []}
+
+    async def request(method, url, **kwargs):
+        fixture["requests"].append((url, kwargs))
+        if url.endswith("/trade/config"):
+            return {"d": {}}
+        if url.endswith("/ordersHistory"):
+            start = kwargs["params"]["from"]
+            return {"d": {"ordersHistory": [
+                row for row in fixture["orders"]
+                if connector._time(row["createdDate"]).timestamp() * 1000 >= start
+            ]}}
+        if url.endswith("/state"):
+            return {"d": {"balance": 0, "equity": 0, "availableFunds": 0, "freeMargin": 999}}
+        if url.endswith("/trade/accounts"):
+            return {"d": fixture["details"]}
+        if url.endswith("/instruments"):
+            return {"d": {"instruments": [{"tradableInstrumentId": 42, "name": "TEST"}]}}
+        if url.endswith("/trade/instruments/42"):
+            return {"d": {"tickSize": [{"tickSize": "0.5"}], "tickCost": [{"tickCost": "2.5"}]}}
+        raise AssertionError(url)
+
+    monkeypatch.setattr("integrations.connectors.tradelocker.request_json", request)
+    return connector, fixture
+
+
+def run_sync(connector):
+    return asyncio.run(connector.sync_historical(account(), {"access_token": "test", "environment": "demo"}))
+
+
+def test_snapshot_uses_native_currency_and_preserves_zero_balances(provider):
+    connector, fixture = provider
+    fixture["details"][0].update({"initialBalance": 10000, "riskRules": {"profitTarget": 1500}})
+    snapshot = run_sync(connector).snapshot
+    assert snapshot.currency == "EUR"
+    assert snapshot.balance == snapshot.equity == snapshot.free_margin == 0
+    assert snapshot.initial_balance == Decimal("10000")
+    assert snapshot.profit_target == Decimal("1500")
+    detected = connector._account({"id": "123", "accNum": 2, "accountBalance": 0, "aaccountBalance": 999}, {})
+    assert detected.balance == 0
+
+
+def test_never_imports_another_accounts_currency_or_rules(provider):
+    connector, fixture = provider
+    fixture["details"] = [{"id": "999", "currency": "GBP", "initialBalance": 50000, "riskRules": {"profitTarget": 9999}}]
+    snapshot = run_sync(connector).snapshot
+    assert snapshot.currency == "USD"
+    assert snapshot.initial_balance is snapshot.profit_target is snapshot.max_drawdown is None
+    assert snapshot.risk_rules == {}
+
+
+def test_opening_zero_does_not_hide_missing_closing_pnl(provider):
+    connector, fixture = provider
+    fixture["orders"] = [
+        order(1, 99, "buy", "2026-09-01T10:00:00Z", 100, profit=0, commission=-2, fee=-1),
+        order(2, 99, "sell", "2026-09-01T11:00:00Z", 110, commission=3, fee=2, swap=-4),
+    ]
+    batch = run_sync(connector)
+    trade = batch.trades[0]
+    assert trade.raw_payload["pnl_source"] == "derived_tick_cost"
+    assert trade.gross_profit == Decimal("50")
+    assert trade.commission == 5 and trade.fees == 3 and trade.swap == -4
+    normalized = normalize_trade(trade, account_id="account-1", connection_id="connection-1",
+                                 provider="tradelocker", external_account_id="123")
+    assert normalized.result_status == "closed"
+    assert normalized.net_profit == Decimal("38")
+    assert [execution.fees for execution in batch.executions] == [1, 2]
+
+
+def test_partial_close_and_later_full_close_keep_original_opening(provider):
+    connector, fixture = provider
+    opening = order(1, 99, "buy", "2026-09-01T10:00:00Z", 100, qty=2)
+    fixture["orders"] = [opening]
+    first = run_sync(connector)
+    assert first.trades[0].close_time is None
+    assert first.next_cursor["replay_from"] <= opening["createdDate"]
+    access = {"access_token": "test", "environment": "demo"}
+
+    fixture["orders"].append(order(2, 99, "sell", "2026-09-02T10:00:00Z", 110, profit=50))
+    partial = asyncio.run(connector.sync_recent(account(), access, first.next_cursor))
+    assert partial.trades[0].close_time is None
+    assert partial.trades[0].volume == 2
+
+    fixture["orders"].append(order(3, 99, "sell", "2026-09-03T10:00:00Z", 120, profit=100))
+    closed = asyncio.run(connector.sync_recent(account(), access, partial.next_cursor))
+    assert closed.trades[0].direction == "long"
+    assert closed.trades[0].open_price == 100
+    assert closed.trades[0].close_price == 115
+    assert closed.trades[0].gross_profit == 150
+    assert closed.trades[0].close_time is not None
+
+    # A subsequent overlap must not replace the closed position with its exit.
+    repeated = asyncio.run(connector.sync_recent(account(), access, closed.next_cursor))
+    assert repeated.trades[0].model_dump() == closed.trades[0].model_dump()
+
+
+def test_boundary_replay_releases_old_closed_positions(provider):
+    connector, fixture = provider
+    fixture["orders"] = [
+        order(1, 99, "buy", "2026-09-01T10:00:00Z", 100),
+        order(2, 99, "sell", "2026-09-02T10:00:00Z", 110, profit=50),
+        order(3, 100, "buy", "2026-09-03T10:00:00Z", 100),
+    ]
+    batch = run_sync(connector)
+    assert connector._time(batch.next_cursor["replay_from"]) == datetime(2026, 9, 3, 9, 55, tzinfo=timezone.utc)
+
+
+def test_old_accounts_and_incomplete_cursors_get_historical_repair():
+    connector = TradeLockerConnector("https://demo.example", "https://live.example")
+    connector._sync = AsyncMock()
+    for cursor in ({"normalization_version": 3, "last_execution_at": "2026-10-01T10:00:00Z"},
+                   {"normalization_version": 4, "last_execution_at": "2026-10-01T10:00:00Z"}):
+        asyncio.run(connector.sync_recent(account(), {}, cursor))
+        assert connector._sync.call_args.args[2] < datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+
+def test_invalid_numeric_results_fall_back_to_valid_values():
+    connector = TradeLockerConnector("https://demo.example", "https://live.example")
+    assert connector._closing_profit({"profit": "NaN", "realizedPnl": "0"}) == 0
+    assert connector._first_decimal({"balance": "Infinity", "fallback": "0"}, "balance", "fallback") == 0
+    assert connector._closing_profit({"profit": "NaN"}) is None

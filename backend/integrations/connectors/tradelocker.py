@@ -27,7 +27,7 @@ class TradeLockerConnector(TradingConnector):
     provider_id = "tradelocker"
     platforms = ("tradelocker",)
     auth_type = "jwt"
-    normalization_version = 3
+    normalization_version = 4
 
     def __init__(
         self, demo_url: str, live_url: str, developer_api_key: str | None = None
@@ -146,17 +146,17 @@ class TradeLockerConnector(TradingConnector):
     async def sync_recent(
         self, account: IntegrationAccount, access: dict, cursor: dict
     ) -> SyncBatch:
-        # Version 2 filters cancelled orders and derives realized P&L from the
-        # provider's instrument tick settings. Force one historical replay for
-        # accounts imported with the previous parser so existing zero-P&L rows
-        # are corrected by the normal idempotent upsert path.
+        # A position can close days after its opening fill. Replaying only the
+        # latest five minutes would overwrite it with a close-only "open" trade.
+        # Version 4 retains the opening of every still-open / boundary position
+        # and forces a historical repair for accounts using an older parser.
         value = (
-            cursor.get("last_execution_at")
+            cursor.get("replay_from")
             if cursor.get("normalization_version") == self.normalization_version
             else None
         )
         start = (
-            datetime.fromisoformat(value.replace("Z", "+00:00")) - timedelta(minutes=5)
+            self._time(value)
             if value
             else datetime.now(timezone.utc) - timedelta(days=3650)
         )
@@ -305,18 +305,17 @@ class TradeLockerConnector(TradingConnector):
                     price=price,
                     executed_at=executed,
                     commission=Decimal(str(row.get("commission") or 0)),
+                    fees=abs(Decimal(str(row.get("fee") or row.get("fees") or 0))),
                     raw_payload=row,
                 )
             )
-        needs_derived_pnl = any(
-            len({item["_direction"] for item in position_rows}) > 1
-            and not any(
-                item.get("profit") is not None
-                or item.get("realizedPnl") is not None
-                for item in position_rows
-            )
-            for position_rows in positions.values()
-        )
+        needs_derived_pnl = False
+        for position_rows in positions.values():
+            ordered = sorted(position_rows, key=lambda item: item["_executed_at"])
+            closing = [item for item in ordered if item["_direction"] != ordered[0]["_direction"]]
+            if closing and any(self._closing_profit(item) is None for item in closing):
+                needs_derived_pnl = True
+                break
         instrument_details = (
             await self._instrument_details(base, headers, detail_routes)
             if needs_derived_pnl
@@ -410,9 +409,7 @@ class TradeLockerConnector(TradingConnector):
             balance=self._decimal(state.get("balance")),
             equity=self._decimal(state.get("equity")),
             margin=self._decimal(state.get("usedMargin")),
-            free_margin=self._decimal(
-                state.get("availableFunds") or state.get("freeMargin")
-            ),
+            free_margin=self._first_decimal(state, "availableFunds", "freeMargin"),
             initial_balance=initial_balance,
             profit_target=profit_target,
             max_drawdown=max_drawdown,
@@ -425,16 +422,22 @@ class TradeLockerConnector(TradingConnector):
                 else None
             ),
             risk_rules=risk_rules,
-            currency=account.currency,
+            currency=account_details.get("currency") or state.get("currency") or account.currency,
             captured_at=datetime.now(timezone.utc),
             raw_payload={"state": state, "account_details": account_details},
         )
+        boundary = latest - timedelta(minutes=5)
+        replay_from = boundary
+        for trade in trades:
+            if trade.close_time is None or trade.close_time >= boundary:
+                replay_from = min(replay_from, trade.open_time)
         return SyncBatch(
             trades=trades,
             executions=executions,
             snapshot=snapshot,
             next_cursor={
                 "last_execution_at": latest.isoformat(),
+                "replay_from": replay_from.isoformat(),
                 "normalization_version": self.normalization_version,
             },
             partial_error=history_partial,
@@ -537,15 +540,7 @@ class TradeLockerConnector(TradingConnector):
         closed_volume = sum((quantity(item) for item in closing), Decimal("0"))
         fully_closed = bool(closing) and closed_volume >= opened_volume
         close_price = weighted_price(closing) if fully_closed else None
-        provider_results = []
-        for item in closing:
-            value = item.get("profit")
-            value = item.get("realizedPnl") if value is None else value
-            try:
-                amount = Decimal(str(value))
-                provider_results.append(amount if amount.is_finite() else None)
-            except (ArithmeticError, ValueError):
-                provider_results.append(None)
+        provider_results = [cls._closing_profit(item) for item in closing]
         provider_pnl_available = bool(closing) and all(value is not None for value in provider_results)
         gross_profit = sum(provider_results, Decimal("0")) if provider_pnl_available else Decimal("0")
         pnl_source = "provider" if provider_pnl_available else "unavailable"
@@ -587,16 +582,17 @@ class TradeLockerConnector(TradingConnector):
             close_price=close_price,
             gross_profit=gross_profit,
             commission=sum(
-                (Decimal(str(item.get("commission") or 0)) for item in rows),
+                (abs(Decimal(str(item.get("commission") or 0))) for item in rows),
                 Decimal("0"),
             ),
             fees=sum(
                 (
-                    Decimal(str(item.get("fee") or item.get("fees") or 0))
+                    abs(Decimal(str(item.get("fee") or item.get("fees") or 0)))
                     for item in rows
                 ),
                 Decimal("0"),
             ),
+            swap=sum((Decimal(str(item.get("swap") or 0)) for item in rows), Decimal("0")),
             market_type="cfd",
             raw_payload={
                 "orders": rows,
@@ -612,6 +608,14 @@ class TradeLockerConnector(TradingConnector):
                 ),
             },
         )
+
+    @classmethod
+    def _closing_profit(cls, row: dict) -> Decimal | None:
+        for key in ("profit", "realizedPnl"):
+            value = cls._decimal_or_none(row.get(key))
+            if value is not None:
+                return value
+        return None
 
     async def _instrument_details(
         self,
@@ -730,9 +734,7 @@ class TradeLockerConnector(TradingConnector):
             account_number_masked=f"•••• {account_id[-4:]}",
             account_type="demo" if access.get("environment") == "demo" else "real",
             account_currency=row.get("currency"),
-            balance=TradeLockerConnector._decimal(
-                row.get("accountBalance") or row.get("aaccountBalance")
-            ),
+            balance=TradeLockerConnector._first_decimal(row, "accountBalance", "aaccountBalance"),
             display_name=row.get("name") or f"TradeLocker {account_id[-4:]}",
             provider_metadata={
                 "environment": access.get("environment"),
@@ -817,7 +819,8 @@ class TradeLockerConnector(TradingConnector):
             account_id = row.get("id") or row.get("accountId")
             if str(account_id) == str(external_account_id):
                 return row
-        return next((row for row in rows if isinstance(row, dict)), {})
+        # Never copy a different account's currency, objectives or risk limits.
+        return {}
 
     @classmethod
     def _rule_decimal(cls, value) -> Decimal | None:
@@ -832,7 +835,9 @@ class TradeLockerConnector(TradingConnector):
     def _first_decimal(cls, payload: dict, *keys: str) -> Decimal | None:
         for key in keys:
             if key in payload:
-                return cls._decimal_or_none(payload.get(key))
+                value = cls._decimal_or_none(payload.get(key))
+                if value is not None:
+                    return value
         return None
 
     @staticmethod
@@ -840,7 +845,8 @@ class TradeLockerConnector(TradingConnector):
         if value is None or value == "":
             return None
         try:
-            return Decimal(str(value))
+            amount = Decimal(str(value))
+            return amount if amount.is_finite() else None
         except (ArithmeticError, ValueError):
             return None
 

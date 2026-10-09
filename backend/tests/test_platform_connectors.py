@@ -292,7 +292,7 @@ def test_tradelocker_keeps_open_positions_and_aggregates_fills():
     assert trade.open_price == Decimal("5005")
     assert trade.close_time is None
     assert trade.close_price is None
-    assert trade.commission == Decimal("-2")
+    assert trade.commission == Decimal("2")
 
 
 def test_ctrader_splits_windows_when_provider_reports_has_more(monkeypatch):
@@ -519,7 +519,7 @@ def test_tradelocker_ignores_cancelled_orders_and_derives_realized_pnl(monkeypat
     assert batch.trades[0].raw_payload["pnl_source"] == "derived_tick_cost"
     assert [item.execution_type for item in batch.executions] == ["open", "close"]
     assert batch.executions[1].realized_pnl == Decimal("50")
-    assert batch.next_cursor["normalization_version"] == 3
+    assert batch.next_cursor["normalization_version"] == connector.normalization_version
 
 
 @pytest.mark.parametrize("cost", ["0", "-2", "NaN", "Infinity"])
