@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { adminApi, isSuperAdmin } from "./api";
 import { useAdminSession } from "./AdminAccess";
 import { Empty, LoadState, Metric, Page, Pagination, RefreshButton, Status, confirmAction, extractError, formatDate, useAdminData } from "./ui";
@@ -27,6 +28,7 @@ export function AdminUserDetail() {
   const session = useAdminSession();
   const state = useAdminData(() => adminApi.user(userId), [userId]);
   const [busy, setBusy] = useState(false);
+  const [syncConfirmation, setSyncConfirmation] = useState(null);
   const run = async (action) => {
     const messages = { suspend: "Suspendre immédiatement ce compte ?", reactivate: "Réactiver ce compte ?", reset_onboarding: "Réinitialiser l’onboarding ?", resend_confirmation: "Renvoyer l’e-mail de confirmation ?" };
     if (!confirmAction(messages[action])) return;
@@ -41,13 +43,19 @@ export function AdminUserDetail() {
     catch (error) { toast.error(extractError(error)); } finally { setBusy(false); }
   };
   const retrySync = async (connectionId) => {
-    if (!confirmAction("Relancer la lecture des comptes déjà autorisés par cet utilisateur ? Aucun ordre ne sera passé et aucun compte supplémentaire ne sera sélectionné.")) return;
+    setSyncConfirmation(null);
     setBusy(true);
     try { const result = await adminApi.retryUserSync(userId, connectionId); if (result.data.partial_error) toast.warning("Une partie de l’historique reste à synchroniser."); else toast.success("Synchronisation terminée. Consulte les résultats."); await state.reload(); }
     catch (error) { toast.error(extractError(error)); } finally { setBusy(false); }
   };
   const data = state.data;
-  return <Page eyebrow="UTILISATEUR" title={data?.identity?.name || "Fiche utilisateur"} description={data?.identity?.email} actions={<><button className="admin-button secondary" onClick={() => navigate(-1)}>Retour</button>{isSuperAdmin(session) && data?.trading?.connections?.filter((item) => item.provider === "tradelocker" && item.connection_status !== "disconnected").map((item) => <button key={item.id} className="admin-button secondary" disabled={busy} onClick={() => retrySync(item.id)}>{busy ? "Synchronisation…" : `Synchroniser TradeLocker ${item.account_number_masked || ""}`}</button>)}<RefreshButton onClick={state.reload} /></>}>
+  return <Page eyebrow="UTILISATEUR" title={data?.identity?.name || "Fiche utilisateur"} description={data?.identity?.email} actions={<><button className="admin-button secondary" onClick={() => navigate(-1)}>Retour</button>{isSuperAdmin(session) && data?.trading?.connections?.filter((item) => item.provider === "tradelocker" && item.connection_status !== "disconnected").map((item) => <button key={item.id} className="admin-button secondary" disabled={busy} onClick={() => setSyncConfirmation(item.id)}>{busy ? "Synchronisation…" : `Synchroniser TradeLocker ${item.account_number_masked || ""}`}</button>)}<RefreshButton onClick={state.reload} /></>}>
+    <AlertDialog open={Boolean(syncConfirmation)} onOpenChange={(open) => { if (!open) setSyncConfirmation(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader><AlertDialogTitle>Relancer la synchronisation TradeLocker ?</AlertDialogTitle><AlertDialogDescription>Seuls les comptes déjà autorisés par cet utilisateur seront lus. Aucun ordre ne sera passé et aucun compte supplémentaire ne sera sélectionné.</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogFooter><AlertDialogCancel>Annuler</AlertDialogCancel><AlertDialogAction onClick={() => retrySync(syncConfirmation)}>Confirmer la synchronisation</AlertDialogAction></AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <LoadState {...state} />
     {data && <>
       <section className="admin-metrics"><Metric label="Comptes" value={data.trading.accounts.length} /><Metric label="Trades" value={data.trading.trades_count} tone="green" /><Metric label="Exécutions" value={data.trading.executions_count ?? 0} /><Metric label="Win rate" value={data.trading_data.win_rate_percent == null ? "—" : `${data.trading_data.win_rate_percent}%`} tone="blue" /><Metric label="P&L net" value={money(data.trading_data.net_pnl)} tone={data.trading_data.net_pnl == null ? undefined : Number(data.trading_data.net_pnl) < 0 ? "red" : "green"} /></section>
