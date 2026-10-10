@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 from integrations.connectors.tradelocker import TradeLockerConnector
-from integrations.models import IntegrationAccount
+from integrations.errors import IntegrationError
+from integrations.models import IntegrationAccount, TradeLockerCredentials
 from integrations.normalization import normalize_trade
 
 
@@ -49,7 +50,7 @@ def provider(monkeypatch):
         if url.endswith("/instruments"):
             return {"d": {"instruments": [{"tradableInstrumentId": 42, "name": "TEST", "routes": fixture["routes"]}]}}
         if url.endswith("/trade/instruments/42"):
-            assert kwargs["params"] == {"routeId": "9"}
+            assert kwargs["params"] == {"routeId": "7"}
             return {"d": {"tickSize": [{"tickSize": "0.5"}], "tickCost": [{"tickCost": "2.5"}]}}
         raise AssertionError(url)
 
@@ -145,14 +146,15 @@ def test_old_accounts_and_incomplete_cursors_get_historical_repair():
     for cursor in ({"normalization_version": 3, "replay_from": "2026-10-01T10:00:00Z"},
                    {"normalization_version": 4, "replay_from": "2026-10-01T10:00:00Z"},
                    {"normalization_version": 5, "replay_from": "2026-10-01T10:00:00Z"},
+                   {"normalization_version": 6, "replay_from": "2026-10-01T10:00:00Z"},
                    {"normalization_version": 6, "last_execution_at": "2026-10-01T10:00:00Z"}):
         asyncio.run(connector.sync_recent(account(), {}, cursor))
         assert connector._sync.call_args.args[2] < datetime(2020, 1, 1, tzinfo=timezone.utc)
 
 
-def test_missing_info_route_does_not_use_order_route_or_invent_pnl(provider):
+def test_missing_advertised_routes_does_not_use_order_route_or_invent_pnl(provider):
     connector, fixture = provider
-    fixture["routes"] = [{"id": 7, "type": "TRADE"}]
+    fixture["routes"] = []
     fixture["orders"] = [
         order(1, 99, "buy", "2026-09-01T10:00:00Z", 100),
         order(2, 99, "sell", "2026-09-01T11:00:00Z", 110),
@@ -198,3 +200,90 @@ def test_explicit_zero_costs_are_valid_but_a_missing_or_invalid_cost_is_unknown(
     assert trade.raw_payload["missing_cost_fields"] == ["commission"]
     assert trade.raw_payload["net_pnl_available"] is False
     assert trade.commission == 0
+
+
+def test_instrument_routes_prefer_documented_trade_and_deduplicate():
+    assert TradeLockerConnector._instrument_routes({"routes": [
+        {"id": 9, "type": "INFO"}, {"id": 7, "type": "TRADE"},
+        {"id": 7, "type": "TRADE"}, {"id": None, "type": "INFO"},
+        {"id": 99, "type": "UNKNOWN"},
+    ]}) == ["7", "9"]
+    assert TradeLockerConnector._instrument_routes({"routes": [{"id": 9, "type": "INFO"}]}) == ["9"]
+
+
+@pytest.mark.parametrize("first_result", ["zero", "rejected", "invalid"])
+def test_instrument_pricing_falls_back_to_legacy_info_only_when_needed(monkeypatch, first_result):
+    calls = []
+    pricing = {"tickSize": [{"tickSize": "0.5"}], "tickCost": [{"tickCost": "2.5"}]}
+
+    async def request(method, url, **kwargs):
+        calls.append(kwargs["params"]["routeId"])
+        if calls[-1] == "7":
+            if first_result == "rejected":
+                raise IntegrationError("provider_request_rejected", "rejected")
+            if first_result == "invalid":
+                return None
+            return {"d": {"tickSize": [{"tickSize": ".5"}], "tickCost": [{"tickCost": "0"}]}}
+        return {"d": pricing}
+
+    monkeypatch.setattr("integrations.connectors.tradelocker.request_json", request)
+    sleep = AsyncMock()
+    monkeypatch.setattr("integrations.connectors.tradelocker.asyncio.sleep", sleep)
+    connector = TradeLockerConnector("https://demo.example", "https://live.example")
+    details = asyncio.run(connector._instrument_details("https://demo.example", {}, {"42": ["7", "9"]}))
+    assert details == {"42": pricing}
+    assert calls == ["7", "9"]
+    sleep.assert_awaited_once_with(0.55)
+
+
+@pytest.mark.parametrize("code", ["invalid_credentials", "rate_limit", "provider_unavailable"])
+def test_pricing_fallback_never_bypasses_denied_access_or_provider_limits(monkeypatch, code):
+    request = AsyncMock(side_effect=IntegrationError(code, "safe message"))
+    monkeypatch.setattr("integrations.connectors.tradelocker.request_json", request)
+    connector = TradeLockerConnector("https://demo.example", "https://live.example")
+    with pytest.raises(IntegrationError) as error:
+        asyncio.run(connector._instrument_details("https://demo.example", {}, {"42": ["7", "9"]}))
+    assert error.value.code == code
+    assert request.await_count == 1
+
+
+def test_no_route_returns_usable_pricing_and_no_net_result_is_invented(monkeypatch):
+    request = AsyncMock(return_value={"d": {"tickSize": [{"tickSize": ".5"}], "tickCost": [{"tickCost": 0}]}})
+    monkeypatch.setattr("integrations.connectors.tradelocker.request_json", request)
+    monkeypatch.setattr("integrations.connectors.tradelocker.asyncio.sleep", AsyncMock())
+    connector = TradeLockerConnector("https://demo.example", "https://live.example")
+    details = asyncio.run(connector._instrument_details("https://demo.example", {}, {"42": ["7", "9"]}))
+    assert connector._realized_pnl("long", Decimal(100), Decimal(110), Decimal(1), details["42"]) is None
+    assert request.await_count == 2
+
+
+def test_developer_key_is_attached_to_token_and_refresh_without_being_logged(monkeypatch, caplog):
+    calls = []
+
+    async def request(method, url, **kwargs):
+        calls.append((url, kwargs))
+        return {"accessToken": "access", "refreshToken": "refresh"}
+
+    monkeypatch.setattr("integrations.connectors.tradelocker.request_json", request)
+    connector = TradeLockerConnector("https://demo.example", "https://live.example", "private-developer-test-key")
+    connector.list_accounts = AsyncMock(return_value=[])
+    asyncio.run(connector.authenticate(TradeLockerCredentials(
+        email="test@example.com", password="private-password", server="BROKER", environment="demo",
+    )))
+    asyncio.run(connector.refresh_auth({"environment": "demo", "refresh_token": "refresh"}))
+    assert all(kwargs["headers"]["developer-api-key"] == "private-developer-test-key" for _, kwargs in calls)
+    assert "private-developer-test-key" not in caplog.text
+    assert "private-password" not in caplog.text
+
+
+def test_financial_diagnostic_logs_only_coverage_not_private_payload(provider, caplog):
+    connector, fixture = provider
+    fixture["orders"] = [
+        order(12345, 67890, "buy", "2026-09-01T10:00:00Z", 100, comment="private-trader-note"),
+        order(12346, 67890, "sell", "2026-09-01T11:00:00Z", 110),
+    ]
+    with caplog.at_level("INFO", logger="pipsevo.integrations.tradelocker"):
+        run_sync(connector)
+    assert "closed=1 gross_verified=1 net_verified=0 missing_commission=1 missing_fees=1 missing_swap=1" in caplog.text
+    assert "private-trader-note" not in caplog.text
+    assert "12345" not in caplog.text and "67890" not in caplog.text

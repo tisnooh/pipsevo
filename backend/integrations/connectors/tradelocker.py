@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from decimal import Decimal
@@ -23,11 +24,14 @@ from ..providers import TradingConnector
 from .http import request_json
 
 
+logger = logging.getLogger("pipsevo.integrations.tradelocker")
+
+
 class TradeLockerConnector(TradingConnector):
     provider_id = "tradelocker"
     platforms = ("tradelocker",)
     auth_type = "jwt"
-    normalization_version = 6
+    normalization_version = 7
 
     def __init__(
         self, demo_url: str, live_url: str, developer_api_key: str | None = None
@@ -45,6 +49,7 @@ class TradeLockerConnector(TradingConnector):
                 f"{base}/auth/jwt/token",
                 expected=(200, 201),
                 provider_name=self.provider_id,
+                headers=self._developer_headers(),
                 json={
                     "email": request.email,
                     "password": request.password.get_secret_value(),
@@ -107,6 +112,7 @@ class TradeLockerConnector(TradingConnector):
             f"{base}/auth/jwt/refresh",
             expected=(200, 201),
             provider_name=self.provider_id,
+            headers=self._developer_headers(),
             json={"refreshToken": refresh_token},
         )
         access_token = data.get("accessToken") or data.get("access_token")
@@ -148,8 +154,8 @@ class TradeLockerConnector(TradingConnector):
     ) -> SyncBatch:
         # A position can close days after its opening fill. Replaying only the
         # latest five minutes would overwrite it with a close-only "open" trade.
-        # Retain the opening of every still-open / boundary position. Version 6
-        # also records whether all costs needed for net P&L were provided.
+        # Retain the opening of every still-open / boundary position. Version 7
+        # also retries instrument pricing with both documented route types.
         value = (
             cursor.get("replay_from")
             if cursor.get("normalization_version") == self.normalization_version
@@ -247,7 +253,7 @@ class TradeLockerConnector(TradingConnector):
         }
         executions: list[ProviderExecutionRecord] = []
         positions: dict[str, list[dict]] = defaultdict(list)
-        detail_routes: dict[str, str] = {}
+        detail_routes: dict[str, list[str]] = {}
         latest = start
         for raw in raw_rows or []:
             row = self._row(raw, order_columns)
@@ -289,11 +295,12 @@ class TradeLockerConnector(TradingConnector):
             row["_direction"] = "long" if side in {"buy", "long", "1"} else "short"
             positions[position_id].append(row)
             instrument_id = str(row.get("tradableInstrumentId") or "")
-            # An order's routeId is a TRADE route. Instrument specifications
-            # require the instrument's INFO route (as in the official client).
-            route_id = self._info_route(instrument_by_id.get(instrument_id, {}))
-            if instrument_id and route_id is not None:
-                detail_routes[instrument_id] = str(route_id)
+            # Current REST documentation specifies TRADE for instrument
+            # details, while the official legacy Python client uses INFO.
+            # Only use routes advertised for this account's instrument.
+            routes = self._instrument_routes(instrument_by_id.get(instrument_id, {}))
+            if instrument_id and routes:
+                detail_routes[instrument_id] = routes
             executions.append(
                 ProviderExecutionRecord(
                     provider_execution_id=str(row.get("id") or row.get("orderId")),
@@ -338,6 +345,19 @@ class TradeLockerConnector(TradingConnector):
             str(trade.provider_position_id or trade.provider_trade_id): trade
             for trade in trades
         }
+        closed_trades = [trade for trade in trades if trade.close_time is not None]
+        logger.info(
+            "tradelocker_financial_coverage closed=%d gross_verified=%d net_verified=%d "
+            "missing_commission=%d missing_fees=%d missing_swap=%d developer_key_configured=%s",
+            len(closed_trades),
+            sum(trade.raw_payload.get("gross_pnl_available") is True for trade in closed_trades),
+            sum(trade.raw_payload.get("net_pnl_available") is True for trade in closed_trades),
+            *[
+                sum(field in trade.raw_payload.get("missing_cost_fields", []) for trade in closed_trades)
+                for field in ("commission", "fees", "swap")
+            ],
+            bool(self.developer_api_key),
+        )
         closing_volume: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
         for execution in executions:
             position_id = str(execution.provider_position_id or "")
@@ -633,43 +653,71 @@ class TradeLockerConnector(TradingConnector):
         self,
         base: str,
         headers: dict[str, str],
-        routes: dict[str, str],
+        routes: dict[str, list[str]],
     ) -> dict[str, dict]:
         details: dict[str, dict] = {}
-        for index, (instrument_id, route_id) in enumerate(sorted(routes.items())):
-            if index:
-                # The official GET_INSTRUMENT_DETAILS limit is two requests per
-                # second. Keep historical imports below that provider limit.
-                await asyncio.sleep(0.55)
-            try:
-                payload = await request_json(
-                    "GET",
-                    f"{base}/trade/instruments/{instrument_id}",
-                    provider_name=self.provider_id,
-                    headers=headers,
-                    params={"routeId": route_id},
-                )
-            except IntegrationError as exc:
-                if exc.code not in {
-                    "provider_request_rejected",
-                    "provider_invalid_response",
-                }:
-                    raise
-                continue
-            root = payload.get("d", payload.get("data", payload))
-            if isinstance(root, dict):
-                details[instrument_id] = root
+        requests_count = 0
+        for instrument_id, route_ids in sorted(routes.items()):
+            for route_id in route_ids:
+                if requests_count:
+                    # Both route attempts share the two-requests/second limit.
+                    await asyncio.sleep(0.55)
+                requests_count += 1
+                try:
+                    payload = await request_json(
+                        "GET",
+                        f"{base}/trade/instruments/{instrument_id}",
+                        provider_name=self.provider_id,
+                        headers=headers,
+                        params={"routeId": route_id},
+                    )
+                except IntegrationError as exc:
+                    if exc.code not in {
+                        "provider_request_rejected",
+                        "provider_invalid_response",
+                    }:
+                        # Never turn denied access, rate limiting or an outage
+                        # into a route fallback or an invented financial value.
+                        raise
+                    continue
+                root = payload.get("d", payload.get("data", payload)) if isinstance(payload, dict) else None
+                if not isinstance(root, dict):
+                    continue
+                details.setdefault(instrument_id, root)
+                if self._has_positive_pricing(root):
+                    details[instrument_id] = root
+                    break
         return details
 
+    @classmethod
+    def _has_positive_pricing(cls, instrument: dict) -> bool:
+        for field in ("tickSize", "tickCost"):
+            tiers = instrument.get(field)
+            if not isinstance(tiers, list) or not any(
+                isinstance(tier, dict)
+                and (value := cls._decimal_or_none(tier.get(field))) is not None
+                and value > 0
+                for tier in tiers
+            ):
+                return False
+        return True
+
     @staticmethod
-    def _info_route(instrument: dict) -> str | int | None:
+    def _instrument_routes(instrument: dict) -> list[str]:
         routes = instrument.get("routes") if isinstance(instrument, dict) else None
         if not isinstance(routes, list):
-            return None
-        for route in routes:
-            if isinstance(route, dict) and str(route.get("type") or "").upper() == "INFO":
-                return route.get("id")
-        return None
+            return []
+        result: list[str] = []
+        for route_type in ("TRADE", "INFO"):
+            for route in routes:
+                if (
+                    isinstance(route, dict)
+                    and str(route.get("type") or "").upper() == route_type
+                    and route.get("id") is not None
+                    and str(route["id"]) not in result
+                ):
+                    result.append(str(route["id"]))
+        return result
 
     @classmethod
     def _realized_pnl(
@@ -720,13 +768,15 @@ class TradeLockerConnector(TradingConnector):
         headers = {
             "Authorization": f"Bearer {access['access_token']}",
             "Content-Type": "application/json",
+            **self._developer_headers(),
         }
         if acc_num is not None:
             headers["accNum"] = str(acc_num)
-        if self.developer_api_key:
-            # This is the header used by TradeLocker's official Python client.
-            headers["developer-api-key"] = self.developer_api_key
         return headers
+
+    def _developer_headers(self) -> dict[str, str]:
+        # The official client attaches this key to authentication/refresh too.
+        return {"developer-api-key": self.developer_api_key} if self.developer_api_key else {}
 
     @staticmethod
     def _account(row: dict, access: dict) -> DetectedAccount:

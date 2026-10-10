@@ -486,7 +486,7 @@ def test_tradelocker_ignores_cancelled_orders_and_derives_realized_pnl(monkeypat
                 }
             }
         if url.endswith("/trade/instruments/42"):
-            assert kwargs["params"] == {"routeId": "8"}
+            assert kwargs["params"] == {"routeId": "7"}
             return {
                 "d": {
                     "tickSize": [{"leftRangeLimit": 0, "tickSize": 0.5}],
