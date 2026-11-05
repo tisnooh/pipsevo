@@ -93,7 +93,7 @@ def build_admin_router(get_current_user, service: AdminService, integration_serv
             role = status_value = plan = None
         else:
             status_value = account_status
-        return await service.list_users(page, per_page, search, role, status_value, plan)
+        return await service.list_users(page, per_page, search, role, status_value, plan, support_view=normalize_role(user.get("role")) == "support")
 
     @router.get("/admin/users/{user_id}")
     async def user_detail(user_id: str, user=Depends(staff_user)):
@@ -413,7 +413,7 @@ def build_admin_router(get_current_user, service: AdminService, integration_serv
 
     @router.get("/admin/search")
     async def global_search(q: str = Query(..., min_length=2, max_length=100), user=Depends(staff_user)):
-        users_result, support_result = await service.list_users(1, 8, q, None, None, None), await service.support_list(1, 8, None, None, q)
+        users_result, support_result = await service.list_users(1, 8, q, None, None, None, support_view=normalize_role(user.get("role")) == "support"), await service.support_list(1, 8, None, None, q)
         firms = []
         if normalize_role(user.get("role")) != "support":
             clean = q.replace("*", "")[:80]

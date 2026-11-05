@@ -4,6 +4,7 @@ import sys
 import types
 
 from starlette.requests import Request
+from mongomock_motor import AsyncMongoMockClient
 
 sys.modules.setdefault("anthropic", types.SimpleNamespace(Anthropic=lambda **_kwargs: None))
 os.environ.setdefault("MONGO_URL", "mongodb://127.0.0.1:27017")
@@ -31,6 +32,7 @@ class FakeContactMessages:
 class FakeDb:
     def __init__(self):
         self.contact_messages = FakeContactMessages()
+        self.public_rate_limits = AsyncMongoMockClient().support.public_rate_limits
 
 
 def test_support_request_notifies_team_and_acknowledges_user(monkeypatch):

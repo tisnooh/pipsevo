@@ -134,9 +134,10 @@ def brand_email_html(
 </table></td></tr></table></body></html>"""
 
 
-def confirmation_email(email: str, locale: Locale = "fr") -> Dict[str, object]:
+def confirmation_email(email: str, locale: Locale = "fr", *, token: Optional[str] = None) -> Dict[str, object]:
     language = _locale(locale)
-    links = newsletter_links(email)
+    token = token or issue_email_token(email, "newsletter-confirm", timedelta(hours=24))
+    links = {"confirm": f"{_frontend_url()}/newsletter/confirm?token={token}"}
     copy = ({
         "subject": "Confirm your PipsEvo newsletter subscription", "preheader": "One last step to receive PipsEvo updates.",
         "title": "Confirm your email address", "intro": "You asked to receive PipsEvo analysis, guides, and product news.",
@@ -260,7 +261,9 @@ def _send_with_smtp(*, to: str, subject: str, html: str, text: str, reply_to: Op
                 smtp.starttls(context=ssl.create_default_context())
                 smtp.ehlo()
             smtp.login(username, password)
-            smtp.send_message(message)
+            refused = smtp.send_message(message)
+            if refused:
+                raise EmailDeliveryError("SMTP provider refused the recipient")
     except (OSError, smtplib.SMTPException) as exc:
         raise EmailDeliveryError("SMTP provider rejected or could not deliver the email") from exc
     return f"smtp:{stable_id}"
@@ -286,8 +289,12 @@ def _send_with_resend(*, to: str, subject: str, html: str, text: str, reply_to: 
         raise EmailDeliveryError("Email provider is unreachable") from exc
     if response.status_code >= 400:
         raise EmailDeliveryError(f"Email provider rejected the request ({response.status_code})")
-    message_id = response.json().get("id")
-    if not message_id:
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise EmailDeliveryError("Email provider returned an invalid response") from exc
+    message_id = payload.get("id") if isinstance(payload, dict) else None
+    if not isinstance(message_id, str) or not message_id.strip():
         raise EmailDeliveryError("Email provider returned no message id")
     return str(message_id)
 

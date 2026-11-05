@@ -254,8 +254,9 @@ class AdminService:
             "series": {"signups": series},
         }
 
-    async def list_users(self, page: int, per_page: int, search: str, role: str | None, status: str | None, plan: str | None) -> dict[str, Any]:
-        params: dict[str, Any] = {"select": "*", "order": "created_at.desc"}
+    async def list_users(self, page: int, per_page: int, search: str, role: str | None, status: str | None, plan: str | None, *, support_view: bool = False) -> dict[str, Any]:
+        identity_fields = "id,name,email,role,status,created_at"
+        params: dict[str, Any] = {"select": identity_fields if support_view else "*", "order": "created_at.desc"}
         if search:
             clean = re.sub(r"[^\w@.+-]", "", search)[:100]
             if clean:
@@ -267,12 +268,18 @@ class AdminService:
             params["role"] = f"eq.{role}"
         if status:
             params["status"] = f"eq.{status}"
-        if plan:
+        if plan and not support_view:
             params["plan"] = f"eq.{plan}"
-        rows, total = await self.supabase.list_rows("admin_user_metrics", params=params, page=page, per_page=per_page)
+        rows, total = await self.supabase.list_rows("profiles" if support_view else "admin_user_metrics", params=params, page=page, per_page=per_page)
+        if support_view:
+            rows = [{field: row.get(field) for field in identity_fields.split(",")} for row in rows]
         return {"items": rows, "page": page, "per_page": per_page, "total": total, "pages": max(1, math.ceil(total / per_page))}
 
     async def user_detail(self, user_id: str, *, support_view: bool = False) -> dict[str, Any] | None:
+        if support_view:
+            fields = "id,name,email,role,status,created_at"
+            row = await self.supabase.one("profiles", {"id": f"eq.{user_id}"}, fields)
+            return {"identity": {field: row.get(field) for field in fields.split(",")}} if row else None
         profile, auth_user, subscription = await asyncio.gather(
             self.supabase.one("profiles", {"id": f"eq.{user_id}"}),
             self.supabase.auth_user(user_id),

@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 import json
 import math
+import re
 from typing import Any
 
 
@@ -39,7 +40,7 @@ CONTEXT_GUIDANCE = {
 
 
 def _number(value: Any) -> float | None:
-    if value is None or value == "":
+    if value is None or value == "" or isinstance(value, bool):
         return None
     try:
         result = float(value)
@@ -55,6 +56,8 @@ def measured_trade_pnl(trade: dict) -> float | None:
     exposed a monetary result. Treating that placeholder as real data makes
     net P&L and daily performance look valid while they are not.
     """
+    if trade.get("currency_available") is False:
+        return None
     pnl = _number(trade.get("pnl"))
     if pnl is None:
         return None
@@ -92,25 +95,72 @@ def measured_trade_pnl(trade: dict) -> float | None:
     return pnl
 
 
+def _currency(row: dict) -> str:
+    """Match the journal's native-currency handling, without FX conversion."""
+    if row.get("currency_available") is False:
+        return "UNKNOWN"
+    return str(row.get("provider_currency") or row.get("currency") or "USD").strip().upper() or "USD"
+
+
+def _monetary_total(rows: list[dict], field: str = "pnl") -> float | None:
+    measured = [(row, measured_trade_pnl(row) if field == "pnl" else _number(row.get(field))) for row in rows]
+    measured = [(row, value) for row, value in measured if value is not None and row.get("currency_available") is not False]
+    if not measured or len({_currency(row) for row, _ in measured}) > 1:
+        return None
+    return round(sum(value for _, value in measured), 2)
+
+
+def _remaining_drawdown(account: dict) -> float | None:
+    """Use an explicit floor/reference; never invent a trailing high-water mark."""
+    if account.get("currency_available") is False:
+        return None
+    balance = _number(account.get("balance"))
+    limit = _number(account.get("max_drawdown"))
+    basis = _number(account.get("equity")) if account.get("drawdown_basis") == "equity" else balance
+    if balance is None or balance < 0 or basis is None or limit is None or limit <= 0:
+        return None
+    floor = _number(account.get("drawdown_floor") if account.get("drawdown_floor") is not None else account.get("max_drawdown_level"))
+    reported_used = _number(account.get("current_drawdown"))
+    mode = str(account.get("drawdown_mode") or account.get("drawdown_type") or "").lower()
+    if floor is not None and floor >= 0:
+        return max(0, basis - floor)
+    initial = _number(account.get("initial_balance"))
+    if mode in {"static", "fixed", "fixe"} and initial is not None and initial > 0:
+        return max(0, basis - initial + limit)
+    if reported_used is not None and reported_used >= 0:
+        return max(0, limit - reported_used)
+    if mode in {"trailing", "suiveur", "trailing_balance", "trailing_equity"}:
+        high_water_mark = _number(account.get("high_water_mark"))
+        return max(0, basis - high_water_mark + limit) if high_water_mark is not None and high_water_mark >= basis else None
+    static_estimate_allowed = not mode and not account.get("source_provider") and not account.get("integration_account_id")
+    if (static_estimate_allowed or mode in {"static", "fixed", "fixe"}) and initial is not None and initial > 0:
+        return max(0, basis - initial + limit)
+    return None
+
+
 def _group_performance(trades: list[dict], field: str) -> list[dict]:
     groups: dict[str, list[float]] = defaultdict(list)
+    currencies: dict[str, set[str]] = defaultdict(set)
     for trade in trades:
         label = str(trade.get(field) or "").strip()
         pnl = measured_trade_pnl(trade)
         if label and pnl is not None:
             groups[label].append(pnl)
+            currencies[label].add(_currency(trade))
+    comparable_currency = len(set().union(*currencies.values())) <= 1
     return sorted(
         (
             {
                 "name": name,
                 "sample_size": len(values),
-                "pnl": round(sum(values), 2),
-                "average_pnl": round(sum(values) / len(values), 2),
-                "eligible_for_comparison": len(values) >= MIN_GROUP_SAMPLE,
+                "pnl": round(sum(values), 2) if len(currencies[name]) == 1 else None,
+                "average_pnl": round(sum(values) / len(values), 2) if len(currencies[name]) == 1 else None,
+                "currencies": sorted(currencies[name]),
+                "eligible_for_comparison": len(values) >= MIN_GROUP_SAMPLE and len(currencies[name]) == 1 and comparable_currency,
             }
             for name, values in groups.items()
         ),
-        key=lambda row: (row["eligible_for_comparison"], row["pnl"]),
+        key=lambda row: (row["eligible_for_comparison"], row["pnl"] or 0),
         reverse=True,
     )
 
@@ -120,6 +170,18 @@ def _date_key(value: Any) -> str:
     if len(raw) >= 10:
         return raw[:10]
     return raw
+
+
+def _closure_order_key(trade: dict) -> str:
+    closed, exit_time = str(trade.get("closed_at") or ""), str(trade.get("exit_time") or "")
+    if re.match(r"^\d{4}-\d{2}-\d{2}[T ]", closed):
+        timestamp = closed
+    elif re.match(r"^\d{4}-\d{2}-\d{2}[T ]", exit_time):
+        timestamp = exit_time
+    else:
+        clock = exit_time if re.match(r"^\d{2}:\d{2}", exit_time) else "00:00:00"
+        timestamp = f"{_date_key(trade.get('exit_date') or trade.get('date'))}T{clock}"
+    return f"{timestamp}|{trade.get('created_at') or ''}|{trade.get('id') or ''}"
 
 
 def trade_outcome(trade: dict) -> int | None:
@@ -135,8 +197,12 @@ def build_atlas_context(
     payouts: list[dict] | None = None,
 ) -> tuple[dict, list[dict]]:
     payouts = payouts or []
+    active_trades = [row for row in trades if str(row.get("result_status") or "").lower() not in {"cancelled", "canceled"}]
+    closed_trades = [row for row in active_trades if str(row.get("result_status") or "").lower() != "open"]
     pnl_values = [measured_trade_pnl(trade) for trade in trades]
     measured_pnl = [value for value in pnl_values if value is not None]
+    currencies = sorted({_currency(trade) for trade in trades if measured_trade_pnl(trade) is not None})
+    one_currency = len(currencies) <= 1
     outcomes = [outcome for trade in trades if (outcome := trade_outcome(trade)) is not None]
     winning_outcomes = [outcome for outcome in outcomes if outcome > 0]
     losing_outcomes = [outcome for outcome in outcomes if outcome < 0]
@@ -144,10 +210,10 @@ def build_atlas_context(
     losses = [value for value in measured_pnl if value < 0]
     measured_plan: list[bool] = [
         value
-        for trade in trades
+        for trade in active_trades
         if isinstance((value := trade.get("plan_respected")), bool)
     ]
-    r_values = [_number(trade.get("r")) for trade in trades]
+    r_values = [_number(trade.get("r")) for trade in closed_trades if trade_outcome(trade) is not None]
     measured_r = [value for value in r_values if value is not None]
     gross_profit = sum(wins)
     gross_loss = abs(sum(losses))
@@ -162,26 +228,26 @@ def build_atlas_context(
     current_losing_streak = 0
     max_losing_streak = 0
     running_losing_streak = 0
-    ordered_outcomes = [trade_outcome(row) for row in sorted(trades, key=lambda item: f"{_date_key(item.get('date'))}|{item.get('created_at') or ''}")]
+    ordered_outcomes = [trade_outcome(row) for row in sorted(closed_trades, key=_closure_order_key)]
     for outcome in ordered_outcomes:
         if outcome is not None and outcome < 0:
             running_losing_streak += 1
             max_losing_streak = max(max_losing_streak, running_losing_streak)
-        elif outcome is not None:
+        else:
             running_losing_streak = 0
     for outcome in reversed(ordered_outcomes):
         if outcome is not None and outcome < 0:
             current_losing_streak += 1
-        elif outcome is not None:
+        else:
             break
 
     checklist_values: list[bool] = []
     mistake_counts: dict[str, int] = defaultdict(int)
     high_risk_emotion_rows: list[dict] = []
-    for trade in trades:
+    for trade in active_trades:
         checklist = trade.get("checklist_results")
         if isinstance(checklist, list):
-            checklist_values.extend(bool(item.get("checked")) for item in checklist if isinstance(item, dict))
+            checklist_values.extend(item.get("checked") is True for item in checklist if isinstance(item, dict))
         mistakes = trade.get("mistakes")
         if isinstance(mistakes, list):
             for mistake in mistakes:
@@ -195,15 +261,15 @@ def build_atlas_context(
         values = plan_groups[value]
         return {
             "sample_size": len(values),
-            "net_pnl": round(sum(values), 2) if values else None,
-            "average_pnl": round(sum(values) / len(values), 2) if values else None,
+            "net_pnl": round(sum(values), 2) if values and one_currency else None,
+            "average_pnl": round(sum(values) / len(values), 2) if values and one_currency else None,
         }
 
     rules_value = user.get("rules")
-    rules: dict[str, Any] = rules_value if isinstance(rules_value, dict) else {}
+    rules: dict[str, Any] = rules_value if isinstance(rules_value, dict) and rules_value.get("configured") is not False else {}
     max_trades = int(_number(rules.get("max_trades")) or 0)
     by_day: dict[str, list[dict]] = defaultdict(list)
-    for trade in trades:
+    for trade in active_trades:
         if key := _date_key(trade.get("date")):
             by_day[key].append(trade)
     overtrading_days = [
@@ -224,6 +290,7 @@ def build_atlas_context(
                 "instrument": trade.get("instrument"),
                 "direction": trade.get("direction"),
                 "pnl": measured_trade_pnl(trade),
+                "currency": _currency(trade),
                 "r": _number(trade.get("r")),
                 "setup": trade.get("setup"),
                 "session": trade.get("session"),
@@ -246,15 +313,19 @@ def build_atlas_context(
             "trades_with_r": len(measured_r),
             "trades_with_plan_status": len(measured_plan),
             "minimum_group_sample": MIN_GROUP_SAMPLE,
+            "currencies": currencies,
+            "mixed_currencies": not one_currency,
         },
         "metrics": {
-            "net_pnl": round(sum(measured_pnl), 2) if measured_pnl else None,
+            "net_pnl": _monetary_total(trades),
+            "currency": currencies[0] if len(currencies) == 1 else None,
+            "net_pnl_by_currency": {currency: _monetary_total([trade for trade in trades if _currency(trade) == currency]) for currency in currencies},
             "wins": len(winning_outcomes),
             "losses": len(losing_outcomes),
             "win_rate_percent": round(len(winning_outcomes) / len(outcomes) * 100, 1) if outcomes else None,
-            "profit_factor": round(gross_profit / gross_loss, 2) if gross_loss else None,
-            "average_win": round(gross_profit / len(wins), 2) if wins else None,
-            "average_loss": round(sum(losses) / len(losses), 2) if losses else None,
+            "profit_factor": round(gross_profit / gross_loss, 2) if gross_loss and one_currency else None,
+            "average_win": round(gross_profit / len(wins), 2) if wins and one_currency else None,
+            "average_loss": round(sum(losses) / len(losses), 2) if losses and one_currency else None,
             "average_r": round(sum(measured_r) / len(measured_r), 2) if measured_r else None,
             "plan_respect_percent": round(sum(measured_plan) / len(measured_plan) * 100, 1) if measured_plan else None,
         },
@@ -268,7 +339,7 @@ def build_atlas_context(
             "plan_not_respected": plan_summary(False),
             "average_pnl_difference": (
                 round(sum(plan_groups[True]) / len(plan_groups[True]) - sum(plan_groups[False]) / len(plan_groups[False]), 2)
-                if plan_groups[True] and plan_groups[False]
+                if plan_groups[True] and plan_groups[False] and one_currency
                 else None
             ),
             "checklist_completion_percent": round(sum(checklist_values) / len(checklist_values) * 100, 1) if checklist_values else None,
@@ -277,7 +348,7 @@ def build_atlas_context(
             "high_risk_emotion_trade_count": len(high_risk_emotion_rows),
             "high_risk_emotion_measured_pnl": (
                 round(sum(values), 2)
-                if (values := [value for row in high_risk_emotion_rows if (value := measured_trade_pnl(row)) is not None])
+                if one_currency and (values := [value for row in high_risk_emotion_rows if (value := measured_trade_pnl(row)) is not None])
                 else None
             ),
             "documented_mistakes": [
@@ -298,11 +369,13 @@ def build_atlas_context(
         ],
         "payouts": {
             "count": len(payouts),
-            "total_amount": round(sum(value for row in payouts if (value := _number(row.get("amount"))) is not None), 2),
+            "total_amount": _monetary_total(payouts, "amount"),
+            "amount_by_currency": {currency: _monetary_total([row for row in payouts if _currency(row) == currency], "amount") for currency in sorted({_currency(row) for row in payouts})},
             "records": [
                 {
                     "date": row.get("date"),
                     "amount": _number(row.get("amount")),
+                    "currency": _currency(row),
                     "account_id": row.get("account_id"),
                     "status": row.get("status"),
                 }
@@ -325,7 +398,9 @@ def build_atlas_prompt(question: str, context_tag: str, context: dict) -> str:
         f"{json.dumps(provider_context, ensure_ascii=False, separators=(',', ':'))}\n\n"
         "Règles d'interprétation : une valeur null signifie non mesurée. "
         "Si context_truncated=true, certaines données ont été omises pour limiter la taille : signale cette limite. "
-        "Ne transforme jamais une donnée absente en zéro. Ne désigne un meilleur ou pire "
+        "Ne transforme jamais une donnée absente en zéro. "
+        "Ne somme ni ne compare des montants de devises différentes. Aucune conversion FX n’est fournie. "
+        "Ne désigne un meilleur ou pire "
         "setup/session que parmi les groupes où eligible_for_comparison=true. "
         "Une association observée entre émotion, discipline et P&L ne prouve jamais une causalité. "
         "Les alertes et priorités de coaching_briefing sont calculées par le moteur déterministe : "
@@ -509,7 +584,7 @@ def build_coaching_briefing(
         })
 
     rules_value = user.get("rules")
-    rules: dict[str, Any] = rules_value if isinstance(rules_value, dict) else {}
+    rules: dict[str, Any] = rules_value if isinstance(rules_value, dict) and rules_value.get("configured") is not False else {}
     stop_after = int(_number(rules.get("stop_after_loss")) or 0)
     losing_streak = discipline["current_losing_streak"]
     if stop_after and losing_streak >= stop_after:
@@ -574,6 +649,12 @@ def build_coaching_briefing(
 
     total_trades = data_quality["total_trades"]
     measured_pnl_count = data_quality["trades_with_pnl"]
+    if data_quality["mixed_currencies"]:
+        add_alert(
+            "mixed-currencies", "info", "Résultats séparés par devise",
+            "Les montants sont exprimés dans plusieurs devises et ne sont pas additionnés. Aucune conversion automatique n’est appliquée.",
+            source="native_trade_currencies",
+        )
     if total_trades and measured_pnl_count < total_trades:
         add_alert(
             "pnl-coverage",
@@ -616,6 +697,7 @@ def build_coaching_briefing(
         "checklist-completion": ("Compléter la checklist", "Valider chaque contrôle requis avant de considérer le processus prêt.", "Checklist complétée à au moins 80%."),
         "high-risk-emotions": ("Créer une règle de pause émotionnelle", "Reporter la décision lorsque l’état à risque est déclaré avec une intensité forte.", "Aucun trade pris sous émotion forte sans pause documentée."),
         "pnl-coverage": ("Améliorer la qualité des données", "Vérifier la synchronisation ou renseigner les résultats manquants sans les inventer.", "P&L réellement mesuré sur tous les trades disponibles."),
+        "mixed-currencies": ("Relire chaque devise séparément", "Comparer les résultats uniquement dans leur devise native, sans additionner les montants.", "Aucun total monétaire mélangeant plusieurs devises."),
         "review-completeness": ("Finaliser les revues post-trade", "Ajouter plan, notes, émotion et checklist aux trades incomplets.", "Aucun trade récent sans contexte de revue."),
     }
     severity_rank = {"critical": 0, "warning": 1, "info": 2}
@@ -646,12 +728,12 @@ def build_coaching_briefing(
     for trade in period_trades:
         grouped[_date_key(trade.get("date"))].append(trade)
     for day_key, rows in sorted(grouped.items()):
-        pnl_values = [value for row in rows if (value := measured_trade_pnl(row)) is not None]
         reviewed_plan = [row["plan_respected"] for row in rows if isinstance(row.get("plan_respected"), bool)]
         daily_rows.append({
             "date": day_key,
             "trade_count": len(rows),
-            "measured_pnl": round(sum(pnl_values), 2) if pnl_values else None,
+            "measured_pnl": _monetary_total(rows),
+            "currencies": sorted({_currency(row) for row in rows if measured_trade_pnl(row) is not None}),
             "plan_respect_percent": round(sum(reviewed_plan) / len(reviewed_plan) * 100, 1) if reviewed_plan else None,
         })
 
@@ -661,6 +743,8 @@ def build_coaching_briefing(
         "overview": {
             "trade_count": total_trades,
             "measured_pnl": metrics["net_pnl"],
+            "currency": metrics["currency"],
+            "net_pnl_by_currency": metrics["net_pnl_by_currency"],
             "win_rate_percent": metrics["win_rate_percent"],
             "plan_respect_percent": plan_rate,
             "checklist_completion_percent": checklist_rate,
@@ -704,7 +788,7 @@ def build_deterministic_coach_answer(question: str, context_tag: str, context: d
 
     if focus:
         pnl = focus.get("pnl")
-        pnl_text = "non mesuré" if pnl is None else f"{pnl:+.2f} USD"
+        pnl_text = "non mesuré" if pnl is None else f"{pnl:+.2f} {_currency(focus)}"
         lines.extend([
             "",
             "#### Revue du trade",
@@ -716,7 +800,7 @@ def build_deterministic_coach_answer(question: str, context_tag: str, context: d
         ])
     else:
         pnl = overview.get("measured_pnl")
-        pnl_text = "non mesuré" if pnl is None else f"{pnl:+.2f} USD"
+        pnl_text = "non agrégé (plusieurs devises)" if quality.get("mixed_currencies") else "non mesuré" if pnl is None else f"{pnl:+.2f} {overview.get('currency') or 'USD'}"
         lines.extend([
             "",
             "#### Bilan mesuré",
@@ -779,7 +863,7 @@ def build_pretrade_readiness(
     trading signal.
     """
     rules_value = user.get("rules")
-    rules: dict[str, Any] = rules_value if isinstance(rules_value, dict) else {}
+    rules: dict[str, Any] = rules_value if isinstance(rules_value, dict) and rules_value.get("configured") is not False else {}
     checks: list[dict[str, Any]] = []
 
     def add_check(
@@ -811,10 +895,31 @@ def build_pretrade_readiness(
 
     local_date = str(proposal.get("local_date") or "")[:10]
     account_id = str(account.get("id") or "") if account else ""
-    account_trades = [row for row in trades if not account_id or str(row.get("account_id") or "") == account_id]
+    account_trades = [row for row in trades if (not account_id or str(row.get("account_id") or "") == account_id) and str(row.get("result_status") or "").lower() not in {"cancelled", "canceled"}]
     today_trades = [row for row in account_trades if _date_key(row.get("date")) == local_date]
-    today_pnl_values = [measured_trade_pnl(row) for row in today_trades]
-    today_pnl = round(sum(value for value in today_pnl_values if value is not None), 2)
+    today_closed = [row for row in today_trades if str(row.get("result_status") or "").lower() != "open"]
+    today_pnl_values = [measured_trade_pnl(row) for row in today_closed]
+    account_currency_known = account is not None and account.get("currency_available") is not False
+    today_pnl_complete = account_currency_known and all(value is not None for value in today_pnl_values) and all(_currency(row) == _currency(account) for row in today_closed)
+    today_pnl = round(sum(value for value in today_pnl_values if value is not None), 2) if today_pnl_complete else None
+    open_positions = [row for row in account_trades if str(row.get("result_status") or "").lower() == "open"]
+    if open_positions:
+        add_check("open_positions", "Positions ouvertes", "warn", f"{len(open_positions)} position(s) ouverte(s) : leur P&L flottant est exclu du résultat clôturé. L’exposition et les règles fournisseur restent à vérifier.", observed=len(open_positions), source="account_and_trades")
+
+    planned_risk_percent = _number(proposal.get("planned_risk_percent"))
+    planned_risk_amount = _number(proposal.get("planned_risk_amount"))
+    balance = _number(account.get("balance")) if account else None
+    if not account_currency_known:
+        add_check("currency", "Devise du compte", "warn", "La devise native n’est pas connue : les marges monétaires ne peuvent pas être validées.", source="account")
+    amount_from_percent = planned_risk_percent / 100 * balance if planned_risk_percent is not None and balance and balance > 0 else None
+    inconsistent_risk = (
+        planned_risk_amount is not None and amount_from_percent is not None
+        and not math.isclose(planned_risk_amount, amount_from_percent, abs_tol=0.01, rel_tol=0.001)
+    )
+    if planned_risk_amount is None:
+        planned_risk_amount = amount_from_percent
+    if planned_risk_percent is None and planned_risk_amount is not None and balance and balance > 0:
+        planned_risk_percent = planned_risk_amount / balance * 100
 
     max_trades = int(_number(rules.get("max_trades")) or 0)
     if max_trades > 0:
@@ -832,37 +937,65 @@ def build_pretrade_readiness(
         add_check("max_trades", "Nombre maximal de trades", "warn", "Aucune limite quotidienne n’est configurée.", source="profile_rule")
 
     daily_limit = _number(account.get("daily_loss_limit")) if account else None
-    if not daily_limit:
+    daily_from_profile = daily_limit is None
+    if daily_from_profile:
         daily_limit = _number(rules.get("daily_loss_limit"))
+    daily_currency = str(rules.get("daily_loss_currency") or rules.get("currency") or "USD").upper() if daily_from_profile else _currency(account)
+    compatible_daily_currency = daily_currency == _currency(account)
     if daily_limit and daily_limit > 0:
-        remaining = round(daily_limit + today_pnl, 2)
-        status = "block" if remaining <= 0 else "warn" if remaining <= daily_limit * 0.2 else "pass"
+        remaining = round(daily_limit + today_pnl, 2) if today_pnl is not None and compatible_daily_currency else None
+        status = (
+            "warn" if remaining is None
+            else "block" if remaining <= 0 or (planned_risk_amount is not None and planned_risk_amount > remaining)
+            else "warn" if remaining <= daily_limit * 0.2 else "pass"
+        )
         add_check(
             "daily_loss",
             "Perte journalière",
             status,
-            f"P&L mesuré du jour : {today_pnl:.2f}. Marge restante : {max(0, remaining):.2f}.",
-            observed=today_pnl,
+            f"La limite globale est en {daily_currency}, le compte en {_currency(account)}. Aucune conversion automatique : renseigne une limite dans la devise du compte."
+            if not compatible_daily_currency else "La marge journalière ne peut pas être validée : des résultats ou leurs devises sont manquants ou incompatibles."
+            if remaining is None else f"P&L mesuré du jour : {today_pnl:.2f}. Marge restante : {max(0, remaining):.2f}. Risque prévu : {planned_risk_amount if planned_risk_amount is not None else 'non renseigné'}.",
+            observed=today_pnl if compatible_daily_currency else None,
             limit=-daily_limit,
             source="account_and_trades",
         )
     else:
         add_check("daily_loss", "Perte journalière", "warn", "Aucune limite de perte journalière n’est configurée.", source="profile_rule")
 
+    max_drawdown = _number(account.get("max_drawdown")) if account else None
+    if max_drawdown and max_drawdown > 0:
+        drawdown_remaining = _remaining_drawdown(account)
+        drawdown_status = (
+            "warn" if drawdown_remaining is None
+            else "block" if drawdown_remaining <= 0 or (planned_risk_amount is not None and planned_risk_amount > drawdown_remaining)
+            else "warn" if drawdown_remaining <= max_drawdown * 0.2 else "pass"
+        )
+        add_check(
+            "drawdown", "Marge de drawdown", drawdown_status,
+            "Le drawdown ne peut pas être vérifié : renseigne le seuil courant ou sa référence."
+            if drawdown_remaining is None else f"Marge de drawdown restante : {drawdown_remaining:.2f}, comparée au risque prévu renseigné.",
+            observed=drawdown_remaining, limit=max_drawdown, source="account_and_proposal",
+        )
+
     stop_after = int(_number(rules.get("stop_after_loss")) or 0)
     consecutive_losses = 0
-    for row in sorted(account_trades, key=lambda item: f"{_date_key(item.get('date'))}|{item.get('created_at') or ''}", reverse=True):
+    streak_complete = True
+    closed_trades = [row for row in account_trades if str(row.get("result_status") or "").lower() != "open"]
+    for row in sorted(closed_trades, key=_closure_order_key, reverse=True):
         outcome = trade_outcome(row)
         if outcome is not None and outcome < 0:
             consecutive_losses += 1
-        elif outcome is not None:
+        else:
+            if outcome is None:
+                streak_complete = False
             break
     if stop_after > 0:
         add_check(
             "loss_streak",
             "Pertes consécutives",
-            "block" if consecutive_losses >= stop_after else "pass",
-            f"{consecutive_losses} perte(s) consécutive(s) pour une limite de {stop_after}.",
+            "block" if consecutive_losses >= stop_after else "pass" if streak_complete else "warn",
+            f"{consecutive_losses} perte(s) consécutive(s) confirmée(s) pour une limite de {stop_after}." + (" Un résultat clôturé manque : la série complète n’est pas vérifiable." if not streak_complete else ""),
             observed=consecutive_losses,
             limit=stop_after,
             source="profile_rule_and_trades",
@@ -870,13 +1003,10 @@ def build_pretrade_readiness(
     else:
         add_check("loss_streak", "Pertes consécutives", "warn", "Aucune règle d’arrêt après pertes n’est configurée.", source="profile_rule")
 
-    planned_risk_percent = _number(proposal.get("planned_risk_percent"))
-    planned_risk_amount = _number(proposal.get("planned_risk_amount"))
-    balance = _number(account.get("balance")) if account else None
-    if planned_risk_percent is None and planned_risk_amount is not None and balance and balance > 0:
-        planned_risk_percent = planned_risk_amount / balance * 100
     max_risk_percent = _number(rules.get("max_risk_pct"))
-    if planned_risk_percent is None:
+    if inconsistent_risk:
+        add_check("risk", "Risque prévu", "block", "Le montant de risque et son pourcentage sont incohérents avec le solde du compte.", source="proposal")
+    elif planned_risk_percent is None:
         add_check("risk", "Risque prévu", "block", "Renseigne le risque prévu en pourcentage ou en montant.", source="proposal")
     elif planned_risk_percent <= 0:
         add_check("risk", "Risque prévu", "block", "Le risque prévu doit être supérieur à zéro.", observed=planned_risk_percent, source="proposal")
@@ -900,9 +1030,12 @@ def build_pretrade_readiness(
 
     min_rr = _number(rules.get("min_rr"))
     planned_rr = None
-    if entry is not None and stop is not None and take_profit is not None and entry != stop:
+    invalid_levels = entry is not None and stop is not None and take_profit is not None and (stop - entry) * (take_profit - entry) >= 0
+    if entry is not None and stop is not None and take_profit is not None and entry != stop and not invalid_levels:
         planned_rr = abs(take_profit - entry) / abs(entry - stop)
-    if planned_rr is None:
+    if invalid_levels:
+        add_check("reward_risk", "Ratio risque/rendement", "block", "Le stop loss et l’objectif doivent être de part et d’autre du prix d’entrée.", source="proposal")
+    elif planned_rr is None:
         add_check("reward_risk", "Ratio risque/rendement", "warn", "Renseigne entrée, stop et objectif pour mesurer le ratio prévu.", source="proposal")
     elif min_rr and planned_rr < min_rr:
         add_check("reward_risk", "Ratio risque/rendement", "block", f"Le ratio prévu {planned_rr:.2f}R est inférieur à ta règle de {min_rr:g}R.", observed=round(planned_rr, 2), limit=min_rr, source="profile_rule")
@@ -910,7 +1043,7 @@ def build_pretrade_readiness(
         add_check("reward_risk", "Ratio risque/rendement", "pass", f"Ratio prévu : {planned_rr:.2f}R.", observed=round(planned_rr, 2), limit=min_rr, source="profile_rule")
 
     checklist_rows = proposal.get("checklist_results") if isinstance(proposal.get("checklist_results"), list) else []
-    checklist_map = {str(row.get("id")): bool(row.get("checked")) for row in checklist_rows if isinstance(row, dict)}
+    checklist_map = {str(row.get("id")): row.get("checked") is True for row in checklist_rows if isinstance(row, dict)}
     configured_checklist = rules.get("pre_trade_checklist") if isinstance(rules.get("pre_trade_checklist"), list) else []
     if not configured_checklist:
         configured_checklist = [
@@ -959,8 +1092,10 @@ def build_pretrade_readiness(
             "local_date": local_date,
             "today_trade_count": len(today_trades),
             "today_measured_pnl": today_pnl,
+            "today_pnl_complete": today_pnl_complete,
             "consecutive_losses": consecutive_losses,
             "planned_risk_percent": round(planned_risk_percent, 3) if planned_risk_percent is not None else None,
+            "planned_risk_amount": round(planned_risk_amount, 2) if planned_risk_amount is not None else None,
             "planned_rr": round(planned_rr, 2) if planned_rr is not None else None,
         },
         "disclaimer": "Atlas valide uniquement ton processus et tes limites enregistrées. Il ne valide pas la direction du marché et ne garantit aucun résultat.",

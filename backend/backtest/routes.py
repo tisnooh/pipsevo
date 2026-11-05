@@ -87,15 +87,7 @@ def build_backtest_router(get_current_user, db, feature_checker=None):
 
     @router.delete("/account-data")
     async def delete_account_data(user=Depends(authenticated)):
-        """Purge every Backtest Lab record before the Supabase user is deleted."""
-        owner = {"user_id": user["id"]}
-        deleted = {}
-        for collection in ("backtest_sessions", "backtest_strategies", "backtest_bars", "backtest_datasets"):
-            result = await db[collection].delete_many(owner)
-            deleted[collection] = result.deleted_count
-        usage = await db.backtest_usage.delete_many({"_id": {"$regex": f"^{re.escape(user['id'])}:"}})
-        deleted["backtest_usage"] = usage.deleted_count
-        return {"ok": True, "deleted": deleted}
+        raise HTTPException(410, "Utilise la suppression coordonnée dans les paramètres. Aucune donnée n’a été effacée.")
 
     @router.get("/datasets")
     async def datasets(user=Depends(authenticated)):

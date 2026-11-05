@@ -36,6 +36,28 @@ def test_provider_uses_free_deterministic_mode_without_any_key():
     assert config.model == "deterministic-coaching-v1"
 
 
+@pytest.mark.parametrize("provider", ["deterministic", "off", "invalid-config"])
+def test_local_or_invalid_mode_does_not_activate_stored_provider_keys(provider):
+    config = AtlasProviderConfig.from_env({
+        "ATLAS_PROVIDER": provider, "ATLAS_GROQ_API_KEY": "groq-test",
+        "ATLAS_ANTHROPIC_API_KEY": "anthropic-test", "ATLAS_TIMEOUT_SECONDS": "invalid",
+    })
+    assert config.provider == "deterministic"
+    assert config.api_key is None
+    assert config.timeout_seconds == 45
+
+
+@pytest.mark.parametrize("content", [None, {}, [], True, 123, " "])
+def test_malformed_provider_content_is_rejected_for_local_fallback(monkeypatch, content):
+    monkeypatch.setattr("atlas_provider.requests.post", lambda *_args, **_kwargs: FakeResponse(
+        200, {"choices": [{"message": {"content": content}}]},
+    ))
+    config = AtlasProviderConfig.from_env({"ATLAS_PROVIDER": "groq", "ATLAS_GROQ_API_KEY": "test"})
+    with pytest.raises(AtlasProviderFailure) as caught:
+        asyncio.run(generate_atlas_answer(config, system="Rules", prompt="Review"))
+    assert caught.value.code == "empty_response"
+
+
 def test_groq_generation_uses_openai_compatible_response(monkeypatch):
     captured = {}
 

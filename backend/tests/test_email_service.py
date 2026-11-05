@@ -147,3 +147,50 @@ def test_gmail_smtp_rejects_an_unverified_from_address(monkeypatch):
             html="<p>Hello</p>",
             text="Hello",
         )
+
+
+def test_smtp_refused_recipient_is_not_reported_as_sent(monkeypatch):
+    monkeypatch.setenv("EMAIL_PROVIDER", "smtp")
+    monkeypatch.setenv("EMAIL_FROM_ADDRESS", "sender@gmail.com")
+    monkeypatch.setenv("SMTP_USERNAME", "sender@gmail.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "test-only")
+
+    class RefusingSmtp:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def ehlo(self):
+            pass
+
+        def starttls(self, **_kwargs):
+            pass
+
+        def login(self, *_args):
+            pass
+
+        def send_message(self, _message):
+            return {"trader@example.com": (550, b"Rejected")}
+
+    monkeypatch.setattr(email_service.smtplib, "SMTP", RefusingSmtp)
+    with pytest.raises(email_service.EmailDeliveryError, match="refused"):
+        email_service.send_email(to="trader@example.com", subject="Test", html="Hello", text="Hello")
+
+
+@pytest.mark.parametrize("payload", [[], None, {"id": None}, {"id": 3}, {"id": " "}])
+def test_malformed_resend_response_is_not_reported_as_accepted(monkeypatch, payload):
+    monkeypatch.setenv("EMAIL_PROVIDER", "resend")
+    monkeypatch.setenv("EMAIL_FROM_ADDRESS", "sender@example.com")
+    monkeypatch.setenv("RESEND_API_KEY", "test-only")
+    class FakeResponse:
+        status_code = 200
+        def json(self):
+            return payload
+    monkeypatch.setattr(email_service.requests, "post", lambda *_args, **_kwargs: FakeResponse())
+    with pytest.raises(email_service.EmailDeliveryError):
+        email_service.send_email(to="trader@example.com", subject="Test", html="Hello", text="Hello")

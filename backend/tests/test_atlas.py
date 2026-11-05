@@ -51,6 +51,31 @@ def test_atlas_metrics_distinguish_missing_values_from_zero():
     assert len(evidence) == 3
 
 
+def test_unknown_currency_is_not_invented_by_coaching_or_readiness():
+    trade = {"id": "unknown", "account_id": "account-1", "date": "2026-09-30", "pnl": 500, "currency_available": False}
+    context, evidence = build_atlas_context({}, [], [trade])
+    assert context["metrics"]["net_pnl"] is None
+    assert context["metrics"]["win_rate_percent"] is None
+    assert evidence[0]["currency"] == "UNKNOWN"
+    assert evidence[0]["pnl"] is None
+    account = {**readiness_account(), "currency_available": False}
+    result = build_pretrade_readiness(readiness_user(), account, [], valid_proposal())
+    assert result["data"]["today_measured_pnl"] is None
+    assert {"currency", "daily_loss"}.issubset(result["warnings"])
+    assert result["status"] != "ready"
+
+
+def test_atlas_loss_streak_uses_closure_clock_not_insertion_order():
+    trades = [
+        {"id": "loss", "account_id": "account-1", "date": "2026-09-30", "exit_time": "11:00:00", "created_at": "2026-10-01T10:00:00Z", "pnl": -10},
+        {"id": "win", "account_id": "account-1", "date": "2026-09-30", "exit_time": "10:00:00", "created_at": "2026-10-01T11:00:00Z", "pnl": 50},
+    ]
+    context, _ = build_atlas_context({}, [], trades)
+    assert context["discipline"]["current_losing_streak"] == 1
+    result = build_pretrade_readiness(readiness_user(), readiness_account(), trades, valid_proposal())
+    assert result["data"]["consecutive_losses"] == 1
+
+
 def test_atlas_group_comparison_requires_two_trades():
     trades = [
         {"id": "1", "pnl": 100, "setup": "FVG"},
@@ -215,6 +240,75 @@ def readiness_account():
     }
 
 
+def test_unconfirmed_profile_limits_are_not_applied_by_atlas():
+    user = readiness_user()
+    user["rules"]["configured"] = False
+    report = build_pretrade_readiness(user, readiness_account(), [], valid_proposal())
+    checks = {row["id"]: row for row in report["checks"]}
+    assert checks["max_trades"]["status"] == "warn"
+    assert checks["max_trades"]["limit"] is None
+    assert checks["risk"]["status"] == "warn"
+
+
+def test_global_daily_limit_cannot_be_compared_across_native_currencies():
+    user = readiness_user()
+    user["rules"]["daily_loss_currency"] = "USD"
+    account = readiness_account()
+    account.update(currency="EUR", daily_loss_limit=None)
+    rows = [{"account_id": account["id"], "date": "2026-09-30", "pnl": -100, "provider_currency": "EUR"}]
+    report = build_pretrade_readiness(user, account, rows, valid_proposal())
+    check = next(row for row in report["checks"] if row["id"] == "daily_loss")
+    assert check["status"] == "warn"
+    assert check["observed"] is None
+    assert "USD" in check["detail"] and "EUR" in check["detail"]
+
+
+def test_account_daily_limit_remains_authoritative_in_its_native_currency():
+    user = readiness_user()
+    user["rules"]["daily_loss_currency"] = "USD"
+    account = readiness_account()
+    account.update(currency="EUR", daily_loss_limit=200)
+    rows = [{"account_id": account["id"], "date": "2026-09-30", "pnl": -250, "provider_currency": "EUR"}]
+    report = build_pretrade_readiness(user, account, rows, valid_proposal())
+    check = next(row for row in report["checks"] if row["id"] == "daily_loss")
+    assert check["status"] == "block"
+    assert check["limit"] == -200
+
+
+def test_zero_account_daily_limit_does_not_fall_back_to_global_limit():
+    account = readiness_account()
+    account["daily_loss_limit"] = 0
+    report = build_pretrade_readiness(readiness_user(), account, [], valid_proposal())
+    check = next(row for row in report["checks"] if row["id"] == "daily_loss")
+    assert check["limit"] is None
+    assert check["status"] == "warn"
+
+
+def test_open_and_cancelled_trades_do_not_hide_a_confirmed_loss_streak():
+    rows = [
+        {"id": "l1", "account_id": "account-1", "date": "2026-09-30", "exit_time": "10:00:00", "pnl": -100},
+        {"id": "l2", "account_id": "account-1", "date": "2026-09-30", "exit_time": "11:00:00", "pnl": -100},
+        {"id": "open", "account_id": "account-1", "date": "2026-09-30", "exit_time": "12:00:00", "result_status": "open", "pnl": 500},
+        {"id": "cancel", "account_id": "account-1", "date": "2026-09-30", "exit_time": "13:00:00", "result_status": "cancelled", "pnl": 1000, "plan_respected": False},
+    ]
+    context, _ = build_atlas_context(readiness_user(), [], rows)
+    assert context["discipline"]["current_losing_streak"] == 2
+    assert context["data_quality"]["trades_with_plan_status"] == 0
+    report = build_pretrade_readiness(readiness_user(), readiness_account(), rows, valid_proposal())
+    checks = {row["id"]: row for row in report["checks"]}
+    assert checks["loss_streak"]["status"] == "block"
+    assert checks["max_trades"]["observed"] == 4
+    assert checks["open_positions"]["status"] == "warn"
+    assert report["data"]["today_measured_pnl"] == -200
+
+
+def test_unknown_closed_result_never_confirms_the_end_of_a_losing_streak():
+    rows = [{"account_id": "account-1", "date": "2026-09-30", "pnl": None}]
+    report = build_pretrade_readiness(readiness_user(), readiness_account(), rows, valid_proposal())
+    check = next(row for row in report["checks"] if row["id"] == "loss_streak")
+    assert check["status"] == "warn"
+
+
 def valid_proposal():
     return {
         "account_id": "account-1",
@@ -274,8 +368,63 @@ def test_pretrade_readiness_does_not_treat_unmeasured_provider_pnl_as_loss():
 
     result = build_pretrade_readiness(readiness_user(), readiness_account(), [trade], valid_proposal())
 
-    assert result["data"]["today_measured_pnl"] == 0
+    assert result["data"]["today_measured_pnl"] is None
+    assert result["data"]["today_pnl_complete"] is False
+    assert "daily_loss" in result["warnings"]
     assert "daily_loss" not in result["blockers"]
+
+
+def test_readiness_blocks_risk_larger_than_remaining_daily_margin():
+    result = build_pretrade_readiness(readiness_user(), readiness_account(), [
+        {"account_id": "account-1", "date": "2026-09-30", "pnl": -100},
+    ], valid_proposal())
+    assert result["data"]["planned_risk_amount"] == 250
+    assert "daily_loss" in result["blockers"]
+
+
+def test_readiness_does_not_accept_inconsistent_risk_amount_and_percent():
+    proposal = {**valid_proposal(), "planned_risk_amount": 10000}
+    result = build_pretrade_readiness(readiness_user(), readiness_account(), [], proposal)
+    assert "risk" in result["blockers"]
+    assert "daily_loss" in result["blockers"]
+
+
+def test_readiness_rejects_false_string_as_a_checked_item():
+    proposal = {**valid_proposal(), "checklist_results": [{"id": "plan", "checked": "false"}]}
+    result = build_pretrade_readiness(readiness_user(), readiness_account(), [], proposal)
+    assert "checklist" in result["blockers"]
+
+
+def test_readiness_rejects_stop_and_target_on_the_same_side_of_entry():
+    proposal = {**valid_proposal(), "stop": 101, "take_profit": 103}
+    result = build_pretrade_readiness(readiness_user(), readiness_account(), [], proposal)
+    assert "reward_risk" in result["blockers"]
+    assert result["data"]["planned_rr"] is None
+
+
+def test_readiness_verifies_drawdown_against_planned_loss_without_guessing_trailing_floor():
+    account = {**readiness_account(), "max_drawdown": 2000, "drawdown_floor": 49900}
+    result = build_pretrade_readiness(readiness_user(), account, [], valid_proposal())
+    assert "drawdown" in result["blockers"]
+    account.pop("drawdown_floor")
+    account["drawdown_mode"] = "trailing"
+    result = build_pretrade_readiness(readiness_user(), account, [], valid_proposal())
+    assert "drawdown" in result["warnings"]
+    account["high_water_mark"] = 50100
+    result = build_pretrade_readiness(readiness_user(), account, [], valid_proposal())
+    assert "drawdown" not in result["blockers"]
+    assert "drawdown" not in result["warnings"]
+
+
+def test_atlas_does_not_bridge_unmeasured_trade_between_losses():
+    trades = [
+        {"date": "2026-10-08", "pnl": -10},
+        {"date": "2026-10-09", "pnl": None},
+        {"date": "2026-10-10", "pnl": -20},
+    ]
+    context, _ = build_atlas_context({}, [], trades)
+    assert context["discipline"]["current_losing_streak"] == 1
+    assert context["discipline"]["max_losing_streak"] == 1
 
 
 def test_pretrade_readiness_warns_instead_of_inventing_unconfigured_limits():
@@ -431,3 +580,40 @@ def test_free_deterministic_answer_remains_useful_without_provider_key():
     assert "P&L disponible : non mesuré" in answer
     assert "Les valeurs absentes ne sont jamais transformées en zéro" in answer
     assert "ni un signal ni un conseil d’investissement" in answer
+
+
+def test_atlas_separates_native_currencies_without_inventing_fx_conversion():
+    trades = [
+        {"id": "usd", "date": "2026-10-10", "pnl": 100, "provider_currency": "USD", "setup": "FVG"},
+        {"id": "eur", "date": "2026-10-10", "pnl": -50, "provider_currency": "EUR", "setup": "FVG"},
+    ]
+    context, evidence = build_atlas_context({}, [], trades)
+    assert context["metrics"]["net_pnl"] is None
+    assert context["metrics"]["net_pnl_by_currency"] == {"EUR": -50, "USD": 100}
+    assert context["metrics"]["profit_factor"] is None
+    assert context["metrics"]["win_rate_percent"] == 50
+    assert context["setup_performance"][0]["pnl"] is None
+    assert context["setup_performance"][0]["eligible_for_comparison"] is False
+    assert evidence[1]["currency"] == "EUR"
+    context["coaching_briefing"] = build_coaching_briefing({}, [], trades, period="daily", local_date="2026-10-10")
+    assert context["coaching_briefing"]["daily"][0]["measured_pnl"] is None
+    answer = build_deterministic_coach_answer("Review", "daily_briefing", context)
+    assert "non agrégé (plusieurs devises)" in answer
+    assert "+50.00 USD" not in answer
+
+
+def test_atlas_euro_single_currency_report_is_not_relabelled_usd():
+    trades = [{"id": "eur", "date": "2026-10-10", "pnl": 40, "provider_currency": "EUR"}]
+    context, _ = build_atlas_context({}, [], trades)
+    context["coaching_briefing"] = build_coaching_briefing({}, [], trades, period="daily", local_date="2026-10-10")
+    answer = build_deterministic_coach_answer("Review", "daily_briefing", context)
+    assert "+40.00 EUR" in answer
+    assert "+40.00 USD" not in answer
+
+
+def test_atlas_does_not_add_payouts_across_currencies():
+    context, _ = build_atlas_context({}, [], [], [
+        {"amount": 100, "currency": "EUR"}, {"amount": 200, "currency": "USD"},
+    ])
+    assert context["payouts"]["total_amount"] is None
+    assert context["payouts"]["amount_by_currency"] == {"EUR": 100, "USD": 200}

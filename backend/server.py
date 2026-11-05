@@ -23,12 +23,17 @@ import requests
 from atlas import build_atlas_context, build_atlas_prompt, build_coaching_briefing, build_deterministic_coach_answer, build_pretrade_readiness, measured_trade_pnl
 from atlas_quota import reserve_analysis
 from atlas_provider import AtlasProviderConfig, AtlasProviderFailure, generate_atlas_answer
+from financial_reporting import account_scores, build_financial_dashboard, native_trade_currency
 from admin import build_admin_router
 from admin.client import AdminConfigurationError, AdminDataError, SupabaseAdminClient
 from admin.security import normalize_role
 from admin.service import AdminService
 from backtest.routes import build_backtest_router, ensure_backtest_indexes
 from backtest.body_limit import BacktestBodyLimit
+from account_deletion import AccountDeletionRetryWorker, AccountDeletionService, DeletionGateway, build_account_deletion_router
+from account_export import build_account_export_router
+from http_policy import build_cors_origins
+from release_preflight import check_runtime
 
 from email_service import (
     EmailConfigurationError,
@@ -36,6 +41,7 @@ from email_service import (
     brand_email_html,
     confirmation_email,
     decode_email_token,
+    issue_email_token,
     newsletter_links,
     send_email,
     support_notification_email,
@@ -101,6 +107,11 @@ admin_service = AdminService(
     db,
     SupabaseAdminClient(SUPABASE_URL, SUPABASE_SECRET_KEY, SUPABASE_PUBLISHABLE_KEY),
     os.environ.get("FRONTEND_URL", "https://pipsevo.vercel.app"),
+)
+account_deletion_service = AccountDeletionService(db, DeletionGateway(SUPABASE_URL, SUPABASE_SECRET_KEY))
+account_deletion_worker = AccountDeletionRetryWorker(
+    account_deletion_service,
+    int(os.environ.get("ACCOUNT_DELETION_RETRY_SECONDS", "600")),
 )
 economic_calendar_cache: Dict[str, Any] = {"events": [], "fetched_at": None, "expires_at": None}
 economic_calendar_lock = asyncio.Lock()
@@ -278,6 +289,8 @@ async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depen
         if auth_response.status_code != 200:
             raise HTTPException(status_code=401, detail="Invalid token")
         auth_user = auth_response.json()
+        if auth_user.get("deleted_at"):
+            raise HTTPException(status_code=401, detail="Account removed")
         profile_response = await asyncio.to_thread(
             requests.get,
             f"{SUPABASE_URL}/rest/v1/profiles",
@@ -295,6 +308,8 @@ async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depen
 
     if not profiles:
         raise HTTPException(status_code=401, detail="User profile not found")
+    if not isinstance(profiles, list) or len(profiles) != 1 or not isinstance(profiles[0], dict) or profiles[0].get("id") != auth_user["id"]:
+        raise HTTPException(status_code=503, detail="Unable to verify user profile ownership")
     result = {
         **profiles[0],
         "id": auth_user["id"],
@@ -314,17 +329,90 @@ async def supabase_select(table: str, token: str, params: Dict[str, str]):
         "Authorization": f"Bearer {token}",
         "Accept": "application/json",
     }
-    response = await asyncio.to_thread(
-        requests.get,
-        f"{SUPABASE_URL}/rest/v1/{table}",
-        headers=headers,
-        params=params,
-        timeout=15,
-    )
+    try:
+        response = await asyncio.to_thread(
+            requests.get,
+            f"{SUPABASE_URL}/rest/v1/{table}",
+            headers=headers,
+            params=params,
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(503, "Le stockage canonique est temporairement indisponible.") from exc
     if response.status_code >= 400:
-        logging.error("Supabase read failed for %s: %s", table, response.text[:300])
+        logging.error("Supabase read failed for %s status=%s", table, response.status_code)
         raise HTTPException(502, "Unable to read trading data")
-    return response.json()
+    try:
+        rows = response.json()
+    except ValueError as exc:
+        raise HTTPException(502, "Le stockage canonique a renvoyé une réponse invalide.") from exc
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        raise HTTPException(502, "Le stockage canonique a renvoyé une réponse invalide.")
+    return rows
+
+
+def canonical_financial_token(user: Dict[str, Any]) -> str:
+    token = user.get("_supabase_token")
+    if not token or not SUPABASE_URL or not SUPABASE_PUBLISHABLE_KEY:
+        raise HTTPException(503, "Le stockage financier canonique n’est pas disponible. Aucune donnée de secours n’est utilisée.")
+    return token
+
+
+async def canonical_financial_rows(user: Dict[str, Any], table: str, filters: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
+    """Read the complete owned history, including deployments with a smaller row cap."""
+    orders = {"accounts": "created_at.desc,id.desc", "trades": "date.desc,id.desc", "payouts": "date.desc,id.desc", "integration_accounts": "created_at.desc,id.desc"}
+    if table not in orders:
+        raise ValueError("Unsupported financial table")
+    token = canonical_financial_token(user)
+    result = []
+    seen_ids = set()
+    offset = 0
+    for _ in range(200):
+        rows = await supabase_select(table, token, {
+            **(filters or {}), "user_id": f"eq.{user['id']}", "select": "*",
+            "order": orders[table], "limit": "1000", "offset": str(offset),
+        })
+        if not rows:
+            return result
+        if any(row.get("user_id") != user["id"] or not row.get("id") for row in rows):
+            raise HTTPException(502, "L’appartenance des données financières n’a pas pu être vérifiée.")
+        if any(row["id"] in seen_ids for row in rows) or len({row["id"] for row in rows}) != len(rows):
+            raise HTTPException(503, "L’historique financier a changé pendant la lecture. Réessaie.")
+        seen_ids.update(row["id"] for row in rows)
+        result.extend(rows)
+        offset += len(rows)
+    raise HTTPException(413, "L’historique financier dépasse la limite de lecture sécurisée. Aucun résumé partiel n’est publié.")
+
+
+async def canonical_financial_accounts(user: Dict[str, Any]) -> List[Dict[str, Any]]:
+    accounts, provider_accounts = await asyncio.gather(
+        canonical_financial_rows(user, "accounts"), canonical_financial_rows(user, "integration_accounts"),
+    )
+    currencies: Dict[str, set] = {}
+    for row in provider_accounts:
+        account_id = row.get("account_id")
+        if account_id:
+            currencies.setdefault(account_id, set())
+            currency = str(row.get("currency") or "").strip().upper()
+            if currency:
+                currencies[account_id].add(currency)
+    for account in accounts:
+        linked = currencies.get(account["id"])
+        if linked is not None:
+            account["currency"] = next(iter(linked)) if len(linked) == 1 else None
+            account["currency_available"] = len(linked) == 1
+            account["integration_account_id"] = next((row["id"] for row in provider_accounts if row.get("account_id") == account["id"]), None)
+        else:
+            native = str(account.get("provider_currency") or account.get("currency") or "").strip().upper()
+            available = account.get("currency_available") is not False and bool(native or not (account.get("source_provider") or account.get("integration_account_id")))
+            account["currency"] = native or ("USD" if available else None)
+            account["currency_available"] = available
+        account["health_score"], account["survival_score"] = account_scores(account)
+    return accounts
+
+
+def legacy_financial_mutation_disabled():
+    raise HTTPException(410, "Cette ancienne voie d’écriture financière est désactivée. Utilise les formulaires PipsEvo et leurs mutations Supabase protégées par RLS.")
 
 
 async def supabase_insert(table: str, token: str, payload: Dict[str, Any]):
@@ -342,10 +430,42 @@ async def supabase_insert(table: str, token: str, payload: Dict[str, Any]):
         timeout=15,
     )
     if response.status_code >= 400:
-        logging.error("Supabase insert failed for %s: %s", table, response.text[:300])
+        logging.error("Supabase insert failed for %s: HTTP %s", table, response.status_code)
         raise HTTPException(502, "Unable to persist AI report")
     rows = response.json()
     return rows[0] if rows else payload
+
+
+async def supabase_update_profile(user: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+    """Write user-editable fields through the same RLS authority as auth."""
+    try:
+        response = await asyncio.to_thread(
+            requests.patch,
+            f"{SUPABASE_URL}/rest/v1/profiles",
+            headers={
+                "apikey": SUPABASE_PUBLISHABLE_KEY,
+                "Authorization": f"Bearer {user['_supabase_token']}",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            params={"id": f"eq.{user['id']}"},
+            json=updates,
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(503, "Le service de profil est temporairement indisponible.") from exc
+    if response.status_code >= 400:
+        logging.error("Supabase profile update rejected status=%s", response.status_code)
+        raise HTTPException(502, "Le profil n’a pas pu être enregistré.")
+    try:
+        rows = response.json()
+    except ValueError as exc:
+        raise HTTPException(502, "Le service de profil a renvoyé une réponse invalide.") from exc
+    if isinstance(rows, list) and not rows:
+        raise HTTPException(404, "Profil introuvable.")
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict) or rows[0].get("id") != user["id"]:
+        raise HTTPException(502, "Le service de profil a renvoyé une réponse invalide.")
+    return rows[0]
 
 
 # ============= MODELS =============
@@ -366,11 +486,18 @@ class ProfileIn(BaseModel):
     rules: Optional[Dict[str, Any]] = None
     journal_preferences: Optional[Dict[str, Any]] = None
 
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Le nom ne peut pas être vide")
+        return value.strip()
+
 
 class OnboardingIn(BaseModel):
-    trader_type: str  # futures | cfd | both
-    prop_firms: List[str]
-    num_accounts: int
+    trader_type: Literal["futures", "cfd", "both"]
+    prop_firms: List[str] = Field(max_length=100)
+    num_accounts: int = Field(ge=0, le=1000)
     rules: Dict[str, Any]
     journal_preferences: Dict[str, Any] = Field(default_factory=dict)
 
@@ -509,11 +636,11 @@ class PreTradeReadinessIn(BaseModel):
     session: Optional[str] = Field(default=None, max_length=120)
     emotion: Optional[str] = Field(default=None, max_length=120)
     emotion_intensity: Optional[Literal["low", "medium", "high"]] = None
-    planned_risk_percent: Optional[float] = Field(default=None, ge=0, le=100)
-    planned_risk_amount: Optional[float] = Field(default=None, ge=0)
-    entry: Optional[float] = None
-    stop: Optional[float] = None
-    take_profit: Optional[float] = None
+    planned_risk_percent: Optional[float] = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    planned_risk_amount: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    entry: Optional[float] = Field(default=None, allow_inf_nan=False)
+    stop: Optional[float] = Field(default=None, allow_inf_nan=False)
+    take_profit: Optional[float] = Field(default=None, allow_inf_nan=False)
     checklist_results: List[Dict[str, Any]] = Field(default_factory=list, max_length=50)
 
     @field_validator("local_date")
@@ -537,10 +664,13 @@ class ContactIn(BaseModel):
 
     @field_validator("name", "subject", "message")
     @classmethod
-    def clean_text(cls, value: str) -> str:
+    def clean_text(cls, value: str, info) -> str:
         cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("Ce champ ne peut pas être vide")
+        minimum = {"name": 2, "subject": 3, "message": 10}[info.field_name]
+        if len(cleaned) < minimum:
+            raise ValueError("Ce champ est trop court après suppression des espaces")
+        if info.field_name in {"name", "subject"} and any(char in cleaned for char in "\r\n\x00"):
+            raise ValueError("Ce champ doit tenir sur une seule ligne")
         return cleaned
 
 
@@ -668,25 +798,12 @@ async def contact(body: ContactIn, request: Request):
     email = str(body.email).strip().lower()
     ip_hash = _contact_ip_hash(request)
     now = datetime.now(timezone.utc)
-    window_minutes = max(
-        1,
-        min(
-            int(
-                os.environ.get("SUPPORT_RATE_LIMIT_WINDOW_MINUTES")
-                or os.environ.get("CONTACT_RATE_LIMIT_WINDOW_MINUTES", "15")
-            ),
-            1440,
-        ),
+    window_minutes = _bounded_env_int(
+        "SUPPORT_RATE_LIMIT_WINDOW_MINUTES",
+        _bounded_env_int("CONTACT_RATE_LIMIT_WINDOW_MINUTES", 15, 1, 1440), 1, 1440,
     )
-    max_requests = max(
-        1,
-        min(
-            int(
-                os.environ.get("SUPPORT_RATE_LIMIT_MAX")
-                or os.environ.get("CONTACT_RATE_LIMIT_MAX", "3")
-            ),
-            20,
-        ),
+    max_requests = _bounded_env_int(
+        "SUPPORT_RATE_LIMIT_MAX", _bounded_env_int("CONTACT_RATE_LIMIT_MAX", 3, 1, 20), 1, 20,
     )
     recent = await db.contact_messages.count_documents({
         "created_at": {"$gte": now - timedelta(minutes=window_minutes)},
@@ -694,6 +811,13 @@ async def contact(body: ContactIn, request: Request):
     })
     if recent >= max_requests:
         raise HTTPException(429, "Trop de demandes ont été envoyées. Réessaie dans quelques minutes.")
+    # The historical message count is useful for continuity; atomic buckets
+    # also cover requests racing before their contact document is inserted.
+    for scope, identity in (("support-ip", ip_hash), ("support-email", email)):
+        await _enforce_public_rate_limit(
+            scope=scope, identity=identity, max_requests=max_requests,
+            window_seconds=window_minutes * 60,
+        )
 
     request_id = f"PE-{now:%Y%m%d}-{uuid.uuid4().hex[:8].upper()}"
     doc = body.model_dump(exclude={"website"})
@@ -855,11 +979,18 @@ async def newsletter_subscribe(body: NewsletterSubscribeIn, request: Request):
     existing = await db.newsletter_subscribers.find_one({"email": email})
     now = datetime.now(timezone.utc)
     last_sent = existing.get("confirmation_sent_at") if existing else None
+    if isinstance(last_sent, datetime) and last_sent.tzinfo is None:
+        last_sent = last_sent.replace(tzinfo=timezone.utc)
     if existing and existing.get("status") == "active":
         return {"ok": True, "status": "confirmation_required"}
     if isinstance(last_sent, datetime) and now - last_sent < timedelta(seconds=60):
         return {"ok": True, "status": "confirmation_required"}
 
+    try:
+        confirmation_token = issue_email_token(email, "newsletter-confirm", timedelta(hours=24))
+    except EmailConfigurationError as exc:
+        raise HTTPException(503, "L’envoi est temporairement indisponible. Réessaie plus tard.") from exc
+    confirmation_token_hash = hashlib.sha256(confirmation_token.encode()).hexdigest()
     await db.newsletter_subscribers.update_one(
         {"email": email},
         {
@@ -870,13 +1001,14 @@ async def newsletter_subscribe(body: NewsletterSubscribeIn, request: Request):
                 "updated_at": now,
                 "product_updates": True,
                 "trading_education": True,
+                "confirmation_token_hash": confirmation_token_hash,
             },
             "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now},
         },
         upsert=True,
     )
 
-    message = confirmation_email(email, body.locale)
+    message = confirmation_email(email, body.locale, token=confirmation_token)
     try:
         message_id = await asyncio.to_thread(
             send_email,
@@ -908,9 +1040,16 @@ async def newsletter_confirm(body: NewsletterTokenIn):
     except pyjwt.PyJWTError:
         raise HTTPException(400, "Ce lien de confirmation est invalide ou a expiré.")
 
+    token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+    subscriber = await db.newsletter_subscribers.find_one({"email": email}) or {}
+    if subscriber.get("status") == "active" and subscriber.get("confirmed_token_hash") == token_hash:
+        return {"ok": True, "status": "active"}
+    # A previously confirmed or replaced link must never undo an unsubscribe.
+    if subscriber.get("status") != "pending" or subscriber.get("confirmation_token_hash") != token_hash:
+        raise HTTPException(400, "Ce lien n’est plus actif. Demande une nouvelle confirmation.")
     now = datetime.now(timezone.utc)
     result = await db.newsletter_subscribers.update_one(
-        {"email": email},
+        {"email": email, "status": "pending", "confirmation_token_hash": token_hash},
         {
             "$set": {
                 "status": "active",
@@ -918,6 +1057,7 @@ async def newsletter_confirm(body: NewsletterTokenIn):
                 "updated_at": now,
                 "product_updates": True,
                 "trading_education": True,
+                "confirmed_token_hash": token_hash,
             }
         },
     )
@@ -1057,20 +1197,23 @@ async def send_newsletter_campaign(
     existing_campaign = await db.newsletter_campaigns.find_one({"campaign_key": body.campaign_key})
     if existing_campaign and existing_campaign.get("content_hash") != content_hash:
         raise HTTPException(409, "This campaign key already exists with different content")
-    await db.newsletter_campaigns.update_one(
-        {"campaign_key": body.campaign_key},
-        {
-            "$setOnInsert": {
-                "id": str(uuid.uuid4()),
-                "campaign_key": body.campaign_key,
-                "content_hash": content_hash,
-                "content": content_payload,
-                "created_at": now,
+    try:
+        await db.newsletter_campaigns.update_one(
+            {"campaign_key": body.campaign_key, "content_hash": content_hash},
+            {
+                "$setOnInsert": {
+                    "id": str(uuid.uuid4()),
+                    "campaign_key": body.campaign_key,
+                    "content_hash": content_hash,
+                    "content": content_payload,
+                    "created_at": now,
+                },
+                "$set": {"last_run_at": now},
             },
-            "$set": {"last_run_at": now},
-        },
-        upsert=True,
-    )
+            upsert=True,
+        )
+    except DuplicateKeyError as exc:
+        raise HTTPException(409, "This campaign key already exists with different content") from exc
 
     subscriber_filter: Dict[str, Any] = {"status": "active"}
     if body.audience == "all":
@@ -1093,6 +1236,12 @@ async def send_newsletter_campaign(
     failed_count = 0
     for recipient in recipients:
         email = recipient["email"]
+        # Consent may have changed while another recipient was processed.
+        if not await db.newsletter_subscribers.find_one({**subscriber_filter, "email": email}):
+            continue
+        delivery_query = await _claim_newsletter_delivery(body.campaign_key, email)
+        if delivery_query is None:
+            continue
         locale = "en" if recipient.get("locale") == "en" else "fr"
         campaign_copy = {
             "subject": body.subject_en if locale == "en" else body.subject,
@@ -1102,7 +1251,13 @@ async def send_newsletter_campaign(
             "body": body.body_en if locale == "en" else body.body,
             "cta_label": body.cta_label_en if locale == "en" else body.cta_label,
         }
-        links = newsletter_links(email)
+        try:
+            links = newsletter_links(email)
+        except EmailConfigurationError as exc:
+            await db.newsletter_deliveries.update_one(delivery_query, {"$set": {
+                "status": "failed", "last_error": "provider_not_configured", "updated_at": datetime.now(timezone.utc),
+            }})
+            raise HTTPException(503, "Newsletter campaign delivery is not configured") from exc
         rendered_html = brand_email_html(
             preheader=campaign_copy["preheader"],
             title=campaign_copy["title"],
@@ -1131,25 +1286,19 @@ async def send_newsletter_campaign(
             )
             sent_count += 1
             await db.newsletter_deliveries.update_one(
-                {"campaign_key": body.campaign_key, "email": email},
+                delivery_query,
                 {
-                    "$set": {"status": "sent", "message_id": message_id, "sent_at": datetime.now(timezone.utc)},
-                    "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now},
-                    "$inc": {"attempts": 1},
+                    "$set": {"status": "sent", "message_id": message_id, "sent_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)},
                 },
-                upsert=True,
             )
         except (EmailConfigurationError, EmailDeliveryError):
             failed_count += 1
             logging.exception("Newsletter campaign delivery failed")
             await db.newsletter_deliveries.update_one(
-                {"campaign_key": body.campaign_key, "email": email},
+                delivery_query,
                 {
-                    "$set": {"status": "failed", "failed_at": datetime.now(timezone.utc)},
-                    "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now},
-                    "$inc": {"attempts": 1},
+                    "$set": {"status": "failed", "failed_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)},
                 },
-                upsert=True,
             )
 
     remaining = await db.newsletter_subscribers.count_documents(subscriber_filter)
@@ -1166,6 +1315,37 @@ async def send_newsletter_campaign(
     }
 
 
+async def _claim_newsletter_delivery(campaign_key: str, email: str) -> Optional[Dict[str, Any]]:
+    """Reserve one recipient across workers; only interrupted leases retry."""
+    now = datetime.now(timezone.utc)
+    delivery_id = _email_delivery_id("campaign-ledger", f"{campaign_key}:{email}")
+    claim_token = str(uuid.uuid4())
+    existing = await db.newsletter_deliveries.find_one({"campaign_key": campaign_key, "email": email})
+    if not existing:
+        try:
+            await db.newsletter_deliveries.insert_one({
+                "_id": delivery_id, "id": delivery_id, "campaign_key": campaign_key, "email": email,
+                "status": "sending", "claim_token": claim_token, "attempts": 1,
+                "created_at": now, "updated_at": now,
+            })
+            return {"_id": delivery_id, "claim_token": claim_token}
+        except DuplicateKeyError:
+            existing = await db.newsletter_deliveries.find_one({"campaign_key": campaign_key, "email": email})
+    if not existing:
+        return None
+    # Historical delivery rows used Mongo-generated ids, keep them retryable.
+    delivery_id = existing["_id"]
+    result = await db.newsletter_deliveries.update_one({
+        "_id": delivery_id,
+        "$or": [
+            {"status": {"$nin": ["sent", "sending"]}},
+            {"status": "sending", "updated_at": {"$lte": now - timedelta(minutes=5)}},
+            {"status": "sending", "updated_at": {"$exists": False}},
+        ],
+    }, {"$set": {"status": "sending", "claim_token": claim_token, "updated_at": now}, "$inc": {"attempts": 1}})
+    return {"_id": delivery_id, "claim_token": claim_token} if result.modified_count else None
+
+
 @api.post("/auth/register")
 async def register(body: RegisterIn):
     raise HTTPException(410, "L’authentification historique est désactivée. Utilise la connexion Supabase de PipsEvo.")
@@ -1178,7 +1358,7 @@ async def login(body: LoginIn, request: Request):
 
 @api.get("/auth/me")
 async def me(user=Depends(get_current_user)):
-    return user
+    return {key: value for key, value in user.items() if not key.startswith("_") and key != "password_hash"}
 
 
 @api.patch("/auth/me")
@@ -1188,19 +1368,23 @@ async def update_profile(body: ProfileIn, user=Depends(get_current_user)):
         updates["rules"] = body.rules
     if body.journal_preferences is not None:
         updates["journal_preferences"] = body.journal_preferences
+    if user.get("_supabase_token"):
+        return await supabase_update_profile(user, updates)
     await db.users.update_one({"id": user["id"]}, {"$set": updates})
     return await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
 
 
 @api.post("/auth/google")
 async def google_mock():
-    # Google OAuth via Emergent - to be wired in next iteration. Mocked path creates a demo user.
-    raise HTTPException(501, "Google login is queued for next release")
+    raise HTTPException(410, "Utilise la connexion Google Supabase de PipsEvo.")
 
 
 # ============= ONBOARDING =============
 @api.post("/onboarding")
 async def save_onboarding(body: OnboardingIn, user=Depends(get_current_user)):
+    if user.get("_supabase_token"):
+        await supabase_update_profile(user, {**body.model_dump(), "onboarded": True, "onboarding_completed": True})
+        return {"ok": True}
     await db.users.update_one(
         {"id": user["id"]},
         {"$set": {
@@ -1218,255 +1402,89 @@ async def save_onboarding(body: OnboardingIn, user=Depends(get_current_user)):
 # ============= PROP ACCOUNTS =============
 @api.get("/accounts")
 async def list_accounts(user=Depends(get_current_user)):
-    docs = await db.accounts.find({"user_id": user["id"]}, {"_id": 0}).to_list(500)
-    # Enrich with computed scores
-    for d in docs:
-        d["health_score"] = compute_health(d)
-        d["survival_score"] = compute_survival(d)
-    return docs
+    return await canonical_financial_accounts(user)
 
 
 @api.post("/accounts")
 async def create_account(body: PropAccountIn, user=Depends(get_current_user)):
-    acc = body.model_dump()
-    acc["id"] = str(uuid.uuid4())
-    acc["user_id"] = user["id"]
-    acc["created_at"] = now_utc()
-    acc["current_drawdown"] = 0
-    await db.accounts.insert_one(acc)
-    acc.pop("_id", None)
-    acc["health_score"] = compute_health(acc)
-    acc["survival_score"] = compute_survival(acc)
-    return acc
+    legacy_financial_mutation_disabled()
 
 
 @api.delete("/accounts/{aid}")
 async def delete_account(aid: str, user=Depends(get_current_user)):
-    result = await db.accounts.delete_one({"id": aid, "user_id": user["id"]})
-    if not result.deleted_count:
-        raise HTTPException(404, "Account not found")
-    await db.trades.delete_many({"account_id": aid, "user_id": user["id"]})
-    await db.payouts.delete_many({"account_id": aid, "user_id": user["id"]})
-    return {"ok": True}
+    legacy_financial_mutation_disabled()
 
 
 @api.patch("/accounts/{aid}")
 async def update_account(aid: str, body: PropAccountUpdate, user=Depends(get_current_user)):
-    account = await db.accounts.find_one({"id": aid, "user_id": user["id"]})
-    if not account:
-        raise HTTPException(404, "Account not found")
-    updates = body.model_dump(exclude_none=True)
-    if not updates:
-        raise HTTPException(400, "No changes supplied")
-    await db.accounts.update_one({"id": aid, "user_id": user["id"]}, {"$set": updates})
-    updated = await db.accounts.find_one({"id": aid, "user_id": user["id"]}, {"_id": 0})
-    updated["health_score"] = compute_health(updated)
-    updated["survival_score"] = compute_survival(updated)
-    return updated
+    legacy_financial_mutation_disabled()
 
 
-def compute_health(acc: Dict[str, Any]) -> int:
-    ib = max(acc.get("initial_balance", 1), 1)
-    bal = acc.get("balance", ib)
-    profit_pct = (bal - ib) / ib
-    dd_pct = max(0, (ib - bal) / max(acc.get("max_drawdown", 1), 1))
-    score = 70 + profit_pct * 100 - dd_pct * 60
-    return max(0, min(100, int(score)))
+def compute_health(acc: Dict[str, Any]) -> Optional[int]:
+    return account_scores(acc)[0]
 
 
-def compute_survival(acc: Dict[str, Any]) -> int:
-    ib = max(acc.get("initial_balance", 1), 1)
-    bal = acc.get("balance", ib)
-    md = max(acc.get("max_drawdown", 1), 1)
-    dd_used = max(0, ib - bal) / md
-    return max(5, min(99, int(95 - dd_used * 90)))
+def compute_survival(acc: Dict[str, Any]) -> Optional[int]:
+    return account_scores(acc)[1]
 
 
 # ============= TRADES =============
 @api.get("/trades")
 async def list_trades(account_id: Optional[str] = None, user=Depends(get_current_user)):
-    q = {"user_id": user["id"]}
+    filters = {}
     if account_id:
-        q["account_id"] = account_id
-    docs = await db.trades.find(q, {"_id": 0}).sort("date", -1).to_list(2000)
-    return docs
+        try:
+            account_id = str(uuid.UUID(account_id))
+        except ValueError as exc:
+            raise HTTPException(422, "Identifiant de compte invalide.") from exc
+        filters["account_id"] = f"eq.{account_id}"
+    return await canonical_financial_rows(user, "trades", filters)
 
 
 @api.post("/trades")
 async def create_trade(body: TradeIn, user=Depends(get_current_user)):
-    account = await db.accounts.find_one({"id": body.account_id, "user_id": user["id"]})
-    if not account:
-        raise HTTPException(404, "Account not found")
-    t = body.model_dump()
-    t["id"] = str(uuid.uuid4())
-    t["user_id"] = user["id"]
-    t["created_at"] = now_utc()
-    await db.trades.insert_one(t)
-    # Update account balance
-    if body.pnl is not None:
-        await db.accounts.update_one(
-            {"id": body.account_id, "user_id": user["id"]},
-            {"$inc": {"balance": body.pnl}},
-        )
-    t.pop("_id", None)
-    return t
+    legacy_financial_mutation_disabled()
 
 
 @api.delete("/trades/{tid}")
 async def delete_trade(tid: str, user=Depends(get_current_user)):
-    trade = await db.trades.find_one({"id": tid, "user_id": user["id"]})
-    if trade:
-        await db.accounts.update_one(
-            {"id": trade["account_id"], "user_id": user["id"]},
-            {"$inc": {"balance": -float(trade.get("pnl") or 0)}},
-        )
-        await db.trades.delete_one({"id": tid, "user_id": user["id"]})
-    return {"ok": True}
+    legacy_financial_mutation_disabled()
 
 
 @api.patch("/trades/{tid}")
 async def update_trade(tid: str, body: TradeUpdate, user=Depends(get_current_user)):
-    trade = await db.trades.find_one({"id": tid, "user_id": user["id"]})
-    if not trade:
-        raise HTTPException(404, "Trade not found")
-    updates = body.model_dump(exclude_unset=True)
-    if not updates:
-        raise HTTPException(400, "No changes supplied")
-    new_account_id = updates.get("account_id", trade["account_id"])
-    if new_account_id != trade["account_id"]:
-        target = await db.accounts.find_one({"id": new_account_id, "user_id": user["id"]})
-        if not target:
-            raise HTTPException(404, "Target account not found")
-    old_pnl = float(trade.get("pnl") or 0)
-    new_pnl = float(updates.get("pnl") or 0) if "pnl" in updates else old_pnl
-    if new_account_id == trade["account_id"]:
-        delta = new_pnl - old_pnl
-        if delta:
-            await db.accounts.update_one({"id": trade["account_id"], "user_id": user["id"]}, {"$inc": {"balance": delta}})
-    else:
-        await db.accounts.update_one({"id": trade["account_id"], "user_id": user["id"]}, {"$inc": {"balance": -old_pnl}})
-        await db.accounts.update_one({"id": new_account_id, "user_id": user["id"]}, {"$inc": {"balance": new_pnl}})
-    await db.trades.update_one({"id": tid, "user_id": user["id"]}, {"$set": updates})
-    return await db.trades.find_one({"id": tid, "user_id": user["id"]}, {"_id": 0})
+    legacy_financial_mutation_disabled()
 
 
 # ============= ANALYTICS / DASHBOARD =============
 @api.get("/dashboard")
 async def dashboard(user=Depends(get_current_user)):
-    accounts = await db.accounts.find({"user_id": user["id"]}, {"_id": 0}).to_list(500)
-    trades = await db.trades.find({"user_id": user["id"]}, {"_id": 0}).to_list(5000)
-    payouts = await db.payouts.find({"user_id": user["id"]}, {"_id": 0}).to_list(500)
+    accounts, trades, payouts = await asyncio.gather(
+        canonical_financial_accounts(user), canonical_financial_rows(user, "trades"), canonical_financial_rows(user, "payouts"),
+    )
+    return build_financial_dashboard(accounts, trades, payouts)
 
-    total_funded = sum(a.get("initial_balance", 0) for a in accounts)
-    total_balance = sum(a.get("balance", 0) for a in accounts)
-    total_profit = total_balance - total_funded
-    remaining_dd = sum(max(0, a.get("max_drawdown", 0) - max(0, a.get("initial_balance", 0) - a.get("balance", 0))) for a in accounts)
-    total_payouts = sum(p.get("amount", 0) for p in payouts)
-    estimated_payout = max(0, total_profit * 0.8)
 
-    wins = [t for t in trades if (t.get("pnl") or 0) > 0]
-    losses = [t for t in trades if (t.get("pnl") or 0) < 0]
-    winrate = (len(wins) / len(trades) * 100) if trades else 0
-    avg_win = (sum(t["pnl"] for t in wins) / len(wins)) if wins else 0
-    avg_loss = (sum(t["pnl"] for t in losses) / len(losses)) if losses else 0
-    profit_factor = (sum(t["pnl"] for t in wins) / abs(sum(t["pnl"] for t in losses))) if losses and sum(t["pnl"] for t in losses) < 0 else 0
-
-    plan_respect = (sum(1 for t in trades if t.get("plan_respected")) / len(trades) * 100) if trades else 100
-    discipline_score = int(plan_respect * 0.6 + (winrate * 0.2) + 20)
-    discipline_score = max(0, min(100, discipline_score))
-
-    survival_avg = int(sum(compute_survival(a) for a in accounts) / len(accounts)) if accounts else 100
-    trader_score = int((discipline_score + survival_avg + min(100, max(0, winrate))) / 3)
-
-    # Equity curve (running pnl by date)
-    sorted_trades = sorted(trades, key=lambda t: t.get("date", ""))
-    equity = []
-    running = 0
-    for t in sorted_trades:
-        running += t.get("pnl") or 0
-        equity.append({"date": t.get("date"), "equity": round(running, 2)})
-
-    # By setup
-    setups: Dict[str, Dict[str, Any]] = {}
-    for t in trades:
-        s = t.get("setup") or "Unspecified"
-        setups.setdefault(s, {"trades": 0, "pnl": 0, "wins": 0})
-        setups[s]["trades"] += 1
-        setups[s]["pnl"] += t.get("pnl") or 0
-        if (t.get("pnl") or 0) > 0:
-            setups[s]["wins"] += 1
-    for s in setups.values():
-        s["winrate"] = round(s["wins"] / max(s["trades"], 1) * 100, 1)
-    best_setup = max(setups.items(), key=lambda x: x[1]["pnl"])[0] if setups else None
-    worst_setup = min(setups.items(), key=lambda x: x[1]["pnl"])[0] if setups else None
-
-    # Session breakdown
-    sessions: Dict[str, Dict[str, Any]] = {}
-    for t in trades:
-        s = t.get("session") or "Unspecified"
-        sessions.setdefault(s, {"trades": 0, "pnl": 0, "wins": 0})
-        sessions[s]["trades"] += 1
-        sessions[s]["pnl"] += t.get("pnl") or 0
-        if (t.get("pnl") or 0) > 0:
-            sessions[s]["wins"] += 1
-    for s in sessions.values():
-        s["winrate"] = round(s["wins"] / max(s["trades"], 1) * 100, 1)
-
-    return {
-        "kpis": {
-            "funded_capital": round(total_funded, 2),
-            "total_profit": round(total_profit, 2),
-            "remaining_drawdown": round(remaining_dd, 2),
-            "estimated_payout": round(estimated_payout, 2),
-            "discipline_score": discipline_score,
-            "trader_score": trader_score,
-            "survival_score": survival_avg,
-            "total_payouts": round(total_payouts, 2),
-            "active_accounts": len(accounts),
-            "total_trades": len(trades),
-        },
-        "equity_curve": equity[-180:],
-        "metrics": {
-            "winrate": round(winrate, 1),
-            "profit_factor": round(profit_factor, 2),
-            "avg_win": round(avg_win, 2),
-            "avg_loss": round(avg_loss, 2),
-            "plan_respect_rate": round(plan_respect, 1),
-        },
-        "setups": setups,
-        "sessions": sessions,
-        "best_setup": best_setup,
-        "worst_setup": worst_setup,
-    }
+@api.get("/stats")
+async def financial_stats(user=Depends(get_current_user)):
+    # Share the same complete snapshot and rules as /dashboard.
+    return await dashboard(user)
 
 
 # ============= PAYOUTS =============
 @api.get("/payouts")
 async def list_payouts(user=Depends(get_current_user)):
-    docs = await db.payouts.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(500)
-    return docs
+    return await canonical_financial_rows(user, "payouts")
 
 
 @api.post("/payouts")
 async def create_payout(body: PayoutIn, user=Depends(get_current_user)):
-    account = await db.accounts.find_one({"id": body.account_id, "user_id": user["id"]})
-    if not account:
-        raise HTTPException(404, "Account not found")
-    p = body.model_dump()
-    p["id"] = str(uuid.uuid4())
-    p["user_id"] = user["id"]
-    p["created_at"] = now_utc()
-    await db.payouts.insert_one(p)
-    p.pop("_id", None)
-    return p
+    legacy_financial_mutation_disabled()
 
 
 @api.delete("/payouts/{pid}")
 async def delete_payout(pid: str, user=Depends(get_current_user)):
-    result = await db.payouts.delete_one({"id": pid, "user_id": user["id"]})
-    if not result.deleted_count:
-        raise HTTPException(404, "Payout not found")
-    return {"ok": True}
+    legacy_financial_mutation_disabled()
 
 
 # ============= ATLAS AI COACH =============
@@ -1488,21 +1506,23 @@ COACH_SYSTEM = (
 
 
 async def load_atlas_data(user: dict, trade_limit: int = 500) -> tuple[list[dict], list[dict], list[dict]]:
-    """Load only data owned by the authenticated user for Atlas."""
-    if user.get("_supabase_token"):
-        token = user["_supabase_token"]
-        accounts, trades, payouts = await asyncio.gather(
-            supabase_select("accounts", token, {"user_id": f"eq.{user['id']}", "select": "*", "limit": "50"}),
-            supabase_select("trades", token, {"user_id": f"eq.{user['id']}", "select": "*", "order": "date.desc", "limit": str(trade_limit)}),
-            supabase_select("payouts", token, {"user_id": f"eq.{user['id']}", "select": "*", "order": "date.desc", "limit": "50"}),
-        )
-        return accounts, trades, payouts
+    """Use complete owned history and stored native units, never provider APIs.
+
+    The historical trade_limit argument is retained for callers, but no longer
+    silently truncates statistics. The outbound model prompt is bounded later.
+    """
     accounts, trades, payouts = await asyncio.gather(
-        db.accounts.find({"user_id": user["id"]}, {"_id": 0}).to_list(50),
-        db.trades.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(trade_limit),
-        db.payouts.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(50),
+        canonical_financial_accounts(user),
+        canonical_financial_rows(user, "trades"),
+        canonical_financial_rows(user, "payouts"),
     )
-    return accounts, trades, payouts
+    account_map = {row["id"]: row for row in accounts}
+    trades = [native_trade_currency(row, account_map.get(row.get("account_id"), {})) for row in trades]
+    native_payouts = []
+    for row in payouts:
+        native = native_trade_currency(row, account_map.get(row.get("account_id"), {}))
+        native_payouts.append({**row, "currency": native["provider_currency"], "currency_available": native["currency_available"]})
+    return accounts, trades, native_payouts
 
 
 @api.get("/coach/briefing")
@@ -1535,29 +1555,8 @@ async def coach_readiness(body: PreTradeReadinessIn, user=Depends(get_current_us
     if not await admin_service.feature_enabled("atlas_v2", user, True):
         raise HTTPException(403, "Atlas n’est pas activé pour ce compte.")
 
-    if user.get("_supabase_token"):
-        token = user["_supabase_token"]
-        account_rows, trades = await asyncio.gather(
-            supabase_select("accounts", token, {
-                "user_id": f"eq.{user['id']}",
-                "id": f"eq.{body.account_id}",
-                "select": "*",
-                "limit": "1",
-            }),
-            supabase_select("trades", token, {
-                "user_id": f"eq.{user['id']}",
-                "account_id": f"eq.{body.account_id}",
-                "select": "*",
-                "order": "date.desc",
-                "limit": "500",
-            }),
-        )
-        account = account_rows[0] if account_rows else None
-    else:
-        account, trades = await asyncio.gather(
-            db.accounts.find_one({"id": body.account_id, "user_id": user["id"]}, {"_id": 0}),
-            db.trades.find({"account_id": body.account_id, "user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(500),
-        )
+    accounts, trades, _payouts = await load_atlas_data(user)
+    account = next((row for row in accounts if row["id"] == body.account_id), None)
 
     if not account:
         raise HTTPException(404, "Compte introuvable.")
@@ -1587,12 +1586,11 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
     if user.get("_supabase_token"):
         token = user["_supabase_token"]
         since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-        accounts, trades, payouts, recent_reports = await asyncio.gather(
-            supabase_select("accounts", token, {"user_id": f"eq.{user['id']}", "select": "*", "limit": "50"}),
-            supabase_select("trades", token, {"user_id": f"eq.{user['id']}", "select": "*", "order": "date.desc", "limit": "100"}),
-            supabase_select("payouts", token, {"user_id": f"eq.{user['id']}", "select": "*", "order": "date.desc", "limit": "20"}),
+        financial_data, recent_reports = await asyncio.gather(
+            load_atlas_data(user),
             supabase_select("ai_reports", token, {"user_id": f"eq.{user['id']}", "select": "id,created_at", "created_at": f"gte.{since}", "limit": "11"}),
         )
+        accounts, trades, payouts = financial_data
         if len(recent_reports) >= 10:
             raise HTTPException(429, "Atlas daily beta limit reached (10 analyses / 24h)")
     else:
@@ -1618,7 +1616,18 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
     if body.trade_id:
         focus_trade = next((row for row in trades if str(row.get("id")) == body.trade_id), None)
         if not focus_trade:
+            # Journal reviews may target an owned trade older than the summary
+            # window. Fetch that record explicitly rather than returning a false 404.
+            if user.get("_supabase_token"):
+                rows = await supabase_select("trades", user["_supabase_token"], {
+                    "user_id": f"eq.{user['id']}", "id": f"eq.{body.trade_id}", "select": "*", "limit": "1",
+                })
+                focus_trade = rows[0] if rows else None
+            else:
+                focus_trade = await db.trades.find_one({"id": body.trade_id, "user_id": user["id"]}, {"_id": 0})
+        if not focus_trade:
             raise HTTPException(404, "Trade introuvable pour cette revue.")
+        focus_trade = native_trade_currency(focus_trade, next((row for row in accounts if row["id"] == focus_trade.get("account_id")), {}))
         focus_evidence = {
             "alias": "FOCUS",
             "trade_id": focus_trade.get("id"),
@@ -1626,6 +1635,7 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
             "instrument": focus_trade.get("instrument"),
             "direction": focus_trade.get("direction"),
             "pnl": measured_trade_pnl(focus_trade),
+            "currency": "UNKNOWN" if focus_trade.get("currency_available") is False else focus_trade.get("provider_currency") or focus_trade.get("currency") or "USD",
             "r": focus_trade.get("r"),
             "setup": focus_trade.get("setup"),
             "session": focus_trade.get("session"),
@@ -1713,6 +1723,10 @@ async def coach_ask(body: CoachQuery, user=Depends(get_current_user)):
 
 @api.get("/coach/history")
 async def coach_history(user=Depends(get_current_user)):
+    if user.get("_supabase_token"):
+        return await supabase_select("ai_reports", user["_supabase_token"], {
+            "user_id": f"eq.{user['id']}", "select": "*", "order": "created_at.desc", "limit": "50",
+        })
     docs = await db.ai_reports.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return docs
 
@@ -1720,27 +1734,24 @@ async def coach_history(user=Depends(get_current_user)):
 # ============= TRADING DNA =============
 @api.get("/dna")
 async def trading_dna(user=Depends(get_current_user)):
-    trades = await db.trades.find({"user_id": user["id"]}, {"_id": 0}).to_list(5000)
-    if not trades:
-        return {"trader_type": "Untested", "best_session": None, "best_setup": None, "best_conditions": "Insufficient data"}
-    by_session: Dict[str, float] = {}
-    by_setup: Dict[str, float] = {}
-    by_emotion: Dict[str, float] = {}
-    for t in trades:
-        by_session[t.get("session") or "?"] = by_session.get(t.get("session") or "?", 0) + (t.get("pnl") or 0)
-        by_setup[t.get("setup") or "?"] = by_setup.get(t.get("setup") or "?", 0) + (t.get("pnl") or 0)
-        by_emotion[t.get("emotion") or "?"] = by_emotion.get(t.get("emotion") or "?", 0) + (t.get("pnl") or 0)
-    best_session = max(by_session.items(), key=lambda x: x[1])[0] if by_session else None
-    best_setup = max(by_setup.items(), key=lambda x: x[1])[0] if by_setup else None
-    best_emotion = max(by_emotion.items(), key=lambda x: x[1])[0] if by_emotion else None
-    avg_pnl = sum((t.get("pnl") or 0) for t in trades) / len(trades)
-    trader_type = "Sniper" if len(trades) < 50 and avg_pnl > 0 else ("Volume Trader" if len(trades) >= 100 else "Developing")
+    accounts, trades, _payouts = await load_atlas_data(user)
+    context, _ = build_atlas_context(user, accounts, trades)
+    measured = context["data_quality"]["trades_with_pnl"]
+    def best_group(field):
+        groups = [row for row in context[field] if row["eligible_for_comparison"]]
+        return max(groups, key=lambda row: row["pnl"])["name"] if groups else None
+    avg_pnl = context["metrics"]["net_pnl"] / measured if measured and context["metrics"]["net_pnl"] is not None else None
+    trader_type = "Untested" if not measured else "Sniper" if measured < 50 and avg_pnl is not None and avg_pnl > 0 else "Volume Trader" if measured >= 100 else "Developing"
     return {
         "trader_type": trader_type,
-        "best_session": best_session,
-        "best_setup": best_setup,
-        "best_emotion": best_emotion,
+        "best_session": best_group("session_performance"),
+        "best_setup": best_group("setup_performance"),
+        "best_emotion": best_group("emotion_performance"),
+        "best_conditions": "Insufficient data" if not measured else None,
         "trades_logged": len(trades),
+        "measured_trades": measured,
+        "currencies": context["data_quality"]["currencies"],
+        "minimum_group_sample": context["data_quality"]["minimum_group_sample"],
     }
 
 
@@ -1829,26 +1840,31 @@ async def health():
     except Exception:
         logging.exception("Database health check failed")
         raise HTTPException(503, "Database unavailable")
-    return {"app": "PipsEvo", "api": "ok", "database": "ok"}
+    release = getattr(app.state, "release", None)
+    return {"app": "PipsEvo", "api": "ok", "database": "ok", **({"release": release} if release else {})}
 
 
 api.include_router(build_integration_router(get_current_user, integration_service))
 api.include_router(build_backtest_router(get_current_user, db, admin_service.feature_enabled))
+api.include_router(build_account_deletion_router(get_current_user, db, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY,
+                                               service=account_deletion_service))
+api.include_router(build_account_export_router(get_current_user, db))
 api.include_router(build_admin_router(get_current_user, admin_service, integration_service))
 app.include_router(api)
 app.add_middleware(BacktestBodyLimit)
 
-cors_origins = [
-    origin.strip()
-    for origin in os.environ.get("CORS_ORIGINS", "*").split(",")
-    if origin.strip()
-]
+cors_origins = build_cors_origins(
+    os.environ.get("CORS_ORIGINS", ""),
+    os.environ.get("FRONTEND_URL", ""),
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials="*" not in cors_origins,
+    # PipsEvo API authentication is an explicit bearer, never ambient cookies.
+    allow_credentials=False,
     allow_origins=cors_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept-Language", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -1860,13 +1876,21 @@ async def startup_db():
         provider_registry.has_legacy(integration_config.provider),
         bool(SUPABASE_SECRET_KEY),
     )
-    await db.command("ping")
+    release = await check_runtime(
+        db, os.environ,
+        private_gateway_configured=account_deletion_service.gateway.configured,
+        allowed_origins=cors_origins,
+    )
     await ensure_database_indexes()
     await ensure_backtest_indexes(db)
+    await db.account_deletion_jobs.create_index("expires_at", expireAfterSeconds=0)
     await admin_service.ensure_indexes()
+    account_deletion_worker.start()
+    app.state.release = release
     logging.info("MongoDB connection and indexes are ready")
 
 
 @app.on_event("shutdown")
 async def shutdown_db():
+    await account_deletion_worker.stop()
     client.close()

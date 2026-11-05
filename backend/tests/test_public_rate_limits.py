@@ -115,14 +115,56 @@ def test_auth_service_failure_never_falls_back_to_retained_records(monkeypatch):
     assert caught.value.status_code == 503
 
 
+def test_removed_supabase_user_is_rejected_before_profile_lookup(monkeypatch):
+    monkeypatch.setattr(server, "SUPABASE_URL", "https://auth.example")
+    monkeypatch.setattr(server, "SUPABASE_PUBLISHABLE_KEY", "public-test-key")
+    requests = []
+
+    def get(url, **_kwargs):
+        requests.append(url)
+        assert url.endswith("/auth/v1/user")
+        return types.SimpleNamespace(
+            status_code=200,
+            json=lambda: {"id": "removed-user", "deleted_at": "2026-10-11T08:00:00Z"},
+        )
+
+    monkeypatch.setattr(server.requests, "get", get)
+    creds = server.HTTPAuthorizationCredentials(scheme="Bearer", credentials="old-session")
+    with pytest.raises(HTTPException) as caught:
+        asyncio.run(server.get_current_user(creds))
+    assert caught.value.status_code == 401
+    assert requests == ["https://auth.example/auth/v1/user"]
+
+
+@pytest.mark.parametrize("profiles", [
+    [{"id": "other-user", "role": "super_admin", "status": "active"}],
+    [{"id": "canonical-user"}, {"id": "other-user"}],
+    {"id": "canonical-user"},
+    [{"role": "super_admin"}],
+])
+def test_auth_never_uses_a_foreign_or_malformed_profile(monkeypatch, profiles):
+    monkeypatch.setattr(server, "SUPABASE_URL", "https://auth.example")
+    monkeypatch.setattr(server, "SUPABASE_PUBLISHABLE_KEY", "public-test-key")
+
+    def get(url, **_kwargs):
+        payload = {"id": "canonical-user"} if url.endswith("/user") else profiles
+        return types.SimpleNamespace(status_code=200, json=lambda: payload, raise_for_status=lambda: None)
+
+    monkeypatch.setattr(server.requests, "get", get)
+    creds = server.HTTPAuthorizationCredentials(scheme="Bearer", credentials="user-token")
+    with pytest.raises(HTTPException) as caught:
+        asyncio.run(server.get_current_user(creds))
+    assert caught.value.status_code == 503
+
+
 @pytest.mark.parametrize("trade_id,expected_status", [(None, 422), ("missing-trade", 404)])
 def test_invalid_atlas_request_does_not_consume_a_slot(monkeypatch, trade_id, expected_status):
     fake_db = AsyncMongoMockClient().invalid_atlas_request
     monkeypatch.setattr(server, "db", fake_db)
     async def enabled(*_args):
         return True
-    async def select(table, *_args):
-        return [{"id": "existing-trade", "instrument": "EURUSD", "pnl": 25}] if table == "trades" and trade_id else []
+    async def select(table, _token, params):
+        return [{"id": "existing-trade", "user_id": "user", "instrument": "EURUSD", "pnl": 25}] if table == "trades" and trade_id and params.get("offset") == "0" else []
     monkeypatch.setattr(server.admin_service, "feature_enabled", enabled)
     monkeypatch.setattr(server, "supabase_select", select)
     with pytest.raises(HTTPException) as caught:
@@ -137,7 +179,8 @@ def test_failed_atlas_work_keeps_its_reserved_slot(monkeypatch):
     async def enabled(*_args):
         return True
     async def select(table, *_args):
-        return [{"id": "trade", "instrument": "EURUSD", "pnl": 25}] if table == "trades" else []
+        params = _args[-1]
+        return [{"id": "trade", "user_id": "user", "instrument": "EURUSD", "pnl": 25}] if table == "trades" and params.get("offset") == "0" else []
     def failed_answer(*_args):
         raise RuntimeError("generation failed")
     monkeypatch.setattr(server.admin_service, "feature_enabled", enabled)

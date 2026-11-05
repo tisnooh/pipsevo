@@ -30,7 +30,13 @@ class AtlasProviderConfig:
     def from_env(cls, environ: dict[str, str] | None = None) -> "AtlasProviderConfig":
         env = environ if environ is not None else os.environ
         requested = str(env.get("ATLAS_PROVIDER") or "auto").strip().lower()
-        timeout = max(5, min(int(env.get("ATLAS_TIMEOUT_SECONDS") or "45"), 120))
+        try:
+            timeout = max(5, min(int(env.get("ATLAS_TIMEOUT_SECONDS") or "45"), 120))
+        except (TypeError, ValueError):
+            timeout = 45
+        if requested not in {"auto", "groq", "anthropic"}:
+            # Explicit local mode must not silently activate a stored paid key.
+            return cls("deterministic", None, "deterministic-coaching-v1", timeout)
         groq_key = str(env.get("ATLAS_GROQ_API_KEY") or "").strip() or None
         anthropic_key = str(
             env.get("ATLAS_ANTHROPIC_API_KEY") or env.get("EMERGENT_LLM_KEY") or ""
@@ -114,7 +120,8 @@ def _groq_completion(config: AtlasProviderConfig, system: str, prompt: str) -> s
         raise AtlasProviderFailure("provider_error", "Groq n'a pas pu traiter la demande.")
     try:
         payload: dict[str, Any] = response.json()
-        answer = str(payload["choices"][0]["message"]["content"]).strip()
+        content = payload["choices"][0]["message"]["content"]
+        answer = content.strip() if isinstance(content, str) else ""
     except (KeyError, IndexError, TypeError, ValueError):
         answer = ""
     if not answer:

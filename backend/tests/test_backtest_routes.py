@@ -107,17 +107,16 @@ def test_request_size_limited_before_parsing(client):
     assert result.status_code == 413
 
 
-def test_account_purge_deletes_only_authenticated_users_lab_data(client):
+def test_legacy_account_purge_never_deletes_lab_data(client):
     setup_session(client)
     client.headers["x-test-user"] = "user-b"
     session_b, _ = setup_session(client)
 
     client.headers["x-test-user"] = "user-a"
     result = client.delete("/api/backtest/account-data")
-    assert result.status_code == 200, result.text
-    assert result.json()["deleted"]["backtest_sessions"] == 1
-    assert client.get("/api/backtest/sessions").json() == []
-    assert client.get("/api/backtest/datasets").json() == []
+    assert result.status_code == 410, result.text
+    assert len(client.get("/api/backtest/sessions").json()) == 1
+    assert len(client.get("/api/backtest/datasets").json()) == 1
 
     client.headers["x-test-user"] = "user-b"
     assert client.get(f"/api/backtest/sessions/{session_b['id']}").status_code == 200

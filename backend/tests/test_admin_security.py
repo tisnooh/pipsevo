@@ -11,6 +11,32 @@ class Service:
     pass
 
 
+def test_support_directory_search_and_detail_only_return_identity():
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from admin.service import AdminService
+    owner = "10000000-aaaa-4aaa-8aaa-010111000001"
+    row = {"id": owner, "name": "QA", "email": "qa@example.invalid", "plan": "pro", "net_pnl": 50}
+    store = SimpleNamespace(one=AsyncMock(return_value=row), list_rows=AsyncMock(return_value=([row], 1)))
+    service = AdminService(None, store, "https://example.invalid")
+    service.support_list = AsyncMock(return_value={"items": []})
+    async def support_user():
+        return {"id": "support-id", "role": "support", "status": "active"}
+    app = FastAPI()
+    app.include_router(build_admin_router(support_user, service), prefix="/api")
+    client = TestClient(app)
+    for path, key in [("/api/admin/users?plan=pro", "items"), ("/api/admin/search?q=QA", "users")]:
+        response = client.get(path)
+        assert response.status_code == 200
+        item = response.json()[key][0]
+        assert item["id"] == owner and set(item) == {"id", "name", "email", "role", "status", "created_at"}
+        assert store.list_rows.await_args.args[0] == "profiles"
+    detail = client.get(f"/api/admin/users/{owner}")
+    assert detail.status_code == 200 and set(detail.json()) == {"identity"}
+    assert "plan" not in detail.json()["identity"]
+    assert store.one.await_count == 1 and store.one.await_args.args[0] == "profiles"
+
+
 def client_for(user):
     async def current_user():
         return user
