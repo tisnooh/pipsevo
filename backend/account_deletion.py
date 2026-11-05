@@ -18,6 +18,10 @@ from pydantic import BaseModel, ConfigDict
 from pymongo import ReturnDocument
 
 
+# Cannot be confused with JSON null from an upstream success/error response.
+_AUTH_NOT_FOUND = object()
+
+
 class DeleteAccountBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     confirmation: str
@@ -40,7 +44,7 @@ class DeletionGateway:
         if self.secret.count(".") == 2:
             headers["Authorization"] = f"Bearer {self.secret}"
         result = await asyncio.to_thread(requests.request, method, self.url + path,
-                                        headers=headers, json=payload, timeout=15)
+                                        headers=headers, json=payload, timeout=15, allow_redirects=False)
         if result.status_code == 404 and path.startswith("/auth/v1/admin/users/"):
             # A missing route/proxy is not proof that Auth has been erased.
             try:
@@ -48,15 +52,15 @@ class DeletionGateway:
             except (ValueError, TypeError):
                 error = None
             if isinstance(error, dict) and error.get("error_code") == "user_not_found":
-                return None
-        if result.status_code >= 400:
+                return _AUTH_NOT_FOUND
+        if not 200 <= result.status_code < 300:
             # Provider bodies can contain PII. Never expose them.
             raise RuntimeError("Account erasure provider request failed")
         return result.json() if result.content else {}
 
     async def auth_state(self, user_id):
         data = await self.request("GET", f"/auth/v1/admin/users/{user_id}")
-        if data is None:
+        if data is _AUTH_NOT_FOUND:
             return "absent"
         record = data.get("user", data) if isinstance(data, dict) else None
         try:
@@ -155,7 +159,7 @@ class AccountDeletionService:
     async def complete(self, job):
         user_id = job["_id"]
         state = await self.gateway.auth_state(user_id)
-        if state == "active":
+        if state not in ("disabled", "absent"):
             raise RuntimeError("Auth removal is not confirmed")
         # A previous hard-delete response may have been lost. The owner prefix
         # must still be checked on retries, even when Auth is already absent.

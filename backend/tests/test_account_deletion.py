@@ -234,7 +234,7 @@ def test_legacy_job_without_cutoff_cannot_delete_email_only_records():
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("payload", [[], {}, {"user": None}, {"id": OTHER, "deleted_at": "2026-10-11T10:00:00Z"},
+@pytest.mark.parametrize("payload", [None, [], {}, {"user": None}, {"id": OTHER, "deleted_at": "2026-10-11T10:00:00Z"},
                                      {"id": USER, "deleted_at": True}, {"id": USER, "deleted_at": "invalid"},
                                      {"id": USER, "deleted_at": "2026-10-11T10:00:00"}])
 def test_auth_removal_confirmation_requires_matching_identity_and_valid_timestamp(payload):
@@ -246,7 +246,7 @@ def test_auth_removal_confirmation_requires_matching_identity_and_valid_timestam
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("payload,state", [(None, "absent"), ({"id": USER}, "active"),
+@pytest.mark.parametrize("payload,state", [({"id": USER}, "active"),
                                           ({"user": {"id": USER, "deleted_at": "2026-10-11T10:00:00Z"}}, "disabled")])
 def test_valid_auth_confirmation_states(payload, state):
     async def scenario():
@@ -326,4 +326,23 @@ def test_official_user_not_found_404_confirms_absence(monkeypatch):
                             SimpleNamespace(status_code=404, content=b"error", json=lambda: {"error_code": "user_not_found"}))
         gateway = DeletionGateway("https://example.test", "private-server-key")
         assert await gateway.auth_state(USER) == "absent"
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("status_code", [200, 302])
+def test_ambiguous_provider_reply_never_removes_storage_or_lab(monkeypatch, status_code):
+    import account_deletion
+    async def scenario():
+        db, _, service = await fixture()
+        service.gateway = DeletionGateway("https://example.test", "private-server-key")
+        calls = []
+        def reply(method, url, **kwargs):
+            assert kwargs["allow_redirects"] is False
+            calls.append(method)
+            return SimpleNamespace(status_code=status_code, content=b"null", json=lambda: None)
+        monkeypatch.setattr(account_deletion.requests, "request", reply)
+        await db.account_deletion_jobs.insert_one({"_id": USER, "status": "cleanup_pending"})
+        assert await service.retry() == {"completed": 0, "pending": 1}
+        assert calls == ["GET"]
+        assert await db.backtest_sessions.count_documents({"user_id": USER}) == 1
     asyncio.run(scenario())
