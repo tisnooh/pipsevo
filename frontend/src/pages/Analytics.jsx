@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { accounts as accountsAPI, dashboard, trades as tradesAPI } from "@/lib/api";
+import React, { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
+import useOwnedResource from "@/hooks/useOwnedResource";
+import { EMPTY_MANUAL_REPORT, fetchManualReport } from "@/lib/manualReportingResource";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BarChart3, CalendarDays, Download, RefreshCw, Sparkles } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -7,9 +9,9 @@ import { useAppSettings } from "@/hooks/useAppSettings";
 import TradeCalendar from "@/components/TradeCalendar";
 import { localDateKey, tradeDateKey } from "@/lib/tradeCalendar";
 import { listenForAppDataChanges } from "@/lib/appDataEvents";
-import { calculateTradeAnalytics, measuredTradePnl } from "@/lib/tradeAnalytics";
+import { calculateTradeAnalytics, measuredTradePnl, measuredTradeR } from "@/lib/tradeAnalytics";
+import { filterTradePeriod, formatWinRate } from "@/lib/tradeReporting";
 import { buildCsv, downloadBlob } from "@/lib/dataExport";
-import { apiErrorMessage } from "@/lib/apiError";
 import MobileTradeList from "@/components/MobileTradeList";
 import { journalTradePath } from "@/lib/journalNavigation";
 import useTradingCurrency from "@/hooks/useTradingCurrency";
@@ -17,27 +19,26 @@ import TradingCurrencyControl from "@/components/TradingCurrencyControl";
 import { tradingAccountRisk } from "@/lib/tradeCurrency";
 
 const TABS = ["Vue d'ensemble","Performance","Calendrier","Trades","Temps","Risques","Comportement"];
-const EMPTY_METRICS = { winrate:0,profit_factor:0,avg_win:0,avg_loss:0,plan_respect_rate:0 };
 const card = "card-elev p-5";
 
 export default function Analytics() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { date, settings } = useAppSettings();
-  const [data,setData]=useState(null); const [trades,setTrades]=useState([]); const [accounts,setAccounts]=useState([]);
-  const [tab,setTab]=useState(TABS[0]); const [period,setPeriod]=useState("30"); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
+  const { data, loading, error, reload: load } = useOwnedResource(user?.id, fetchManualReport, EMPTY_MANUAL_REPORT, "Impossible de charger les statistiques.");
+  const { trades, accounts } = data;
+  const [tab,setTab]=useState(TABS[0]); const [period,setPeriod]=useState("30");
   const [selectedMonth,setSelectedMonth]=useState(()=>localDateKey(new Date()).slice(0,7));
   const [selectedYear,setSelectedYear]=useState(()=>String(new Date().getFullYear()));
   const [customRange,setCustomRange]=useState({start:"",end:""});
-  const load=useCallback(async()=>{setLoading(true);setError("");try{const[d,t,a]=await Promise.all([dashboard(),tradesAPI.list(),accountsAPI.list()]);setData(d.data);setTrades(t.data);setAccounts(a.data)}catch(e){setError(apiErrorMessage(e,"Impossible de charger les statistiques."))}finally{setLoading(false)}},[]);
-  useEffect(()=>{load();return listenForAppDataChanges(load,["accounts","trades","analytics","dashboard"])},[load]);
+  useEffect(()=>listenForAppDataChanges(load,["accounts","trades","analytics","dashboard"]),[load]);
   const availableYears=useMemo(()=>Array.from(new Set([String(new Date().getFullYear()),...trades.map(t=>tradeDateKey(t.date).slice(0,4)).filter(year=>/^\d{4}$/.test(year))])).sort((a,b)=>Number(b)-Number(a)),[trades]);
   const periodTrades=useMemo(()=>{
     if(period==="all")return trades;
     if(period==="month")return trades.filter(t=>tradeDateKey(t.date).startsWith(selectedMonth));
     if(period==="year")return trades.filter(t=>tradeDateKey(t.date).startsWith(selectedYear));
-    if(period==="custom")return trades.filter(t=>{const key=tradeDateKey(t.date);if(!key)return false;return(!customRange.start||key>=customRange.start)&&(!customRange.end||key<=customRange.end)});
-    const start=new Date();start.setDate(start.getDate()-Math.max(0,Number(period)-1));const min=localDateKey(start);
-    return trades.filter(t=>!t.date||tradeDateKey(t.date)>=min);
+    if(period==="custom")return filterTradePeriod(trades,customRange);
+    return filterTradePeriod(trades,{days:period});
   },[trades,period,selectedMonth,selectedYear,customRange]);
   const currencyScope = useTradingCurrency(periodTrades);
   const { trades: filtered, money } = currencyScope;
@@ -46,21 +47,21 @@ export default function Analytics() {
   const equity=useMemo(()=>{let value=0;return [...filtered].map(t=>({...t,pnl:measuredTradePnl(t)})).filter(t=>t.pnl!==null).sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(t=>({date:t.date,equity:+(value+=t.pnl).toFixed(2)}))},[filtered]);
   const exportLabel=period==="month"?selectedMonth:period==="year"?selectedYear:period==="custom"?`${customRange.start||"debut"}-${customRange.end||"fin"}`:period==="all"?"toute-periode":`${period}j`;
   const download=()=>{if(!filtered.length)return;const keys=["date","instrument","direction","pnl","provider_currency","r","session","setup","plan_respected","account_id"];const rows=filtered.map(t=>({...t,pnl:measuredTradePnl(t),provider_currency:currencyScope.currency}));downloadBlob(new Blob([buildCsv(rows,keys.map(key=>[key,key]),",")],{type:"text/csv;charset=utf-8"}),`pipsevo-trades-${exportLabel}.csv`)};
-  const metrics=data?.metrics||EMPTY_METRICS;
 
   return <div className="pe-page pe-page-stack max-w-[1800px] mx-auto">
     <div className="pe-page-header"><div><div className="pe-eyebrow">Analyse des données réelles</div><h1 className="pe-page-title mt-2">Statistiques</h1><p className="pe-page-copy mt-1">Explore uniquement les trades enregistrés dans ton journal.</p></div><div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end"><div className="flex flex-wrap items-center gap-2"><div className="hidden h-10 w-10 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.025] text-[#8C73FF] sm:grid"><CalendarDays className="h-4 w-4"/></div><select aria-label="Type de période" value={period} onChange={e=>setPeriod(e.target.value)} className="pe-control min-w-[150px] flex-1 text-xs sm:flex-none"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option><option value="month">Mois précis</option><option value="year">Année précise</option><option value="custom">Dates personnalisées</option><option value="all">Toute la période</option></select>{period==="month"&&<input aria-label="Mois à analyser" type="month" value={selectedMonth} onChange={e=>setSelectedMonth(e.target.value)} className="pe-control min-w-[150px] flex-1 text-xs sm:flex-none"/>}{period==="year"&&<select aria-label="Année à analyser" value={selectedYear} onChange={e=>setSelectedYear(e.target.value)} className="pe-control min-w-[120px] flex-1 text-xs sm:flex-none">{availableYears.map(year=><option key={year} value={year}>{year}</option>)}</select>}{period==="custom"&&<><input aria-label="Date de début" title="Date de début" type="date" value={customRange.start} max={customRange.end||undefined} onChange={e=>setCustomRange(range=>({...range,start:e.target.value}))} className="pe-control min-w-[145px] flex-1 text-xs sm:flex-none"/><input aria-label="Date de fin" title="Date de fin" type="date" value={customRange.end} min={customRange.start||undefined} onChange={e=>setCustomRange(range=>({...range,end:e.target.value}))} className="pe-control min-w-[145px] flex-1 text-xs sm:flex-none"/></>}<button disabled={!filtered.length} onClick={download} title="Exporter les trades filtrés en CSV" className="pe-icon-button disabled:opacity-40"><Download className="w-4 h-4"/></button></div><div className="text-[10px] font-medium text-[#747C8B]">{filtered.length} trade{filtered.length>1?"s":""} dans la sélection</div></div></div>
     <TradingCurrencyControl {...currencyScope}/>
+    {stats.unknownCount>0&&<p role="status" className="text-xs text-[var(--pe-text-muted)]">{stats.unknownCount} résultat(s) net(s) indisponible(s), exclus des calculs. Les indicateurs utilisent {stats.measuredCount} résultat(s) mesuré(s).</p>}
     <div className="overflow-x-auto border-b border-white/[0.06]"><div className="flex min-w-max gap-1">{TABS.map(t=><button key={t} onClick={()=>setTab(t)} className={`px-4 py-3 text-sm transition ${tab===t?"text-white border-b-2 border-[#7C4DFF]":"text-[#7E8798] hover:text-white"}`}>{t}</button>)}</div></div>
     {error&&<div className="rounded-2xl border border-[#F26A70]/25 bg-[#F26A70]/10 p-4 text-sm text-[#FF8A8A] flex justify-between"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 text-xs"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
-    {loading?<div className="grid md:grid-cols-3 gap-4">{Array.from({length:6}).map((_,i)=><div key={i} className="h-36 card-elev animate-pulse"/>)}</div>:tab==="Calendrier"?<TradeCalendar trades={filtered} money={money} formatDate={date}/>:!filtered.length?<Empty/>:<>
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3"><Kpi l="Profit net" v={stats.pnl===null?"—":money(stats.pnl,{signDisplay:"always"})} c={stats.pnl===null?"#7E8798":stats.pnl>=0?"#46C99A":"#F26A70"}/><Kpi l="Win rate" v={stats.winrate===null?"—":`${stats.winrate}%`} c={stats.winrate===null?"#7E8798":"#46C99A"}/><Kpi l="Profit factor" v={stats.profitFactor===null?"—":Number.isFinite(stats.profitFactor)?stats.profitFactor.toFixed(2):"∞"} c={stats.profitFactor===null?"#7E8798":"#B58BFF"}/><Kpi l="Gain moyen" v={stats.avgWin===null?"—":money(stats.avgWin)} c={stats.avgWin===null?"#7E8798":"#46C99A"}/><Kpi l="Perte moyenne" v={stats.avgLoss===null?"—":money(stats.avgLoss)} c={stats.avgLoss===null?"#7E8798":"#F26A70"}/><Kpi l="Plan respecté" v={stats.planRate===null?"—":`${stats.planRate}%`} c={stats.planRate===null?"#7E8798":"#4F8CFF"}/></div>
+    {loading?<div className="grid md:grid-cols-3 gap-4">{Array.from({length:6}).map((_,i)=><div key={i} className="h-36 card-elev animate-pulse"/>)}</div>:error?null:tab==="Calendrier"?<TradeCalendar trades={filtered} money={money} formatDate={date}/>:!filtered.length?<Empty/>:<>
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3"><Kpi l="Profit net" v={stats.pnl===null?"—":money(stats.pnl,{signDisplay:"always"})} c={stats.pnl===null?"#7E8798":stats.pnl>=0?"#46C99A":"#F26A70"}/><Kpi l="Win rate" v={formatWinRate(stats.winrate)} c={stats.winrate===null?"#7E8798":"#46C99A"}/><Kpi l="Profit factor" v={stats.profitFactor===null?"—":Number.isFinite(stats.profitFactor)?stats.profitFactor.toFixed(2):"∞"} c={stats.profitFactor===null?"#7E8798":"#B58BFF"}/><Kpi l="Gain moyen" v={stats.avgWin===null?"—":money(stats.avgWin)} c={stats.avgWin===null?"#7E8798":"#46C99A"}/><Kpi l="Perte moyenne" v={stats.avgLoss===null?"—":money(stats.avgLoss)} c={stats.avgLoss===null?"#7E8798":"#F26A70"}/><Kpi l="Plan respecté" v={stats.planRate===null?"—":`${stats.planRate}%`} c={stats.planRate===null?"#7E8798":"#4F8CFF"}/></div>
       {tab==="Vue d'ensemble"&&<Overview equity={equity} stats={stats} money={money}/>}
       {tab==="Performance"&&<Performance stats={stats} money={money}/>}
-      {tab==="Trades"&&<TradesView trades={filtered} money={money} date={date} onSelect={trade=>navigate(journalTradePath(trade.id))}/>}
+      {tab==="Trades"&&<TradesView trades={filtered.map(trade => ({ ...trade, pnl: measuredTradePnl(trade), r: measuredTradeR(trade) }))} money={money} date={date} onSelect={trade=>navigate(journalTradePath(trade.id))}/>}
       {tab==="Temps"&&<TimeView stats={stats} money={money}/>}
       {tab==="Risques"&&<RiskView stats={stats} risk={risk} money={money}/>}
-      {tab==="Comportement"&&<BehaviorView stats={stats} metrics={metrics} money={money}/>}
+      {tab==="Comportement"&&<BehaviorView stats={stats} money={money}/>}
     </>}
   </div>;
 }
@@ -77,7 +78,7 @@ const Kpi=({l,v,c})=><div className={card}><div className="text-xs text-[#7E8798
 const Empty=()=> <div className="card-elev py-16 px-5 text-center"><BarChart3 className="w-8 h-8 mx-auto text-[#6B7280]"/><h2 className="mt-4 font-semibold">Pas encore de statistiques</h2><p className="mt-2 text-sm text-[#7E8798]">Ajoute des trades au journal pour générer des analyses fiables.</p><Link to="/app/journal" className="btn-primary inline-block mt-5">Ouvrir le journal</Link></div>;
 const Overview=({equity,stats})=><div className="grid lg:grid-cols-3 gap-4"><div className={`${card} lg:col-span-2`}><h2 className="text-sm font-semibold">Évolution du P&amp;L</h2><div className="h-72 mt-4"><ResponsiveContainer width="100%" height="100%"><AreaChart data={equity}><defs><linearGradient id="analytics-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#7C4DFF" stopOpacity=".55"/><stop offset="1" stopColor="#7C4DFF" stopOpacity="0"/></linearGradient></defs><XAxis dataKey="date" stroke="#6B7280" fontSize={10}/><YAxis stroke="#6B7280" fontSize={10}/><Tooltip content={<ChartTooltip/>}/><Area dataKey="equity" name="P&L" type="monotone" stroke="#B58BFF" fill="url(#analytics-fill)" strokeWidth={2.4}/></AreaChart></ResponsiveContainer></div></div><div className={card}><h2 className="text-sm font-semibold">Résultats</h2><div className="h-48 [&_.recharts-wrapper]:focus-visible:outline-none [&_.recharts-surface]:focus-visible:outline-none"><ResponsiveContainer width="100%" height="100%"><PieChart accessibilityLayer><Pie data={[{name:"Gagnants",value:stats.wins},{name:"Perdants",value:stats.losses}]} dataKey="value" innerRadius={50} outerRadius={72} strokeWidth={0}><Cell fill="#46C99A"/><Cell fill="#F26A70"/></Pie><Tooltip content={<ChartTooltip/>}/></PieChart></ResponsiveContainer></div><div className="flex justify-center gap-5 text-xs"><span className="text-[#46C99A]">● {stats.wins} gagnants</span><span className="text-[#F26A70]">● {stats.losses} perdants</span></div></div></div>;
 const Performance=({stats,money})=>{
-  const activeDays=stats.days.filter(day=>day.pnl!==0);
+  const activeDays=stats.days.filter(day=>Number.isFinite(day.pnl)&&day.pnl!==0);
   const bestDay=activeDays.reduce((best,day)=>!best||day.pnl>best.pnl?day:best,null);
   return <div className="grid gap-4 lg:grid-cols-2"><Ranking title="Performance par actif" rows={stats.assets} money={money}/><Ranking title="Performance par compte" rows={stats.accounts} money={money}/><div className="card-elev p-4 sm:p-5 lg:col-span-2"><div className="flex items-start justify-between gap-4"><div><h2 className="text-sm font-semibold">Performance par jour de la semaine</h2><p className="mt-1 text-[11px] text-[#6F7787]">P&amp;L cumulé sur la période sélectionnée</p></div>{bestDay&&<div className="shrink-0 text-right"><div className="text-[10px] uppercase tracking-[.12em] text-[#697282]">Meilleur jour</div><div className="mt-1 text-xs font-semibold text-[#46C99A]">{bestDay.name} · {money(bestDay.pnl,{signDisplay:"always"})}</div></div>}</div><div className="mt-3 h-[190px] sm:h-[210px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={stats.days} margin={{top:8,right:8,bottom:4,left:0}} barCategoryGap="32%"><CartesianGrid vertical={false} stroke="rgba(255,255,255,.055)" strokeDasharray="3 5"/><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill:"#737B8B",fontSize:11}} dy={7}/><YAxis width={58} axisLine={false} tickLine={false} tick={{fill:"#697282",fontSize:10}} tickFormatter={compactAxis}/><ReferenceLine y={0} stroke="rgba(255,255,255,.18)"/><Tooltip content={<ChartTooltip formatter={value=>[money(value,{signDisplay:"always"}),"P&L"]}/>} cursor={{fill:"rgba(255,255,255,.025)"}}/><Bar dataKey="pnl" maxBarSize={44} radius={6}>{stats.days.map((x,i)=><Cell key={i} fill={x.pnl>0?"#46C99A":x.pnl<0?"#F26A70":"#252A36"}/>)}</Bar></BarChart></ResponsiveContainer></div></div></div>;
 };

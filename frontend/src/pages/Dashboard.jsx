@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { dashboard, trades, accounts as accAPI, integrationConnections } from "@/lib/api";
+import { integrationConnections } from "@/lib/api";
+import useOwnedResource from "@/hooks/useOwnedResource";
+import { fetchManualReport } from "@/lib/manualReportingResource";
 import { Link } from "react-router-dom";
 import { Plus, Sparkles, Calendar, BarChart3, RefreshCw, ShieldCheck, WalletCards, ChevronLeft, ChevronRight, Flame, X, BookOpen } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, CartesianGrid, ReferenceLine, ResponsiveContainer, ScatterChart, Scatter, Cell, XAxis, YAxis, Tooltip } from "recharts";
@@ -10,47 +12,39 @@ import { DashboardTemplateManager } from "@/components/dashboard/DashboardTempla
 import { DEFAULT_DASHBOARD_TEMPLATES, readDashboardTemplateState } from "@/lib/dashboardTemplates";
 import { CALENDAR_MONTHS_FR, buildTradeCalendarMonth, calendarYears, localDateKey, localMonthKey, shiftMonthKey, tradeDateKey } from "@/lib/tradeCalendar";
 import { listenForAppDataChanges } from "@/lib/appDataEvents";
-import { tradeOutcome } from "@/lib/tradeAnalytics";
+import { calculateTradeAnalytics, measuredTradePnl, measuredTradeR, tradeOutcome } from "@/lib/tradeAnalytics";
+import { filterTradePeriod, formatWinRate, measuredTradeRows } from "@/lib/tradeReporting";
 import useTradingCurrency from "@/hooks/useTradingCurrency";
 import TradingCurrencyControl from "@/components/TradingCurrencyControl";
 import { getAccountDisplayMetrics } from "@/lib/accountDisplay";
-import { tradingAccountRisk } from "@/lib/tradeCurrency";
+import { tradeCurrency, tradingAccountRisk } from "@/lib/tradeCurrency";
 
-const EMPTY_KPIS = { funded_capital: 0, total_profit: 0, remaining_drawdown: 0, estimated_payout: 0, discipline_score: 0, trader_score: 0, total_payouts: 0, active_accounts: 0, total_trades: 0 };
-const EMPTY_METRICS = { winrate: 0, profit_factor: 0, avg_win: 0, avg_loss: 0, plan_respect_rate: 0 };
+const EMPTY_DASHBOARD = { trades: [], accounts: [], providerAccounts: {} };
+async function fetchDashboardData() {
+  const results = await Promise.allSettled([fetchManualReport(), integrationConnections.list()]);
+  if (results[0].status === "rejected") throw results[0].reason;
+  const connections = results[1].status === "fulfilled" && Array.isArray(results[1].value?.data) ? results[1].value.data : [];
+  const providerAccounts = Object.fromEntries(connections.flatMap(connection => connection.integration_accounts || []).filter(account => account.account_id).map(account => [account.account_id, account]));
+  return { ...results[0].value, providerAccounts };
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { money: nativeMoney, settings } = useAppSettings();
-  const [d, setD] = useState(null);
-  const [recent, setRecent] = useState([]);
-  const [accs, setAccs] = useState([]);
-  const [providerAccounts, setProviderAccounts] = useState({});
+  const { data, loading, error, reload: load } = useOwnedResource(user?.id, fetchDashboardData, EMPTY_DASHBOARD, "Impossible de charger le tableau de bord.");
+  const { trades: recent, accounts: accs, providerAccounts } = data;
   const [tab, setTab] = useState("Tous");
   const [period, setPeriod] = useState("30");
   const [accountFilter, setAccountFilter] = useState("");
   const [assetFilter, setAssetFilter] = useState("");
   const [calendarMonth, setCalendarMonth] = useState(localMonthKey);
   const [selectedDay, setSelectedDay] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [templateState, setTemplateState] = useState(readDashboardTemplateState);
 
-  const load = useCallback(async () => {
-    setLoading(true); setError("");
-    try {
-      const results = await Promise.allSettled([dashboard(), trades.list(), accAPI.list(), integrationConnections.list()]);
-      for (const result of results.slice(0, 3)) if (result.status === "rejected") throw result.reason;
-      setD(results[0].value.data); setRecent(results[1].value.data); setAccs(results[2].value.data);
-      const connections = results[3].status === "fulfilled" ? results[3].value.data : [];
-      setProviderAccounts(Object.fromEntries(connections.flatMap(connection => connection.integration_accounts || []).filter(account => account.account_id).map(account => [account.account_id, account])));
-    } catch (e) { setError(e.response?.data?.detail || "Impossible de charger le tableau de bord."); }
-    finally { setLoading(false); }
-  }, []);
   useEffect(() => {
-    load();
     return listenForAppDataChanges(load, ["accounts", "trades", "payouts", "dashboard"]);
   }, [load]);
+  useEffect(() => { if (loading || error) setSelectedDay(null); }, [error, loading]);
   useEffect(() => {
     if (!selectedDay) return undefined;
     const previousOverflow = document.body.style.overflow;
@@ -63,29 +57,24 @@ export default function Dashboard() {
     };
   }, [selectedDay]);
 
-  const k = d?.kpis || EMPTY_KPIS;
-  const m = d?.metrics || EMPTY_METRICS;
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - Math.max(0, Number(period) - 1));
-  const cutoffKey = localDateKey(cutoffDate);
-  const inPeriod = (item) => !item?.date || tradeDateKey(item.date) >= cutoffKey;
-  const tradeList = recent.filter(inPeriod);
+  const tradeList = filterTradePeriod(recent, { days: period });
   const accList = accs;
   const matchesAccountAndAsset = useCallback((trade) =>
     (!accountFilter || trade.account_id === accountFilter) &&
     (!assetFilter || trade.instrument === assetFilter), [accountFilter, assetFilter]);
-  const currencyScope = useTradingCurrency(recent.filter(matchesAccountAndAsset));
+  const currencyScope = useTradingCurrency(tradeList.filter(matchesAccountAndAsset));
   const { money } = currencyScope;
-  const currencyTradeIds = useMemo(() => new Set(currencyScope.trades.map(trade => trade.id)), [currencyScope.trades]);
-  const matchesDashboardFilters = useCallback(trade => currencyTradeIds.has(trade.id), [currencyTradeIds]);
+  const matchesDashboardFilters = useCallback(trade => matchesAccountAndAsset(trade) && tradeCurrency(trade, settings.currency) === currencyScope.currency, [matchesAccountAndAsset, currencyScope.currency, settings.currency]);
   const scopedTrades = tradeList.filter(matchesDashboardFilters);
-  const measuredScopedTrades = scopedTrades.filter(t => typeof t.pnl === "number");
-  const calendarTrades = useMemo(() => recent.filter(matchesDashboardFilters), [recent, matchesDashboardFilters]);
+  const measuredScopedTrades = measuredTradeRows(scopedTrades);
+  const scopedStats = calculateTradeAnalytics(scopedTrades, accList);
+  const disciplineScore = scopedStats.planRate === null ? null : Math.trunc(scopedStats.planRate * 0.7 + 30);
+  const calendarTrades = useMemo(() => recent.filter(matchesDashboardFilters).map(trade => ({ ...trade, pnl: measuredTradePnl(trade), r: measuredTradeR(trade) })), [recent, matchesDashboardFilters]);
   let runningEquity = 0;
   const equityData = [...measuredScopedTrades]
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
     .map(t => ({ date: t.date, equity: Math.round((runningEquity += Number(t.pnl || 0)) * 100) / 100 }));
-  const filtered = scopedTrades.filter(t =>
+  const filtered = scopedTrades.map(trade => ({ ...trade, pnl: measuredTradePnl(trade), r: measuredTradeR(trade) })).filter(t =>
     (tab === "Tous" || (tab === "Gagnants" ? t.pnl > 0 : t.pnl < 0))
   ).slice(0, 5);
   const isEmptyAccount = !loading && !accList.length && !recent.length;
@@ -96,7 +85,7 @@ export default function Dashboard() {
   const scopedLosses = scopedOutcomes.filter(outcome => outcome < 0);
   const monetaryWins = closedScopedTrades.filter(t => Number(t.pnl) > 0);
   const monetaryLosses = closedScopedTrades.filter(t => Number(t.pnl) < 0);
-  const scopedWinrate = scopedOutcomes.length ? scopedWins.length / scopedOutcomes.length * 100 : 0;
+  const scopedWinrate = scopedStats.winrate;
   const scopedGrossProfit = monetaryWins.reduce((sum, t) => sum + Number(t.pnl || 0), 0);
   const scopedGrossLoss = Math.abs(monetaryLosses.reduce((sum, t) => sum + Number(t.pnl || 0), 0));
   const scopedProfitFactor = !closedScopedTrades.length ? null : scopedGrossLoss ? scopedGrossProfit / scopedGrossLoss : scopedGrossProfit > 0 ? Infinity : 0;
@@ -112,14 +101,14 @@ export default function Dashboard() {
   const risk = tradingAccountRisk(accList, recent, currencyScope.currency, settings.currency, providerAccounts, accountFilter);
   const remainingDrawdown = risk.remaining;
   const drawdownRate = risk.rate;
-  const planRateLabel = m.plan_respect_rate === null || m.plan_respect_rate === undefined ? "Non mesuré" : `${m.plan_respect_rate}%`;
-  const insight = !k.total_trades
+  const planRateLabel = scopedStats.planRate === null ? "Non mesuré" : `${scopedStats.planRate}%`;
+  const insight = !scopedTrades.length
     ? "Ajoute tes premiers trades pour obtenir un insight personnalisé."
-    : m.plan_respect_rate === null || m.plan_respect_rate === undefined
+    : scopedStats.planRate === null
       ? "Renseigne le respect du plan sur tes prochains trades pour activer l’analyse de discipline."
-      : m.plan_respect_rate < 80
-        ? `Ton plan est respecté sur ${m.plan_respect_rate}% des trades renseignés. Priorité : réduire les prises hors plan.`
-        : `Ton plan est respecté sur ${m.plan_respect_rate}% des trades renseignés. Continue à documenter chaque décision.`;
+      : scopedStats.planRate < 80
+        ? `Ton plan est respecté sur ${scopedStats.planRate}% des trades renseignés de cette sélection. Priorité : réduire les prises hors plan.`
+        : `Ton plan est respecté sur ${scopedStats.planRate}% des trades renseignés de cette sélection. Continue à documenter chaque décision.`;
   const dailyData = Object.values(measuredScopedTrades.reduce((days, trade) => {
     const date = tradeDateKey(trade.date) || "—";
     days[date] ||= { date, pnl: 0 };
@@ -151,6 +140,8 @@ export default function Dashboard() {
   const panel = "rounded-xl border border-[#6571CF]/20 bg-[#0D1120] shadow-[inset_0_1px_0_rgba(255,255,255,.025)]";
   const control = "pe-control !min-h-9 !h-9 !px-3 !text-xs outline-none transition hover:border-[#7780E0]/35 focus:border-[#8075ED]";
 
+  if (error) return <div className="pe-page max-w-[1800px] mx-auto space-y-4"><h1 className="pe-page-title">Dashboard</h1><div role="alert" className="pe-card p-5"><p>{error}</p><p className="pe-page-copy mt-2">Les résultats et contrôles de risque ne sont pas disponibles tant que le chargement échoue.</p><button onClick={load} className="btn-primary mt-4 inline-flex items-center gap-2"><RefreshCw className="h-4 w-4"/>Réessayer</button></div></div>;
+
   return (
     <div className="pe-page max-w-[1800px] mx-auto space-y-4">
       <CommercialBanner placement="dashboard" />
@@ -170,10 +161,11 @@ export default function Dashboard() {
       </header>
 
       <TradingCurrencyControl {...currencyScope}/>
+      {scopedStats.unknownCount > 0 && <p role="status" className="text-xs text-[var(--pe-text-muted)]">{scopedStats.unknownCount} résultat(s) net(s) indisponible(s), exclus des calculs. Les indicateurs utilisent {scopedStats.measuredCount} résultat(s) mesuré(s).</p>}
 
       <div className="flex items-center gap-2 px-1 text-[11px] text-[#737985]">
         <span className={`h-1.5 w-1.5 rounded-full ${isEmptyAccount ? "bg-[#8071D8]" : "bg-[#3CB58B]"}`}/>
-        {isEmptyAccount ? "Ajoute un compte pour commencer l’analyse." : "Données synchronisées avec ton journal."}
+        {loading ? "Chargement des données du journal…" : isEmptyAccount ? "Ajoute un compte pour commencer l’analyse." : "Données synchronisées avec ton journal."}
       </div>
 
       {error && <div className="rounded-2xl border border-[#F26A70]/25 bg-[#F26A70]/10 p-4 text-sm text-[#FF8A8A] flex flex-col sm:flex-row sm:items-center justify-between gap-3"><span>{error}</span><button onClick={load} className="inline-flex items-center gap-2 rounded-lg border border-[#F26A70]/20 px-3 py-2 text-xs hover:bg-[#F26A70]/10"><RefreshCw className="w-3.5 h-3.5"/>Réessayer</button></div>}
@@ -181,7 +173,7 @@ export default function Dashboard() {
 
       {!loading && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         {visible("summary") && <Kpi label="P&L net" value={periodProfit===null?"—":money(periodProfit,{signDisplay:"always"})} detail={periodProfit===null?"P&L monétaire non disponible":`${measuredScopedTrades.length} trades mesurés sur la période`} tone={periodProfit===null?undefined:periodProfit < 0 ? "negative" : "positive"} testid="kpi-profit" accent={accent} />}
-        {visible("summary") && <GaugeKpi label="Win rate" value={scopedWinrate} display={`${scopedWinrate.toFixed(1)}%`} detail={`${scopedWins.length} gains · ${scopedLosses.length} pertes`} accent={accent} id="win-rate" />}
+        {visible("summary") && <GaugeKpi label="Win rate" value={scopedWinrate ?? 0} display={formatWinRate(scopedWinrate)} detail={scopedWinrate === null ? "Aucun résultat net mesuré" : `${scopedWins.length} gains · ${scopedLosses.length} pertes`} accent={accent} id="win-rate" />}
         {visible("summary") && <RingKpi label="Profit factor" value={scopedProfitFactor===null?0:Number.isFinite(scopedProfitFactor)?Math.min(100, scopedProfitFactor / 3 * 100):100} display={scopedProfitFactor===null?"—":Number.isFinite(scopedProfitFactor)?scopedProfitFactor.toFixed(2):"∞"} detail={scopedProfitFactor===null?"P&L monétaire non disponible":"Objectif solide : 1,50+"} accent={accent} id="profit-factor" />}
         {visible("summary") && <GaugeKpi label="Jours gagnants" value={dayWinRate??0} display={dayWinRate===null?"—":`${dayWinRate.toFixed(0)}%`} detail={dayWinRate===null?"P&L journalier non disponible":`${dailyTotals.filter((pnl) => pnl > 0).length} jours positifs`} accent={accent} id="day-win-rate" />}
         <GaugeKpi label="Drawdown disponible" value={drawdownRate} display={remainingDrawdown===null?"—":money(remainingDrawdown)} detail={remainingDrawdown===null?"Règles à configurer":`${risk.count} compte(s) · ${currencyScope.currency}`} accent={activeTemplate.accent === "blue" ? "#6D7CFF" : "#4F8DFF"} id="drawdown" testid="kpi-dd" amount />
@@ -309,13 +301,13 @@ export default function Dashboard() {
               <Link to="/app/discipline" className="text-[10px] text-[#9B8DE1] transition hover:text-white" data-testid="dash-discipline-link">Détails →</Link>
             </div>
             <div className="grid grid-cols-[116px_1fr] items-center gap-3 px-4 pb-4 pt-3">
-              <MiniGauge value={k.discipline_score} display={`${k.discipline_score}`} accent={accent} suffix="/100" id="discipline" />
+              <MiniGauge value={disciplineScore ?? 0} display={disciplineScore === null ? "—" : `${disciplineScore}`} accent={accent} suffix="/100" id="discipline" />
               <div className="space-y-3">
-                <DisciplineRow label="Plan respecté" value={planRateLabel} progress={Number(m.plan_respect_rate || 0)} accent={accent} />
-                <DisciplineRow label="Trades suivis" value={k.total_trades || recent.length} progress={Math.min(100, (k.total_trades || recent.length) * 10)} accent={accent} />
+                <DisciplineRow label="Plan respecté" value={planRateLabel} progress={Number(scopedStats.planRate || 0)} accent={accent} />
+                <DisciplineRow label="Trades suivis" value={scopedTrades.length} progress={Math.min(100, scopedTrades.length * 10)} accent={accent} />
               </div>
             </div>
-            <div className="flex items-center justify-between border-t border-[#6571CF]/15 bg-[#090E1C] px-5 py-3 text-[10px] text-[#747D92]"><span>État actuel</span><span style={{ color: accent }}>{k.discipline_score >= 80 ? "Solide" : k.discipline_score >= 60 ? "À consolider" : k.discipline_score ? "À améliorer" : "En attente"}</span></div>
+            <div className="flex items-center justify-between border-t border-[#6571CF]/15 bg-[#090E1C] px-5 py-3 text-[10px] text-[#747D92]"><span>État de la sélection</span><span style={{ color: accent }}>{disciplineScore === null ? "En attente" : disciplineScore >= 80 ? "Solide" : disciplineScore >= 60 ? "À consolider" : "À améliorer"}</span></div>
           </div>
           <div className={`${panel} p-5`} style={{ backgroundImage: `linear-gradient(135deg, ${accentSoft}, transparent 55%)` }}>
             <div className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4" style={{ color: accent }}/>Atlas · aperçu</div>

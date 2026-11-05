@@ -10,6 +10,7 @@ import { JOURNAL_DETAIL_ROUTE, JOURNAL_LIST_ROUTE } from "@/lib/journalNavigatio
 import { ProductTelemetry } from "@/features/admin/ProductOperations";
 import ThemeToggle from "@/components/ThemeToggle";
 import { Toaster } from "@/components/ui/sonner";
+import ProfileRecovery from "@/components/auth/ProfileRecovery";
 import "@/index.css";
 
 const Landing = lazy(() => import("@/pages/LandingV2"));
@@ -91,14 +92,18 @@ function Protected() {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-pe-canvas text-pe-text">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.profile_loading_error) return <ProfileRecovery />;
+  if (user.status && user.status !== "active") return <ProfileRecovery suspended />;
   if (!hasCompletedOnboarding(user)) return <Navigate to="/onboarding" replace />;
-  return <AppShell />;
+  return <AppShell key={user.id} />;
 }
 
 function OnboardingGate({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-pe-canvas text-pe-text">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.profile_loading_error) return <ProfileRecovery />;
+  if (user.status && user.status !== "active") return <ProfileRecovery suspended />;
   if (hasCompletedOnboarding(user)) return <Navigate to={AUTH_CONFIG.authenticatedHomePath} replace />;
   return children;
 }
@@ -107,6 +112,8 @@ function AuthEntryGate({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-pe-canvas text-pe-text">Loading…</div>;
   if (!user) return children;
+  if (user.profile_loading_error) return <ProfileRecovery />;
+  if (user.status && user.status !== "active") return <ProfileRecovery suspended />;
   return <Navigate to={hasCompletedOnboarding(user) ? AUTH_CONFIG.authenticatedHomePath : AUTH_CONFIG.postSignUpPath} replace />;
 }
 
@@ -115,6 +122,8 @@ function VerifyEmailGate() {
   if (AUTH_CONFIG.requireEmailConfirmation) return <VerifyEmail />;
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-pe-canvas text-pe-text">Loading…</div>;
   if (!user) return <Navigate to="/register" replace />;
+  if (user.profile_loading_error) return <ProfileRecovery />;
+  if (user.status && user.status !== "active") return <ProfileRecovery suspended />;
   return <Navigate to={hasCompletedOnboarding(user) ? AUTH_CONFIG.authenticatedHomePath : AUTH_CONFIG.postSignUpPath} replace />;
 }
 

@@ -15,7 +15,7 @@ const MARKET_GROUPS = {
   ],
   futures: [
     { id: "nasdaq-futures", label: "Nasdaq Futures", symbol: "OANDA:NAS100USD", directSymbol: "CME_MINI:NQ1!", proxyLabel: "Nasdaq 100 CFD OANDA (pas le contrat NQ)" },
-    { id: "sp-futures", label: "S&P Futures", symbol: "SP:SPX", directSymbol: "CME_MINI:ES1!", proxyLabel: "Indice S&P 500" },
+    { id: "sp-futures", label: "S&P Futures", symbol: "FOREXCOM:SPXUSD", directSymbol: "CME_MINI:ES1!", proxyLabel: "S&P 500 CFD FOREX.com (pas le contrat ES)" },
     { id: "gold-futures", label: "Or Futures", symbol: "OANDA:XAUUSD", directSymbol: "COMEX:GC1!", proxyLabel: "Or spot" },
     { id: "oil-futures", label: "Pétrole Futures", symbol: "TVC:USOIL", directSymbol: "NYMEX:CL1!", proxyLabel: "Pétrole US" },
   ],

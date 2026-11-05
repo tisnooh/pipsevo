@@ -8,6 +8,7 @@ import TradingRulesEditor, { DEFAULT_TRADING_RULES, normalizeTradingRules } from
 import { TrendingUp, Bitcoin, BarChart3, LineChart, Fuel, ArrowRight, ArrowLeft, Check, Clock3, SlidersHorizontal } from "lucide-react";
 import { ASSET_GROUPS, MARKET_INSTRUMENTS, PROP_FIRMS, getInstrumentsForMarket, marketKeys, normalizeJournalPreferences } from "@/lib/journalPreferences";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { tradingRulesValidation } from "@/lib/tradingRulesValidation";
 
 const ASSET_ICONS = {
   forex: LineChart, indices_cfd: BarChart3, commodities_cfd: Fuel, stocks_cfd: TrendingUp, crypto_cfd: Bitcoin,
@@ -40,11 +41,14 @@ export default function Onboarding() {
   };
   const togglePreferenceFavorite = (key,id) => setJournalPreferences(current=>{const ids=current.favorites[key] || [];return {...current,favorites:{...current.favorites,[key]:ids.includes(id)?ids.filter(value=>value!==id):[...ids,id]}}});
   const toggleFavoriteInstrument = id => setJournalPreferences(current=>({...current,favoriteInstruments:current.favoriteInstruments.includes(id)?current.favoriteInstruments.filter(value=>value!==id):[...current.favoriteInstruments,id]}));
-  const canContinue = step === 1 || (step === 2 && assets.length > 0 && journalPreferences.favoriteInstruments.length > 0) || step === 3 || (step === 4 && firms.length > 0) || (step === 5 && Number(numAccounts) >= 1 && Number(numAccounts) <= 50);
-  const canFinish = rulesTiming === "later" || (Number(rules.max_trades) >= 1 && Number(rules.daily_loss_limit) > 0 && Number(rules.max_risk_pct) > 0 && Number(rules.max_risk_pct) <= 10 && Number(rules.stop_after_loss) >= 1 && Number(rules.min_rr) > 0 && Number(rules.max_session_minutes) >= 15);
+  const validAccountCount = Number.isInteger(Number(numAccounts)) && Number(numAccounts) >= 1 && Number(numAccounts) <= 50;
+  const canContinue = step === 1 || (step === 2 && assets.length > 0 && journalPreferences.favoriteInstruments.length > 0) || step === 3 || (step === 4 && firms.length > 0) || (step === 5 && validAccountCount);
+  const canFinish = rulesTiming === "later" || tradingRulesValidation(rules).valid;
 
   const finish = async () => {
     if (loading) return;
+    if (!validAccountCount) return toast.error("Renseigne un nombre entier de comptes entre 1 et 50.");
+    if (!canFinish) return toast.error(tradingRulesValidation(rules).message);
     setLoading(true);
     try {
       const savedRules = rulesTiming === "later" ? { ...DEFAULT_TRADING_RULES, configured: false, assets } : { ...normalizeTradingRules(rules), configured: true, assets };
@@ -67,7 +71,7 @@ export default function Onboarding() {
           <div className="relative grid grid-cols-6 gap-2 mb-7">
             {["Profil","Actifs","Journal","Firms","Comptes","Règles"].map((label,i) => <div key={label}><div className={`h-1.5 rounded-full transition-all duration-500 ${step>=i+1?"bg-gradient-to-r from-[#7C4DFF] to-[#4F8CFF] shadow-[0_0_12px_rgba(124,77,255,.35)]":"bg-white/10"}`} /><div className={`mt-2 hidden text-pe-micro sm:block ${step===i+1?"text-[#B58BFF]":"text-[#4B5563]"}`}>{label}</div></div>)}
           </div>
-          <div className="relative">
+          <fieldset disabled={loading} className="relative min-w-0">
           <div className="font-mono text-pe-micro uppercase tracking-widest text-[#B58BFF]">Étape {step} / 6</div>
 
           {step === 1 && (
@@ -121,9 +125,9 @@ export default function Onboarding() {
               <p className="mt-2 text-sm text-[#8B93A3]">Construis tes garde-fous maintenant. À l’étape suivante, tu pourras connecter automatiquement ton premier compte ou le configurer manuellement.</p>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <button type="button" onClick={()=>setRulesTiming("now")} className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${rulesTiming === "now" ? "border-[#7C4DFF]/70 bg-[#7C4DFF]/10 shadow-[0_12px_35px_rgba(124,77,255,.12)]" : "border-white/[0.07] bg-white/[0.025] hover:border-white/20"}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#7C4DFF]/12 text-[#B58BFF]"><SlidersHorizontal className="h-5 w-5"/></span><span><span className="block text-sm font-semibold">Configurer maintenant</span><span className="mt-1 block text-xs leading-relaxed text-[#7E8798]">Définis tes limites, ta check-list et tes règles personnelles.</span></span></button>
-                <button type="button" onClick={()=>setRulesTiming("later")} className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${rulesTiming === "later" ? "border-[#4F8CFF]/70 bg-[#4F8CFF]/10 shadow-[0_12px_35px_rgba(79,140,255,.12)]" : "border-white/[0.07] bg-white/[0.025] hover:border-white/20"}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#4F8CFF]/12 text-[#8FB4FF]"><Clock3 className="h-5 w-5"/></span><span><span className="block text-sm font-semibold">Ajouter ultérieurement</span><span className="mt-1 block text-xs leading-relaxed text-[#7E8798]">Utilise les valeurs conseillées et personnalise-les plus tard.</span></span></button>
+                <button type="button" onClick={()=>setRulesTiming("later")} className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${rulesTiming === "later" ? "border-[#4F8CFF]/70 bg-[#4F8CFF]/10 shadow-[0_12px_35px_rgba(79,140,255,.12)]" : "border-white/[0.07] bg-white/[0.025] hover:border-white/20"}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#4F8CFF]/12 text-[#8FB4FF]"><Clock3 className="h-5 w-5"/></span><span><span className="block text-sm font-semibold">Ajouter ultérieurement</span><span className="mt-1 block text-xs leading-relaxed text-[#7E8798]">Garde les valeurs conseillées comme brouillon et confirme-les plus tard.</span></span></button>
               </div>
-              {rulesTiming === "now" ? <div className="mt-7"><TradingRulesEditor value={rules} onChange={setRules}/></div> : <div className="mt-6 rounded-2xl border border-[#4F8CFF]/20 bg-[#4F8CFF]/[0.06] p-5"><div className="text-sm font-semibold text-[#AFC8FF]">Tu pourras revenir dessus à tout moment</div><p className="mt-2 text-xs leading-relaxed text-[#8B93A3]">Les valeurs de protection conseillées seront enregistrées. Retrouve ensuite la section « Règles de trading » dans les paramètres de ton compte.</p></div>}
+              {rulesTiming === "now" ? <div className="mt-7"><TradingRulesEditor value={rules} onChange={setRules}/></div> : <div className="mt-6 rounded-2xl border border-[#4F8CFF]/20 bg-[#4F8CFF]/[0.06] p-5"><div className="text-sm font-semibold text-[#AFC8FF]">Tu pourras revenir dessus à tout moment</div><p className="mt-2 text-xs leading-relaxed text-[#8B93A3]">Les valeurs conseillées seront enregistrées comme brouillon : les limites globales ne seront pas appliquées avant confirmation. Les limites propres à tes comptes restent distinctes. Retrouve la section « Règles de trading » dans les paramètres.</p></div>}
             </div>
           )}
 
@@ -135,7 +139,7 @@ export default function Onboarding() {
               <button onClick={finish} disabled={loading || !canFinish} className="btn-primary inline-flex items-center justify-center gap-2 text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed" data-testid="onb-finish">{loading?"Sauvegarde…":(<>Enregistrer et ajouter mon compte <ArrowRight className="w-4 h-4"/></>)}</button>
             )}
           </div>
-          </div>
+          </fieldset>
         </div>
       </div>
     </div>

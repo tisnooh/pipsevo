@@ -25,6 +25,14 @@ Le SMTP de Supabase Auth est un flux séparé, exécuté par Supabase : son fonc
 
 Contrôle du 5 octobre 2026 : le tableau de bord authentifié confirme l'offre Free de `pipsevo-backend`. L'envoi de bienvenue échoue à l'ouverture de la connexion réseau avec `OSError: [Errno 101] Network is unreachable`, avant toute authentification SMTP. Les instructions SMTP ci-dessous ne sont pas utilisables pour ce service dans son offre actuelle. Ne pas changer le mot de passe d'application pour corriger ce blocage et ne pas présenter la configuration présente comme un service d'envoi opérationnel.
 
+Vérification documentaire du 10 octobre 2026 : la documentation officielle Render
+confirme toujours l'interdiction des sorties SMTP sur `25`, `465`, `587`, ainsi que
+la mise en veille après quinze minutes et une reprise d'environ une minute.
+La configuration actuelle doit donc être contrôlée avant ouverture publique :
+les tests unitaires du transport ne prouvent ni la connectivité de production,
+ni la réception en boîte de messagerie. La sélection d'un transport HTTPS déjà
+autorisé ou d'une offre adaptée nécessite une validation du propriétaire.
+
 Pour conserver l'adresse Gmail sur un transport HTTPS, l'[API Gmail permet l'envoi de messages MIME](https://developers.google.com/workspace/gmail/api/guides/sending). Cette solution nécessite une autorisation OAuth d'envoi distincte de la connexion Google à PipsEvo ; le mot de passe d'application SMTP ne remplace pas cette autorisation. Ce transport n'est pas encore implémenté ni activé dans PipsEvo. L'autre choix est le transport Resend HTTPS déjà implémenté, après configuration d'une identité d'expédition autorisée et d'une clé serveur. Le choix du fournisseur et toute nouvelle permission restent à valider par le propriétaire.
 
 Ajouter les variables suivantes dans l'environnement du backend :
@@ -119,12 +127,14 @@ Le backend :
 - Une clé unique par utilisateur et une réservation temporaire empêchent les appels concurrents normaux de déclencher plusieurs envois. Un envoi interrompu en statut `sending` est récupérable après cinq minutes, lors d'un nouvel appel authentifié.
 - Resend dispose d'une fenêtre d'idempotence fournisseur limitée à 24 heures. SMTP ne garantit pas cette déduplication : une interruption après acceptation par le serveur SMTP mais avant la mise à jour en base peut entraîner un doublon à la reprise. Ne pas présenter ce flux comme une garantie absolue de livraison unique.
 - Le statut `sent` confirme l'acceptation par le fournisseur, pas l'arrivée en boîte de réception. La présence des variables serveur n'est pas une preuve de livraison : vérifier le journal, puis le message dans la boîte destinataire.
+- Un refus SMTP du destinataire et une réponse HTTPS sans identifiant de message valide sont des échecs, jamais des envois acceptés.
 - Les liens expirés affichent une action adaptée pour renvoyer la confirmation ou recommencer la récupération du mot de passe.
 
 ## Newsletter
 
 - `POST /api/newsletter/subscribe` crée un abonnement en attente et envoie un lien valable 24 heures.
 - `POST /api/newsletter/confirm` active l'abonnement et envoie le message de bienvenue marketing.
+- Chaque demande possède une empreinte de lien serveur : seule la confirmation en attente la plus récente peut activer l'abonnement. Rejouer une confirmation déjà utilisée ne renvoie pas le bienvenue et ne réactive jamais un désabonné. Les anciennes demandes sans empreinte exigent le renvoi d'un nouveau lien.
 - `POST /api/newsletter/unsubscribe` et `/one-click-unsubscribe` désactivent immédiatement le marketing.
 - `GET/PUT /api/email-preferences` synchronise les choix d'un utilisateur connecté.
 - `POST /api/internal/newsletter/campaigns/send` envoie ou reprend une campagne par lots de 100 destinataires maximum. Cette route exige `X-Newsletter-Admin-Key`.
@@ -132,6 +142,13 @@ Le backend :
 - Les réponses publiques ne révèlent pas si une adresse est déjà abonnée.
 
 Chaque campagne utilise un `campaign_key` stable. Rejouer le même contenu ignore les adresses déjà livrées ; réutiliser la même clé avec un contenu différent est refusé.
+
+Chaque destinataire est réservé atomiquement avec un bail de cinq minutes afin
+que deux travailleurs n'envoient pas simultanément le même lot. Le consentement
+est relu juste avant l'envoi. Les anciens échecs restent récupérables. La limite
+SMTP demeure : une interruption après acceptation mais avant écriture en base
+peut produire un doublon lors de la reprise ; ce n'est pas une garantie absolue
+d'envoi unique ni de réception.
 
 ```json
 {

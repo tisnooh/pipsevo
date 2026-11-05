@@ -11,6 +11,16 @@ const trades = [
 test("keeps the provider currency when display preferences use another currency", () => {
   expect(tradeCurrency(trades[1], "GBP")).toBe("EUR");
   expect(tradeCurrency(trades[0], "USD")).toBe("USD");
+  expect(tradeCurrency(trades[0], "EUR")).toBe("USD");
+});
+
+test("unknown provider currency never becomes the display currency or enters financial totals", () => {
+  const source = { source_provider: "ctrader", pnl: 100, result_status: "closed" };
+  expect(tradeCurrency(source, "USD")).toBe("UNKNOWN");
+  const scope = tradingCurrencyScope([source], "", "EUR");
+  expect(scope.currency).toBe("UNKNOWN");
+  expect(calculateTradeAnalytics(scope.trades, [])).toMatchObject({ pnl: null, winrate: null, unknownCount: 1 });
+  expect(tradingAccountRisk([{ id: "linked", currency_available: false, max_drawdown: 1000, current_drawdown: 0 }], [], "USD").remaining).toBeNull();
 });
 
 test("does not add EUR and USD P&L or include open positions in realized results", () => {
@@ -54,4 +64,20 @@ test("drawdown includes only configured accounts in the selected currency", () =
   expect(tradingAccountRisk(accounts, [], "EUR", "USD", providers)).toEqual({ count: 1, limit: 2000, remaining: 1500, rate: 75 });
   expect(tradingAccountRisk(accounts, [], "USD", "USD", providers).remaining).toBe(4000);
   expect(tradingAccountRisk(accounts, [], "GBP", "USD", providers).remaining).toBeNull();
+});
+
+test("unknown provider or trailing drawdown does not masquerade as a configured static limit", () => {
+  const accounts = [
+    { id: "provider", balance: 52000, initial_balance: 50000, max_drawdown: 2500 },
+    { id: "trailing", balance: 52000, initial_balance: 50000, max_drawdown: 2500, drawdown_mode: "trailing" },
+  ];
+  const providers = { provider: { currency: "USD", status: "connected" } };
+  expect(tradingAccountRisk(accounts, [], "USD", "USD", providers)).toEqual({ count: 0, limit: 0, remaining: null, rate: 0 });
+  expect(tradingAccountRisk([{ ...accounts[0], max_drawdown_level: 51500 }], [], "USD", "USD", providers)).toEqual({ count: 1, limit: 2500, remaining: 500, rate: 20 });
+});
+
+test("legacy account amounts are not relabelled by display preferences", () => {
+  const accounts = [{ id: "manual", balance: 50000, initial_balance: 50000, max_drawdown: 2500 }];
+  expect(tradingAccountRisk(accounts, [], "EUR", "EUR").remaining).toBeNull();
+  expect(tradingAccountRisk(accounts, [], "USD", "EUR").remaining).toBe(2500);
 });

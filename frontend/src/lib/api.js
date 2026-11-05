@@ -2,10 +2,12 @@ import axios from "axios";
 import { supabase, SUPABASE_AUTH_STORAGE_KEY } from "@/lib/supabase";
 import { AUTH_CONFIG } from "@/config/auth";
 import { notifyAppDataChanged } from "@/lib/appDataEvents";
-import { tradeDateKey } from "@/lib/tradeCalendar";
-import { measuredTradePnl, tradeOutcome } from "@/lib/tradeAnalytics";
+import { measuredTradePnl } from "@/lib/tradeAnalytics";
 import { MAX_TRADE_SCREENSHOT_BYTES, TRADE_SCREENSHOT_TYPES } from "@/lib/tradeMedia";
 import { fetchOwnedTradeHistory } from "@/lib/ownedTradeHistory";
+import { clockInput, finiteInput, accountFinancialPayload, validateTradeCurrency } from "@/lib/financialPayloads";
+import { tradeFingerprint, tradeIdentityKeys, isDuplicateTradeImport } from "@/lib/tradeCsvImport";
+import { resolveAccountDrawdown } from "@/lib/riskEngine";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
@@ -29,7 +31,7 @@ const check = (error, fallback) => {
   const message = authMessages[error.code] || error.message || fallback;
   throw fail(message, error.status || (error.code === "over_email_send_rate_limit" ? 429 : 400), error);
 };
-const numberOrNull = (value) => value === "" || value === undefined || value === null ? null : Number(value);
+const removeLocalStorage = key => { try { localStorage.removeItem(key); } catch { /* Storage can be disabled. */ } };
 const numeric = (row, keys) => {
   const copy = { ...row };
   keys.forEach((key) => { if (copy[key] !== null && copy[key] !== undefined) copy[key] = Number(copy[key]); });
@@ -44,6 +46,7 @@ const currentAuthUser = async () => {
 
 api.interceptors.request.use(async (cfg) => {
   const { data: { session } } = await supabase.auth.getSession();
+  cfg.headers ||= {};
   if (session?.access_token) cfg.headers.Authorization = `Bearer ${session.access_token}`;
   return cfg;
 });
@@ -51,9 +54,20 @@ api.interceptors.response.use((value) => value, async (error) => {
   const detail = error.response?.data?.detail;
   const isBusinessError = detail && typeof detail === "object" && Boolean(detail.code);
   if (error.response?.status === 401 && !isBusinessError) {
-    await supabase.auth.signOut({ scope: "local" });
-    localStorage.removeItem("pipsevo_token");
-    window.dispatchEvent(new Event("pipsevo:session-expired"));
+    const headers = error.config?.headers;
+    const authorization = headers?.get?.("Authorization") || headers?.Authorization || headers?.authorization;
+    const requestToken = typeof authorization === "string" && authorization.startsWith("Bearer ") ? authorization.slice(7) : null;
+    // An old request (or a public request) must not sign out a newer session.
+    if (requestToken) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token === requestToken) {
+          try { await supabase.auth.signOut({ scope: "local" }); } catch { /* The rejected session must still be hidden. */ }
+          removeLocalStorage("pipsevo_token");
+          window.dispatchEvent(new Event("pipsevo:session-expired"));
+        }
+      } catch { /* Preserve the original request error if session storage fails. */ }
+    }
   }
   return Promise.reject(error);
 });
@@ -68,7 +82,9 @@ const loadCurrentUserOnce = async () => {
   ]);
   check(profileError, "Profil introuvable");
   if (!profile) throw fail("Le profil est encore en cours de création.", 503);
+  if (profile.id !== authUser.id) throw fail("Le profil reçu ne correspond pas à ta session.", 503);
   check(subscriptionError, "Abonnement indisponible");
+  if (subscription && subscription.user_id !== authUser.id) throw fail("L’abonnement reçu ne correspond pas à ta session.", 503);
   const onboardingCompleted = Boolean(profile.onboarding_completed ?? profile.onboarded);
   return {
     ...profile,
@@ -154,8 +170,11 @@ export const auth = {
     const user = await currentAuthUser();
     const allowed = ["name", "trader_type", "prop_firms", "num_accounts", "onboarded", "onboarding_completed", "rules", "journal_preferences", "app_preferences", "trading_plan"];
     const payload = Object.fromEntries(Object.entries(values).filter(([key]) => allowed.includes(key)));
-    const { error } = await supabase.from("profiles").update(payload).eq("id", user.id);
+    const { data: updated, error } = await supabase.from("profiles").update(payload).eq("id", user.id).select("id").single();
     check(error, "Impossible de sauvegarder le profil");
+    if (updated?.id !== user.id) throw fail("Le profil n’a pas été sauvegardé. Recharge ta session avant de réessayer.", 503);
+    const current = await currentAuthUser();
+    if (current.id !== user.id) throw fail("Le profil a été sauvegardé sur le compte initial, mais ta session a changé. Recharge les paramètres du compte actuel.", 409);
     const metadata = {};
     if (payload.name) metadata.display_name = payload.name;
     if ("onboarding_completed" in payload) metadata.onboarding_completed = Boolean(payload.onboarding_completed);
@@ -163,7 +182,9 @@ export const auth = {
       const { error: metadataError } = await supabase.auth.updateUser({ data: metadata });
       check(metadataError, "Le profil a été sauvegardé, mais ses métadonnées n'ont pas pu être synchronisées");
     }
-    return response(await loadCurrentUser({ retries: 2 }));
+    const refreshed = await loadCurrentUser({ retries: 2 });
+    if (refreshed.id !== user.id) throw fail("Ta session a changé pendant la sauvegarde. Recharge les paramètres du compte actuel.", 409);
+    return response(refreshed);
   },
   logout: async (scope = "local") => {
     const { error } = await supabase.auth.signOut({ scope });
@@ -187,61 +208,62 @@ export const auth = {
     return response({ ok: true });
   },
   deleteAccount: async (confirmation) => {
-    // Backtest Lab data lives in the private backend database and cannot be
-    // removed by the Supabase cascade after the auth token is invalidated.
-    await api.delete("/backtest/account-data");
-    const { data, error } = await supabase.functions.invoke("delete-account", {
-      body: { confirmation },
-    });
-    check(error, "Impossible de supprimer le compte");
+    if (confirmation !== "SUPPRIMER") throw fail("Confirmation invalide.", 422);
+    const { data } = await api.post("/account/delete", { confirmation });
     if (!data?.ok) throw fail(data?.error || "Impossible de supprimer le compte", 400);
 
     // Le compte n'existe plus : l'API Auth peut donc répondre 403 au sign-out.
     // La clé est celle configurée par PipsEvo dans le client Supabase.
-    await supabase.auth.signOut({ scope: "local" });
-    localStorage.removeItem(SUPABASE_AUTH_STORAGE_KEY);
-    return response({ ok: true });
+    try { await supabase.auth.signOut({ scope: "local" }); } catch { /* Auth is already disabled. */ }
+    removeLocalStorage(SUPABASE_AUTH_STORAGE_KEY);
+    return response(data);
   },
 };
 
 const accountNumbers = ["balance", "initial_balance", "profit_target", "max_drawdown", "daily_loss_limit", "current_drawdown"];
 const enrichAccount = (value) => {
   const account = numeric(value, accountNumbers);
-  const initial = Math.max(account.initial_balance || 1, 1);
-  const balance = account.balance ?? initial;
-  const maxDrawdown = Math.max(account.max_drawdown || 1, 1);
-  const profitPct = (balance - initial) / initial;
-  const drawdownRatio = Math.max(0, initial - balance) / maxDrawdown;
+  const risk = resolveAccountDrawdown(account, { allowStaticEstimate: !account.integration_account_id });
+  const initial = Number(account.initial_balance);
+  const scoreAvailable = account.currency_available !== false && initial > 0 && Number.isFinite(account.balance) && risk;
+  const profitPct = scoreAvailable ? (account.balance - initial) / initial : null;
+  const drawdownRatio = risk ? Math.min(1, risk.drawdownUsed / risk.maxDrawdown) : null;
   return {
     ...account,
-    health_score: Math.max(0, Math.min(100, Math.trunc(70 + profitPct * 100 - drawdownRatio * 60))),
-    survival_score: Math.max(5, Math.min(99, Math.trunc(95 - drawdownRatio * 90))),
+    health_score: scoreAvailable ? Math.max(0, Math.min(100, Math.trunc(70 + profitPct * 100 - drawdownRatio * 60))) : null,
+    survival_score: scoreAvailable ? Math.max(5, Math.min(99, Math.trunc(95 - drawdownRatio * 90))) : null,
   };
 };
-const cleanAccount = (values) => {
-  const allowed = ["name", "firm", "market_type", "balance", "initial_balance", "profit_target", "max_drawdown", "daily_loss_limit", "current_drawdown", "status"];
-  const payload = Object.fromEntries(Object.entries(values).filter(([key]) => allowed.includes(key)));
-  accountNumbers.forEach((key) => { if (key in payload) payload[key] = Number(payload[key] || 0); });
-  return payload;
+const ownedAccounts = async (userId) => {
+  const [rows, linked] = await Promise.all([fetchAllOwnedRows("accounts", userId), fetchAllOwnedRows("integration_accounts", userId)]);
+  return rows.map(row => {
+    const providers = linked.filter(item => item.account_id === row.id);
+    const currencies = [...new Set(providers.map(item => String(item.currency || "").toUpperCase()).filter(Boolean))];
+    const native = String(row.provider_currency || row.currency || "").trim().toUpperCase();
+    const nativeAvailable = row.currency_available !== false && Boolean(native || !(row.source_provider || row.integration_account_id));
+    return enrichAccount(providers.length ? { ...row, integration_account_id: providers[0].id, source_provider: providers[0].provider,
+      currency: currencies.length === 1 ? currencies[0] : null, currency_available: currencies.length === 1,
+    } : { ...row, currency: native || (nativeAvailable ? "USD" : null), currency_available: nativeAvailable });
+  });
 };
 
 export const accounts = {
   list: async () => {
     const user = await currentAuthUser();
-    const { data, error } = await supabase.from("accounts").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
-    check(error, "Impossible de charger les comptes");
-    return response((data || []).map(enrichAccount));
+    return response(await ownedAccounts(user.id));
   },
   create: async (values) => {
     const user = await currentAuthUser();
-    const { data, error } = await supabase.from("accounts").insert({ ...cleanAccount(values), user_id: user.id }).select().single();
+    const { data, error } = await supabase.from("accounts").insert({ ...accountFinancialPayload(values), user_id: user.id }).select().single();
     check(error, "Impossible de créer le compte");
     notifyAppDataChanged(["accounts", "trades", "dashboard", "discipline"]);
     return response(enrichAccount(data));
   },
   update: async (id, values) => {
     const user = await currentAuthUser();
-    const { data, error } = await supabase.from("accounts").update(cleanAccount(values)).eq("id", id).eq("user_id", user.id).select().single();
+    const previous = (await ownedAccounts(user.id)).find(item => item.id === id);
+    if (!previous) throw fail("Compte introuvable.", 404);
+    const { data, error } = await supabase.from("accounts").update(accountFinancialPayload(values, previous)).eq("id", id).eq("user_id", user.id).select().single();
     check(error, "Impossible de modifier le compte");
     notifyAppDataChanged(["accounts", "dashboard", "discipline"]);
     return response(enrichAccount(data));
@@ -255,41 +277,87 @@ export const accounts = {
 
 const tradeNumbers = ["entry", "stop", "take_profit", "exit_price", "pnl", "r", "size", "duration_minutes", "point_value", "commission"];
 const cleanTrade = (values) => {
-  const allowed = ["account_id", "date", "instrument", "direction", "entry", "stop", "take_profit", "exit_price", "pnl", "result_status", "market_type", "setup", "setups", "session", "emotion", "emotion_secondary", "emotion_intensity", "notes", "plan_respected", "screenshots", "r", "size", "duration", "duration_minutes", "entry_time", "exit_time", "point_value", "commission", "mistakes", "exit_reason", "plan_exception_reason", "tags", "checklist_results", "starred", "import_batch_id", "import_source", "import_fingerprint", "external_trade_id"];
+  const allowed = ["account_id", "date", "instrument", "direction", "entry", "stop", "take_profit", "exit_price", "pnl", "result_status", "market_type", "setup", "setups", "session", "emotion", "emotion_secondary", "emotion_intensity", "notes", "plan_respected", "screenshots", "r", "size", "duration", "duration_minutes", "entry_time", "exit_time", "point_value", "commission", "mistakes", "exit_reason", "plan_exception_reason", "tags", "checklist_results", "starred", "import_batch_id", "import_source", "import_fingerprint", "external_trade_id", "provider_currency"];
   const payload = Object.fromEntries(Object.entries(values).filter(([key]) => allowed.includes(key)));
-  tradeNumbers.forEach((key) => { if (key in payload) payload[key] = numberOrNull(payload[key]); });
-  ["entry_time", "exit_time"].forEach((key) => { if (payload[key] === "") payload[key] = null; });
+  tradeNumbers.forEach((key) => { if (key in payload) payload[key] = finiteInput(payload[key], key); });
+  ["size", "commission"].forEach(key => { if (payload[key] === null) delete payload[key]; });
+  ["entry_time", "exit_time"].forEach((key) => { if (key in payload) payload[key] = clockInput(payload[key]); });
   if (["open", "cancelled", "canceled"].includes(payload.result_status)) {
     payload.pnl = null;
     if (payload.result_status !== "open") payload.exit_price = null;
   }
   return payload;
 };
-const normalizeTrade = (value) => {
+const normalizeTrade = (value, account) => {
   const trade = numeric(value, tradeNumbers);
-  return { ...trade, pnl: measuredTradePnl(trade) };
+  const explicit = trade.provider_currency || trade.currency;
+  const provider = trade.source_provider || trade.integration_account_id || trade.integration_connection_id;
+  const native = explicit || account?.currency || (!provider ? "USD" : null);
+  const currencyAvailable = trade.currency_available !== false && Boolean(explicit || (account?.currency_available !== false && native));
+  const normalized = { ...trade, provider_currency: native, currency_available: currencyAvailable };
+  return { ...normalized, pnl: measuredTradePnl(normalized) };
+};
+
+const manualTradeMatches = (stored, payload) => {
+  const normalized = numeric(stored, tradeNumbers);
+  return Object.entries(payload).every(([key, value]) => JSON.stringify(normalized[key]) === JSON.stringify(value));
 };
 
 export const trades = {
   list: async (accountId) => {
     const user = await currentAuthUser();
     try {
-      const data = await fetchOwnedTradeHistory(supabase, user.id, accountId);
-      return response(data.map(normalizeTrade));
+      const [data, accountRows] = await Promise.all([fetchOwnedTradeHistory(supabase, user.id, accountId), ownedAccounts(user.id)]);
+      return response(data.map(row => normalizeTrade(row, accountRows.find(account => account.id === row.account_id))));
     } catch (error) {
       check(error, "Impossible de charger les trades");
     }
   },
-  create: async (values) => {
+  create: async (values, { requestId } = {}) => {
     const user = await currentAuthUser();
-    const { data, error } = await supabase.from("trades").insert({ ...cleanTrade(values), user_id: user.id }).select().single();
-    check(error, "Impossible d’ajouter le trade");
+    const account = (await ownedAccounts(user.id)).find(item => item.id === values.account_id);
+    if (!account) throw fail("Compte introuvable.", 404);
+    const payload = validateTradeCurrency(cleanTrade(values), account);
+    if (requestId && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) throw fail("Identifiant de sauvegarde invalide.", 422);
+    let data, insertError;
+    try {
+      const result = await supabase.from("trades").insert({ ...payload, user_id: user.id, ...(requestId ? { id: requestId } : {}) }).select().single();
+      data = result.data; insertError = result.error;
+    } catch (error) { insertError = error; }
+    if (insertError && requestId) {
+      // The primary-key ID is retained by the form across retries. A response
+      // timeout (or duplicate key) can mean the first insert already committed.
+      const existing = await supabase.from("trades").select("*").eq("id", requestId).eq("user_id", user.id).maybeSingle();
+      check(existing.error, "La sauvegarde n’est pas confirmée. Recharge le journal avant de réessayer.");
+      if (existing.data?.id === requestId && existing.data.user_id === user.id) {
+        if (!manualTradeMatches(existing.data, payload)) {
+          const error = fail("Ce trade a déjà été enregistré avec les données de la première tentative. Recharge le journal et modifie le trade existant.", 409);
+          error.saved_trade_id = requestId;
+          throw error;
+        }
+        data = existing.data; insertError = null;
+      }
+    }
+    check(insertError, "Impossible d’ajouter le trade");
+    if (!data?.id || (requestId && data.id !== requestId) || (data.user_id !== undefined && data.user_id !== user.id)) throw fail("La réponse de sauvegarde est incohérente. Recharge le journal avant de réessayer.", 503);
     notifyAppDataChanged(["trades", "dashboard", "discipline", "analytics", "dna"]);
     return response(normalizeTrade(data));
   },
   update: async (id, values) => {
     const user = await currentAuthUser();
-    const { data, error } = await supabase.from("trades").update(cleanTrade(values)).eq("id", id).eq("user_id", user.id).select().single();
+    const { data: previous, error: previousError } = await supabase.from("trades").select("*").eq("id", id).eq("user_id", user.id).single();
+    check(previousError, "Trade introuvable");
+    const account = (await ownedAccounts(user.id)).find(item => item.id === (values.account_id || previous.account_id));
+    if (!account) throw fail("Compte introuvable.", 404);
+    let payload = cleanTrade(values);
+    if (previous.source_provider || previous.integration_account_id) {
+      const financialFields = ["account_id", "date", "instrument", "direction", "entry", "exit_price", "pnl", "result_status", "size", "commission", "provider_currency", "stop", "take_profit", "r", "point_value", "entry_time", "exit_time", "duration", "duration_minutes", "market_type"];
+      const expected = { ...previous, pnl: measuredTradePnl(previous), provider_currency: previous.provider_currency || account.currency };
+      if (financialFields.some(key => key in payload && String(payload[key] ?? "") !== String(expected[key] ?? ""))) throw fail("Les résultats importés du fournisseur sont en lecture seule. Tu peux modifier tes notes et ta discipline ; un trade manuel doit rester distinct.");
+      const annotationFields = ["setup", "setups", "session", "emotion", "emotion_secondary", "emotion_intensity", "notes", "plan_respected", "screenshots", "mistakes", "exit_reason", "plan_exception_reason", "tags", "checklist_results", "starred"];
+      payload = Object.fromEntries(Object.entries(payload).filter(([key]) => annotationFields.includes(key)));
+    } else payload = validateTradeCurrency(payload, account);
+    const { data, error } = await supabase.from("trades").update(payload).eq("id", id).eq("user_id", user.id).select().single();
     check(error, "Impossible de modifier le trade");
     notifyAppDataChanged(["trades", "dashboard", "discipline", "analytics", "dna"]);
     return response(normalizeTrade(data));
@@ -303,38 +371,74 @@ export const trades = {
   },
   importCsv: async ({ fileName, rows, totalRows, skippedRows = 0, errorRows = 0 }) => {
     const user = await currentAuthUser();
+    if (!Array.isArray(rows) || !rows.length || rows.length > 50000) throw fail("Importe entre 1 et 50 000 lignes par fichier.");
+    const [accountRows, existingRows] = await Promise.all([ownedAccounts(user.id), fetchOwnedTradeHistory(supabase, user.id)]);
+    const known = new Set(existingRows.flatMap(tradeIdentityKeys));
+    let duplicateRows = 0;
+    const pending = [];
+    // Validate every row before creating a batch or inserting any trade.
+    for (const values of rows) {
+      const account = accountRows.find(item => item.id === values.account_id);
+      if (!account) throw fail("Compte d’import introuvable.", 404);
+      const payload = validateTradeCurrency(cleanTrade(values), account);
+      if (isDuplicateTradeImport(values, known)) { duplicateRows += 1; continue; }
+      payload.import_fingerprint = tradeFingerprint(values);
+      pending.push(payload);
+      tradeIdentityKeys({ ...values, import_fingerprint: payload.import_fingerprint }).forEach(key => known.add(key));
+    }
     const { data: batch, error: batchError } = await supabase.from("trade_imports").insert({
       user_id: user.id,
       file_name: fileName,
       total_rows: totalRows,
-      skipped_rows: skippedRows,
+      skipped_rows: skippedRows + duplicateRows,
       error_rows: errorRows,
     }).select().single();
     check(batchError, "Impossible de démarrer l’import");
     const imported = [];
     try {
-      for (let index = 0; index < rows.length; index += 200) {
-        const payload = rows.slice(index, index + 200).map(values => ({
-          ...cleanTrade(values),
+      for (let index = 0; index < pending.length; index += 200) {
+        const payload = pending.slice(index, index + 200).map(values => ({
+          ...values,
           user_id: user.id,
           import_batch_id: batch.id,
           import_source: "csv",
         }));
         const { data, error } = await supabase.from("trades").insert(payload).select();
-        check(error, `Échec de l’import à partir de la ligne ${index + 1}`);
-        imported.push(...(data || []).map(normalizeTrade));
+        if (error?.code === "23505") {
+          // Another tab may have inserted the same fingerprint after our read.
+          // A failed bulk insert is atomic; retry rows and verify each conflict.
+          for (const row of payload) {
+            const result = await supabase.from("trades").insert(row).select().single();
+            if (result.error?.code === "23505") {
+              const conflict = await supabase.from("trades").select("id").eq("user_id", user.id).eq("import_fingerprint", row.import_fingerprint).maybeSingle();
+              check(conflict.error, "Impossible de vérifier le doublon");
+              if (!conflict.data) check(result.error, "Conflit d’import non identifié");
+              duplicateRows += 1;
+            } else {
+              check(result.error, `Échec de l’import à partir de la ligne ${index + 1}`);
+              imported.push(normalizeTrade(result.data));
+            }
+          }
+        } else {
+          check(error, `Échec de l’import à partir de la ligne ${index + 1}`);
+          imported.push(...(data || []).map(normalizeTrade));
+        }
       }
       const { error: completeError } = await supabase.from("trade_imports").update({
         status: "completed",
         imported_rows: imported.length,
+        skipped_rows: skippedRows + duplicateRows,
         completed_at: new Date().toISOString(),
       }).eq("id", batch.id).eq("user_id", user.id);
-      check(completeError, "Les trades sont importés, mais le rapport n’a pas pu être finalisé");
       notifyAppDataChanged(["trades", "dashboard", "discipline", "analytics", "dna"]);
-      return response({ batch: { ...batch, status: "completed", imported_rows: imported.length }, trades: imported });
+      return response({ batch: { ...batch, status: completeError ? "processing" : "completed", imported_rows: imported.length, skipped_rows: skippedRows + duplicateRows }, trades: imported, report_pending: Boolean(completeError) });
     } catch (error) {
-      await supabase.from("trades").delete().eq("import_batch_id", batch.id).eq("user_id", user.id);
-      await supabase.from("trade_imports").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", batch.id).eq("user_id", user.id);
+      // Never destroy successful rows because a later write/report timed out.
+      try { await supabase.from("trade_imports").update({ status: "failed", imported_rows: imported.length, skipped_rows: skippedRows + duplicateRows, completed_at: new Date().toISOString() }).eq("id", batch.id).eq("user_id", user.id); } catch { /* Retry uses persisted fingerprints. */ }
+      notifyAppDataChanged(["trades", "dashboard", "discipline", "analytics", "dna"]);
+      if (imported.length) {
+        throw fail(`${imported.length} trade(s) ont été conservés avant l’interruption. Recharge le journal puis réimporte le fichier : les doublons seront ignorés.`, 503, error);
+      }
       throw error;
     }
   },
@@ -359,7 +463,11 @@ export const payouts = {
   },
   create: async (values) => {
     const user = await currentAuthUser();
-    const payload = { account_id: values.account_id, amount: Number(values.amount), date: values.date, note: values.note || null, user_id: user.id };
+    const amount = finiteInput(values.amount, "Montant", { nullable: false, minimum: 0.01 });
+    const account = (await ownedAccounts(user.id)).find(item => item.id === values.account_id);
+    if (!account) throw fail("Compte introuvable.", 404);
+    if (account.currency_available === false) throw fail("La devise native du compte est inconnue. Le payout ne peut pas être enregistré sous une devise supposée.");
+    const payload = { account_id: values.account_id, amount, date: values.date, note: values.note || null, user_id: user.id };
     const { data, error } = await supabase.from("payouts").insert(payload).select().single();
     check(error, "Impossible d’enregistrer le payout");
     notifyAppDataChanged(["payouts", "dashboard"]);
@@ -377,120 +485,47 @@ export const payouts = {
 const fetchAllOwnedRows = async (table, userId, orderColumn = "created_at") => {
   const pageSize = 1000;
   const rows = [];
-  for (let from = 0; ; from += pageSize) {
+  const seen = new Set();
+  let from = 0;
+  for (let page = 0; page < 200; page += 1) {
     const { data, error } = await supabase.from(table).select("*").eq("user_id", userId)
       .order(orderColumn, { ascending: false }).order("id", { ascending: true }).range(from, from + pageSize - 1);
     check(error, `Impossible d’exporter les données de ${table}`);
-    rows.push(...(data || []));
-    if (!data || data.length < pageSize) break;
+    if (!data?.length) return rows;
+    if (data.some(row => seen.has(row.id))) throw fail("Les données ont changé pendant leur lecture. Réessaie.", 503);
+    data.forEach(row => seen.add(row.id));
+    rows.push(...data);
+    from += data.length;
   }
-  return rows;
+  throw fail("L’historique dépasse la limite de lecture sécurisée.", 413);
 };
 
 export const dataExports = {
   all: async () => {
     const user = await currentAuthUser();
-    const [profile, accountRows, tradeRows, payoutRows, aiReports] = await Promise.all([
+    const [profile, accountRows, tradeRows, payoutRows, aiReports, backtest] = await Promise.all([
       loadCurrentUser({ retries: 2 }),
-      fetchAllOwnedRows("accounts", user.id),
+      ownedAccounts(user.id),
       fetchAllOwnedRows("trades", user.id, "date"),
       fetchAllOwnedRows("payouts", user.id, "date"),
       fetchAllOwnedRows("ai_reports", user.id),
+      api.get("/account/backtest-export"),
     ]);
     return response({
       profile,
       accounts: accountRows.map(enrichAccount),
-      trades: tradeRows.map(normalizeTrade),
-      payouts: payoutRows.map(normalizePayout),
+      trades: tradeRows.map(row => normalizeTrade(row, accountRows.find(account => account.id === row.account_id))),
+      payouts: payoutRows.map(row => ({ ...normalizePayout(row), currency: accountRows.find(account => account.id === row.account_id)?.currency || null })),
       aiReports,
+      backtest: backtest.data,
     });
   },
 };
 
-const groupTrades = (rows, key) => {
-  const result = {};
-  rows.filter(trade => typeof trade.pnl === "number" && Number.isFinite(trade.pnl)).forEach((trade) => {
-    const name = trade[key] || "Non renseigné";
-    result[name] ||= { trades: 0, pnl: 0, wins: 0 };
-    result[name].trades += 1;
-    result[name].pnl += trade.pnl;
-    if (trade.pnl > 0) result[name].wins += 1;
-  });
-  Object.values(result).forEach((item) => { item.winrate = Math.round((item.wins / Math.max(item.trades, 1)) * 1000) / 10; });
-  return result;
-};
-const buildDashboard = (accountRows, tradeRows, payoutRows) => {
-  const initial = accountRows.reduce((sum, item) => sum + Number(item.initial_balance || 0), 0);
-  const balance = accountRows.reduce((sum, item) => sum + Number(item.balance || 0), 0);
-  const totalProfit = balance - initial;
-  const remainingDrawdown = accountRows.reduce((sum, item) => sum + Math.max(0, Number(item.max_drawdown || 0) - Math.max(0, Number(item.initial_balance || 0) - Number(item.balance || 0))), 0);
-  const completedTrades = tradeRows.filter((item) =>
-    item.pnl !== null && item.pnl !== undefined && !["open", "cancelled", "canceled"].includes(item.result_status)
-  );
-  const measuredOutcomes = tradeRows.map(item => ({ item, outcome: tradeOutcome(item) })).filter(row => row.outcome !== null);
-  const wins = completedTrades.filter((item) => Number(item.pnl) > 0);
-  const losses = completedTrades.filter((item) => Number(item.pnl) < 0);
-  const winrate = measuredOutcomes.length ? measuredOutcomes.filter(row => row.outcome > 0).length / measuredOutcomes.length * 100 : 0;
-  const measuredPlanTrades = tradeRows.filter((item) => item.plan_respected === true || item.plan_respected === false);
-  const planRate = measuredPlanTrades.length
-    ? measuredPlanTrades.filter((item) => item.plan_respected === true).length / measuredPlanTrades.length * 100
-    : null;
-  const discipline = measuredPlanTrades.length
-    ? Math.max(0, Math.min(100, Math.trunc(planRate * 0.7 + 30)))
-    : 0;
-  const survival = accountRows.length ? Math.trunc(accountRows.reduce((sum, item) => sum + enrichAccount(item).survival_score, 0) / accountRows.length) : 100;
-  let running = 0;
-  const pnlByDate = completedTrades.reduce((result, item) => {
-    const date = tradeDateKey(item.date) || "Date inconnue";
-    result[date] = (result[date] || 0) + Number(item.pnl);
-    return result;
-  }, {});
-  const equity = Object.entries(pnlByDate)
-    .sort(([dateA], [dateB]) => String(dateA).localeCompare(String(dateB)))
-    .map(([date, pnl]) => ({ date, equity: Math.round((running += pnl) * 100) / 100 }));
-  const setups = groupTrades(tradeRows, "setup");
-  const sessions = groupTrades(tradeRows, "session");
-  const setupNames = Object.keys(setups);
-  const sum = (rows) => rows.reduce((total, item) => total + Number(item.pnl || 0), 0);
-  return {
-    kpis: {
-      funded_capital: initial, total_profit: totalProfit, remaining_drawdown: remainingDrawdown,
-      estimated_payout: Math.max(0, totalProfit * 0.8), discipline_score: discipline,
-      trader_score: Math.trunc((discipline + survival + Math.max(0, Math.min(100, winrate))) / 3),
-      survival_score: survival, total_payouts: payoutRows.reduce((total, item) => total + Number(item.amount || 0), 0),
-      active_accounts: accountRows.filter((item) => item.status === "active").length, total_trades: measuredOutcomes.length,
-    },
-    equity_curve: equity.slice(-180),
-    metrics: {
-      winrate: Math.round(winrate * 10) / 10,
-      profit_factor: !completedTrades.length ? null : losses.length ? Math.round((sum(wins) / Math.abs(sum(losses))) * 100) / 100 : wins.length ? Infinity : 0,
-      avg_win: wins.length ? Math.round(sum(wins) / wins.length * 100) / 100 : null,
-      avg_loss: losses.length ? Math.round(sum(losses) / losses.length * 100) / 100 : null,
-      plan_respect_rate: planRate === null ? null : Math.round(planRate * 10) / 10,
-    },
-    setups, sessions,
-    best_setup: setupNames.length ? setupNames.reduce((best, name) => setups[name].pnl > setups[best].pnl ? name : best) : null,
-    worst_setup: setupNames.length ? setupNames.reduce((worst, name) => setups[name].pnl < setups[worst].pnl ? name : worst) : null,
-  };
-};
-
-export const dashboard = async () => {
-  const [accountResponse, tradeResponse, payoutResponse] = await Promise.all([accounts.list(), trades.list(), payouts.list()]);
-  return response(buildDashboard(accountResponse.data, tradeResponse.data, payoutResponse.data));
-};
-export const dna = async () => {
-  const { data: rows } = await trades.list();
-  const measuredRows = rows.filter(item => typeof item.pnl === "number" && Number.isFinite(item.pnl));
-  if (!measuredRows.length) return response({ trader_type: "Untested", best_session: null, best_setup: null, best_conditions: "Insufficient monetary data" });
-  const totals = (key) => measuredRows.reduce((result, item) => ({ ...result, [item[key] || "?"]: (result[item[key] || "?"] || 0) + item.pnl }), {});
-  const best = (values) => Object.keys(values).reduce((winner, key) => values[key] > values[winner] ? key : winner);
-  const sessions = totals("session"), setups = totals("setup"), emotions = totals("emotion");
-  const average = measuredRows.reduce((sum, item) => sum + item.pnl, 0) / measuredRows.length;
-  return response({
-    trader_type: measuredRows.length < 50 && average > 0 ? "Sniper" : measuredRows.length >= 100 ? "Volume Trader" : "Developing",
-    best_session: best(sessions), best_setup: best(setups), best_emotion: best(emotions), trades_logged: rows.length,
-  });
-};
+// Shell and Atlas use the same canonical financial report as the backend API.
+// Monetary fields are null for mixed currencies instead of being added together.
+export const dashboard = () => api.get("/dashboard");
+export const dna = () => api.get("/dna");
 export const onboarding = (values) => auth.update({ ...values, onboarded: true, onboarding_completed: true });
 
 export const coach = {

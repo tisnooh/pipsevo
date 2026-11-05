@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { Check, ListChecks, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { DEFAULT_CHECKLIST } from "@/lib/journalPreferences";
-import { useAppSettings } from "@/hooks/useAppSettings";
 
 export const DEFAULT_TRADING_RULES = {
   max_trades: 3,
   daily_loss_limit: 300,
+  daily_loss_currency: "USD",
   max_risk_pct: 1,
   stop_after_loss: 2,
   min_rr: 1.5,
@@ -15,12 +15,16 @@ export const DEFAULT_TRADING_RULES = {
   configured: true,
 };
 
-export const normalizeTradingRules = (rules = {}) => ({
-  ...DEFAULT_TRADING_RULES,
-  ...rules,
-  pre_trade_checklist: Array.isArray(rules.pre_trade_checklist) ? rules.pre_trade_checklist : DEFAULT_CHECKLIST,
-  custom_rules: Array.isArray(rules.custom_rules) ? rules.custom_rules : [],
-});
+export const normalizeTradingRules = (value = {}) => {
+  const rules = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const validItems = items => items.filter(item => item && typeof item === "object" && !Array.isArray(item) && typeof item.id === "string" && typeof item.label === "string");
+  return {
+    ...DEFAULT_TRADING_RULES,
+    ...rules,
+    pre_trade_checklist: Array.isArray(rules.pre_trade_checklist) ? validItems(rules.pre_trade_checklist) : DEFAULT_CHECKLIST,
+    custom_rules: Array.isArray(rules.custom_rules) ? validItems(rules.custom_rules) : [],
+  };
+};
 
 const NumberField = ({ label, hint, value, onChange, min, max, step = 1, suffix }) => (
   <label className="block text-xs text-[#9CA3AF]">
@@ -39,7 +43,6 @@ const RuleToggle = ({ item, onToggle, onDelete, custom = false }) => (
 );
 
 export default function TradingRulesEditor({ value, onChange }) {
-  const { settings } = useAppSettings();
   const rules = normalizeTradingRules(value);
   const [draft, setDraft] = useState("");
   const update = (key, next) => onChange({ ...rules, [key]: next });
@@ -57,7 +60,8 @@ export default function TradingRulesEditor({ value, onChange }) {
       <div className="mb-4 flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#7C4DFF]/12 text-[#B58BFF]"><ShieldCheck className="h-5 w-5"/></span><div><h3 className="text-sm font-semibold">Limites de protection</h3><p className="mt-1 text-xs text-[#687183]">Des garde-fous mesurables pour arrêter avant de dégrader ton compte.</p></div></div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <NumberField label="Trades maximum par jour" value={rules.max_trades} min={1} max={100} onChange={v=>update("max_trades",v)}/>
-        <NumberField label="Perte journalière maximale" suffix={settings.currency} value={rules.daily_loss_limit} min={1} onChange={v=>update("daily_loss_limit",v)}/>
+        <NumberField label="Perte journalière maximale" suffix={rules.daily_loss_currency} value={rules.daily_loss_limit} min={1} onChange={v=>update("daily_loss_limit",v)}/>
+        <label className="block text-xs text-[#9CA3AF]">Devise de la limite journalière<select value={rules.daily_loss_currency} onChange={e=>update("daily_loss_currency",e.target.value)} className="pe-control mt-2 w-full">{[...new Set(["USD","EUR","GBP","CAD","AUD","CHF","JPY",rules.daily_loss_currency].filter(Boolean))].map(currency=><option key={currency} value={currency}>{currency}</option>)}</select><span className="mt-1.5 block text-[10px] leading-relaxed text-[#596172]">Cette limite globale ne s’applique qu’à la même devise. Les limites propres aux comptes restent prioritaires ; aucune conversion n’est effectuée.</span></label>
         <NumberField label="Risque maximum par trade" suffix="%" value={rules.max_risk_pct} min={0.1} max={10} step={0.1} onChange={v=>update("max_risk_pct",v)}/>
         <NumberField label="Arrêt après pertes consécutives" value={rules.stop_after_loss} min={1} max={20} onChange={v=>update("stop_after_loss",v)}/>
         <NumberField label="Ratio risque/rendement minimum" suffix="R" value={rules.min_rr} min={0.1} max={20} step={0.1} onChange={v=>update("min_rr",v)}/>

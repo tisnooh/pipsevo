@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { accounts } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { useAppSettings } from "@/hooks/useAppSettings";
 import { PROP_FIRMS, marketKeys } from "@/lib/journalPreferences";
 import IntegrationConnections from "@/components/IntegrationConnections";
 
@@ -25,7 +24,6 @@ const accountDefaults = (traderType, firm = "") => ({
 export default function AccountSetupFlow({ onComplete, onCancel, welcome = false }) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { settings } = useAppSettings();
   const traderType = user?.trader_type || "futures";
   const firms = useMemo(() => {
     const markets = marketKeys(traderType);
@@ -89,16 +87,16 @@ export default function AccountSetupFlow({ onComplete, onCancel, welcome = false
           setForm(current => ({...current, firm: event.target.value, market_type: firm?.markets.includes(current.market_type) ? current.market_type : firm?.markets[0] || current.market_type}));
         }}>{firms.map(firm => <option key={firm.name} value={firm.name}>{firm.name}</option>)}</select></SetupField>
         <SetupField label="Marché"><select value={form.market_type} onChange={event => setForm({...form, market_type: event.target.value})}>{(firms.find(item => item.name === form.firm)?.markets || marketKeys(traderType)).map(market => <option key={market} value={market}>{market === "futures" ? "Futures" : "CFD / Forex"}</option>)}</select></SetupField>
-        <SetupField label={`Capital initial (${settings.currency})`}><input required min="1" type="number" inputMode="decimal" value={form.initial_balance} onChange={event => setForm({...form, initial_balance: event.target.value, balance: event.target.value})}/></SetupField>
+        <SetupField label="Capital initial (USD)"><input required min="1" type="number" inputMode="decimal" value={form.initial_balance} onChange={event => setForm({...form, initial_balance: event.target.value, balance: event.target.value})}/></SetupField>
       </div>
       <div>
         <div className="text-[10px] uppercase tracking-[0.16em] text-[#687184]">Tailles fréquentes</div>
         <div className="mt-2 flex flex-wrap gap-2">{ACCOUNT_SIZES.map(size => <button key={size} type="button" onClick={() => chooseSize(size)} className={`rounded-xl border px-3 py-2 text-xs font-numeric transition ${Number(form.initial_balance) === size ? "border-[#7C4DFF]/70 bg-[#7C4DFF]/15 text-white" : "border-white/[0.08] bg-white/[0.025] text-[#8B93A3] hover:border-white/20"}`}>{size >= 1000 ? `${size / 1000}K` : size}</button>)}</div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <SetupField label={`Objectif de profit (${settings.currency})`}><input required min="1" type="number" inputMode="decimal" value={form.profit_target} onChange={event => setForm({...form, profit_target: event.target.value})}/></SetupField>
-        <SetupField label={`Drawdown maximal (${settings.currency})`}><input required min="1" type="number" inputMode="decimal" value={form.max_drawdown} onChange={event => setForm({...form, max_drawdown: event.target.value})}/></SetupField>
-        <SetupField label={`Perte quotidienne max. (${settings.currency})`} className="sm:col-span-2"><input required min="0" type="number" inputMode="decimal" value={form.daily_loss_limit} onChange={event => setForm({...form, daily_loss_limit: event.target.value})}/></SetupField>
+        <SetupField label="Objectif de profit (USD)"><input required min="1" type="number" inputMode="decimal" value={form.profit_target} onChange={event => setForm({...form, profit_target:event.target.value})}/></SetupField>
+        <SetupField label="Drawdown maximal (USD)"><input required min="1" type="number" inputMode="decimal" value={form.max_drawdown} onChange={event => setForm({...form, max_drawdown: event.target.value})}/></SetupField>
+        <SetupField label="Perte quotidienne max. (USD)" className="sm:col-span-2"><input required min="0" type="number" inputMode="decimal" value={form.daily_loss_limit} onChange={event => setForm({...form, daily_loss_limit: event.target.value})}/></SetupField>
       </div>
       <div className="rounded-2xl border border-[#4F8CFF]/15 bg-[#4F8CFF]/[0.045] p-4 text-xs leading-relaxed text-[#8EA5CB]">L’ajout manuel crée le suivi du compte. Les trades seront ensuite ajoutés depuis le journal ou un import CSV / HTML MetaTrader.</div>
       <button disabled={saving} className="btn-primary inline-flex w-full items-center justify-center gap-2 py-3 disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin"/> : <ArrowRight className="h-4 w-4"/>}{saving ? "Création…" : "Créer ce compte"}</button>

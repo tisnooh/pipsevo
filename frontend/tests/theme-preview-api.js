@@ -6,8 +6,15 @@ const sampleTrades = [
   { id: 'demo-2', account_id: 'demo-account', date: day, instrument: 'ES', direction: 'short', pnl: -160, result_status: 'closed', plan_respected: false, entry_time: '10:30:00', tags: [], screenshots: [] },
 ];
 const readonly = async () => { throw new Error('Visual fixture is read-only'); };
-export const dashboard = async () => ({ data: { kpis: { total_trades: 2, total_profit: 490, remaining_drawdown: 4000, active_accounts: 1, discipline_score: 50 }, metrics: { plan_respect_rate: 50 } } });
+export const dashboard = async () => ({ data: { kpis: { total_trades: 2, total_profit: 490, remaining_drawdown: 4000, active_accounts: 1, discipline_score: 65 }, metrics: { plan_respect_rate: 50 } } });
 export const trades = { list: async () => ({ data: sampleTrades }), create: readonly, update: readonly, delete: readonly };
 export const accounts = { list: async () => ({ data: sampleAccounts }), create: readonly, update: readonly, delete: readonly };
 export const coach = { briefing: async () => ({ data: { alerts: [] } }) };
 export const tradeScreenshots = { upload: readonly, delete: readonly, get: readonly };
+export const integrationConnections = { list: async () => ({ data: [] }), providers: async () => ({ data: [] }) };
+export const payouts = { list: async () => ({ data: [] }), create: readonly, delete: readonly };
+export const auth = { update: readonly, updatePassword: readonly, signOutOtherSessions: readonly };
+export const newsletter = { getPreferences: async () => ({ data: { daily_summary: false, risk_alerts: true, payout_updates: false, product_updates: false, education: false, newsletter_status: 'not_subscribed' } }), updatePreferences: readonly };
+export const dataExports = { all: readonly };
+export const dna = async () => ({ data: { trades_logged: 2, trader_type: 'Futures · Démo', best_session: null, best_setup: null, best_emotion: null } });
+export const api = { get: readonly, post: readonly, delete: readonly };

@@ -15,6 +15,6 @@ export default function useTradingCurrency(trades) {
     () => tradingCurrencyScope(trades, selectedCurrency, settings.currency),
     [trades, selectedCurrency, settings.currency],
   );
-  const money = useCallback((value, options) => formatMoney(value, { currency: scope.currency, ...options }), [formatMoney, scope.currency]);
+  const money = useCallback((value, options) => scope.currency === "UNKNOWN" ? "—" : formatMoney(value, { currency: scope.currency, ...options }), [formatMoney, scope.currency]);
   return { ...scope, money, setCurrency };
 }

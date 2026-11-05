@@ -3,10 +3,12 @@ import { Link, useLocation } from "react-router-dom";
 import { BarChart3, Check, Cookie, LockKeyhole, X } from "lucide-react";
 import { useI18n } from "@/context/I18nContext";
 import { canLoadAnalytics } from "@/lib/authUrlPrivacy";
+import { toast } from "sonner";
 import {
   captureAnalyticsPageview,
   disableAnalytics,
   loadAnalytics,
+  isCookieConsentPersisted,
   readCookieConsent,
   saveCookieConsent,
 } from "@/lib/cookieConsent";
@@ -29,12 +31,24 @@ export default function CookieConsent() {
       setOpen(true);
     };
     window.addEventListener("pipsevo:cookie-settings", reopen);
-    return () => window.removeEventListener("pipsevo:cookie-settings", reopen);
+    const refresh = () => {
+      const current = readCookieConsent();
+      setConsent(current);
+      setAnalytics(current?.analytics === true);
+      if (!current) setOpen(true);
+    };
+    window.addEventListener("pipsevo:cookie-consent-changed", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("pipsevo:cookie-settings", reopen);
+      window.removeEventListener("pipsevo:cookie-consent-changed", refresh);
+      window.removeEventListener("storage", refresh);
+    };
   }, []);
 
   useEffect(() => {
     let active = true;
-    if (!consent?.analytics) {
+    if (!consent?.analytics || !readCookieConsent()?.analytics) {
       disableAnalytics({ clearPersistence: true });
       lastTrackedRoute.current = "";
       return () => { active = false; };
@@ -53,6 +67,7 @@ export default function CookieConsent() {
 
   const choose = (enabled) => {
     const next = saveCookieConsent(enabled);
+    if (!isCookieConsentPersisted(next)) toast.warning(t("Choix appliqué à cette session uniquement : le stockage du navigateur est bloqué.", "Your choice applies to this session only: browser storage is blocked."));
     setAnalytics(enabled);
     setConsent(next);
     setOpen(false);
@@ -72,6 +87,7 @@ export default function CookieConsent() {
       <div className="space-y-3 p-5">
         <div className="flex items-start gap-4 rounded-2xl border border-[#46C99A]/20 bg-[#46C99A]/[0.04] p-4"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#46C99A]/10 text-[#65D8AE]"><LockKeyhole className="h-5 w-5"/></span><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">{t("Nécessaires","Necessary")}</h3><span className="inline-flex items-center gap-1 rounded-full border border-[#46C99A]/25 px-2.5 py-1 text-[10px] text-[#65D8AE]"><Check className="h-3 w-3"/>{t("Toujours actifs","Always active")}</span></div><p className="mt-2 text-xs leading-5 text-[#8E96A7]">{t("Session sécurisée, langue, préférences, consentement et fonctions demandées.","Secure session, language, preferences, consent, and requested features.")}</p></div></div>
         <label className={`flex cursor-pointer items-start gap-4 rounded-2xl border p-4 transition ${analytics?"border-[#7C4DFF]/45 bg-[#7C4DFF]/[0.07]":"border-white/[0.08] bg-white/[0.015]"}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#7C4DFF]/10 text-[#B58BFF]"><BarChart3 className="h-5 w-5"/></span><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-3"><span className="text-sm font-semibold">{t("Statistiques facultatives","Optional analytics")}</span><input type="checkbox" checked={analytics} onChange={(event)=>setAnalytics(event.target.checked)} className="h-5 w-5 accent-[#7C4DFF]"/></span><span className="mt-2 block text-xs leading-5 text-[#8E96A7]">{t("Mesure les pages vues et quelques événements produit avec PostHog. Aucun enregistrement de session, aucune publicité ciblée.","Measures page views and selected product events with PostHog. No session recording and no targeted advertising.")}</span></span></label>
+        <p className="text-xs leading-5 text-[#8E96A7]">{t("Ce même choix contrôle les mesures internes de navigation. Elles n’incluent pas les identifiants de tes trades ni tes filtres privés.", "The same choice controls internal navigation metrics. They do not include your trade IDs or private filters.")}</p>
         <Link to="/cookies" onClick={()=>setOpen(false)} className="inline-flex text-xs text-[#B58BFF] hover:text-white">{t("Voir la liste détaillée des stockages","View the detailed storage list")}</Link>
       </div>
       <footer className="flex flex-col-reverse gap-2 border-t border-white/[0.07] p-5 sm:flex-row sm:justify-end"><button type="button" onClick={()=>choose(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-[#B5BBC9] hover:bg-white/5">{t("Tout refuser","Reject all")}</button><button type="button" onClick={()=>choose(analytics)} className="btn-primary px-4 py-2.5 text-sm">{t("Enregistrer mon choix","Save my choice")}</button></footer>

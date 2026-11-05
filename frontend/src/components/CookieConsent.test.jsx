@@ -2,6 +2,8 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import CookieConsent, { openCookieSettings } from "./CookieConsent";
 import { COOKIE_CONSENT_KEY, readCookieConsent, saveCookieConsent } from "../lib/cookieConsent";
+import { toast } from "sonner";
+jest.mock("sonner", () => ({ toast: { warning: jest.fn() } }));
 
 jest.mock("react-router-dom", () => ({
   Link: ({ children, ...props }) => <a {...props}>{children}</a>,
@@ -19,6 +21,7 @@ describe("CookieConsent", () => {
 
   beforeEach(() => {
     global.IS_REACT_ACT_ENVIRONMENT = true;
+    jest.clearAllMocks();
     localStorage.clear();
     delete window.posthog;
     container = document.createElement("div");
@@ -30,6 +33,7 @@ describe("CookieConsent", () => {
     act(() => root.unmount());
     container.remove();
     document.querySelectorAll("#pipsevo-posthog").forEach((node) => node.remove());
+    jest.restoreAllMocks(); saveCookieConsent(false);
   });
 
   const renderBanner = async () => {
@@ -77,5 +81,23 @@ describe("CookieConsent", () => {
 
     expect(readCookieConsent()?.analytics).toBe(false);
     expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  test("a browser refusing storage can still dismiss the banner without analytics", async () => {
+    jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("storage blocked"); });
+    await renderBanner();
+    await act(async () => button("Continuer sans statistiques").click());
+    expect(readCookieConsent()?.analytics).toBe(false);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining("session uniquement"));
+  });
+
+  test("withdrawal in another tab opts the current page out", async () => {
+    saveCookieConsent(true);
+    const optOut = jest.fn(); window.posthog = { __SV: 1, opt_out_capturing: optOut, opt_in_capturing: jest.fn() };
+    await renderBanner(); optOut.mockClear();
+    localStorage.setItem(COOKIE_CONSENT_KEY, JSON.stringify({ ...readCookieConsent(), analytics: false }));
+    await act(async () => window.dispatchEvent(new StorageEvent("storage", { key: COOKIE_CONSENT_KEY })));
+    expect(optOut).toHaveBeenCalledWith({ clear_persistence: true });
   });
 });

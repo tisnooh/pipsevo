@@ -17,6 +17,25 @@ for (const name of ['vite', '@vitejs/plugin-react', 'jest', 'babel-jest', 'jest-
   assert.equal(version, manifest.devDependencies[name], `${name} must be explicitly pinned`);
   assert.equal(lock.packages[`node_modules/${name}`].version, version);
 }
+// These compatible overrides close advisories without replacing Tailwind/Jest.
+for (const name of ['source-map-js', 'postcss-selector-parser', 'js-yaml']) {
+  const version = require(`${name}/package.json`).version;
+  assert.equal(version, manifest.overrides[name], `${name} security override must be installed`);
+  const entries = Object.entries(lock.packages).filter(([location]) =>
+    location.endsWith(`node_modules/${name}`));
+  assert.ok(entries.length > 0, `${name} must be present in the lockfile`);
+  for (const [, entry] of entries) assert.equal(entry.version, version, `${name} cannot retain an older nested copy`);
+}
+// braces has no patched 3.x release: this is a scope guard, not a vulnerability fix.
+// Keep its remaining build-time glob inputs fixed and reviewed in this repository.
+const tailwindConfig = require('../tailwind.config.js');
+assert.deepEqual(tailwindConfig.content, ['./src/**/*.{js,jsx,ts,tsx}', './index.html'],
+  'Tailwind scan paths must not accept uploaded data or user-controlled glob patterns');
+for (const [location, entry] of Object.entries(lock.packages)) {
+  if (location.endsWith('node_modules/braces')) {
+    assert.equal(entry.dev, true, 'braces must remain a development-only dependency');
+  }
+}
 
 const secret = 'private-build-fixture-not-for-the-browser';
 const source = {
@@ -61,12 +80,21 @@ for (const route of ['/login', '/auth/callback', '/admin/users/test-user', '/app
 }
 assert.ok(!rewrite.test('/api/sync-due'), 'cron proxy must not be rewritten to HTML');
 assert.equal(deployment.outputDirectory, 'build');
-import('../vite.config.mjs').then(({ default: buildConfig }) => {
+const { loadNycConfig } = require('@istanbuljs/load-nyc-config');
+Promise.all([
+  import('../vite.config.mjs'),
+  // Jest's coverage loader must keep accepting ordinary YAML after the override.
+  loadNycConfig({ cwd: root, nycrcPath: 'scripts/fixtures/nyc-security.yml' }),
+]).then(([{ default: buildConfig }, coverageConfig]) => {
+  assert.deepEqual(coverageConfig.include, ['src/**/*.jsx', 'src/**/*.js']);
+  assert.deepEqual(coverageConfig.exclude, ['src/**/*.test.*']);
+  assert.equal(coverageConfig.checkCoverage, true);
+  assert.equal(coverageConfig.lines, 80);
   const resolved = buildConfig({ mode: 'production', command: 'build' });
   assert.deepEqual(resolved.envPrefix, [], 'automatic VITE_* exports must remain disabled');
   const browserEnv = JSON.parse(resolved.define['process.env']);
   for (const key of Object.keys(browserEnv)) {
     assert.ok(key === 'NODE_ENV' || PUBLIC_KEYS.includes(key), `${key} is not reviewed for browser exposure`);
   }
-  console.log('Build toolchain, public environment boundary and SPA routing checks passed.');
+  console.log('Build toolchain, security overrides, YAML compatibility, public environment boundary and SPA routing checks passed.');
 }).catch(error => { console.error(error); process.exitCode = 1; });

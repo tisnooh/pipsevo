@@ -7,7 +7,8 @@ import { dashboard, accounts as accountsAPI, coach, trades as tradesAPI } from "
 import { useI18n } from "@/context/I18nContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { applyDocumentPreferences, listenForSettingsChanges, readSettings } from "@/lib/preferences";
-import { BILLING_CONFIG, COMMERCIAL_PHASES, canUseFeature } from "@/config/billing";
+import { BILLING_CONFIG, COMMERCIAL_PHASES, canUseFeature, effectivePlan, PLANS } from "@/config/billing";
+import { toast } from "sonner";
 import { evaluateRiskAlerts } from "@/lib/riskEngine";
 import { listenForAppDataChanges, notifyAppDataChanged } from "@/lib/appDataEvents";
 import { JOURNAL_LIST_PATH } from "@/lib/journalNavigation";
@@ -47,10 +48,11 @@ export default function AppShell() {
   const location = useLocation();
   const links = useMemo(() => NAV_LINKS.map(link => ({ ...link, label: t(link.fr, link.en) })), [t]);
   const mobileLinks = useMemo(() => links.filter(link => MOBILE_NAV_ROUTES.has(link.to)), [links]);
-  const [discipline, setDiscipline] = useState(0);
+  const [discipline, setDiscipline] = useState(null);
   const [summary, setSummary] = useState(null);
   const [riskAlerts, setRiskAlerts] = useState([]);
   const [atlasAlerts, setAtlasAlerts] = useState([]);
+  const [shellStatus, setShellStatus] = useState("loading");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
@@ -63,29 +65,44 @@ export default function AppShell() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [settings, setSettings] = useState(readSettings);
+  const [loggingOut, setLoggingOut] = useState(false);
   const shellRequest = useRef(0);
   const hasCoachAccess = canUseFeature(user, "aiCoach");
 
   const refreshShellData = useCallback(async () => {
     const requestId = ++shellRequest.current;
+    setShellStatus("loading");
+    if (!user?.id) { setShellStatus("error"); return; }
     try {
       const atlasRequest = hasCoachAccess
-        ? coach.briefing("daily", localDateKey()).catch(() => ({ data: null }))
+        ? coach.briefing("daily", localDateKey()).catch(() => ({ data: null, unavailable: true }))
         : Promise.resolve({ data: null });
       const [dashboardResponse, accountResponse, tradeResponse, atlasResponse] = await Promise.all([dashboard(), accountsAPI.list(), tradesAPI.list(), atlasRequest]);
       if (requestId !== shellRequest.current) return;
-      setDiscipline(dashboardResponse.data?.kpis?.discipline_score ?? 0);
+      setDiscipline(dashboardResponse.data?.kpis?.discipline_score ?? null);
       setSummary(dashboardResponse.data);
       setRiskAlerts(evaluateRiskAlerts({ accounts: accountResponse.data, trades: tradeResponse.data, rules: user?.rules || {} }));
       setAtlasAlerts(atlasResponse.data?.alerts || []);
+      setShellStatus(atlasResponse.unavailable ? "partial" : "ready");
     } catch {
-      // Les pages gardent leur propre état d'erreur. Le shell conserve la dernière valeur connue.
+      if (requestId !== shellRequest.current) return;
+      setDiscipline(null);
+      setSummary(null);
+      setRiskAlerts([]);
+      setAtlasAlerts([]);
+      setShellStatus("error");
     }
-  }, [hasCoachAccess, user?.rules]);
+  }, [hasCoachAccess, user?.id, user?.rules]);
 
   useEffect(() => {
+    const requestState = shellRequest;
+    setDiscipline(null);
+    setSummary(null);
+    setRiskAlerts([]);
+    setAtlasAlerts([]);
     refreshShellData();
-    return listenForAppDataChanges(refreshShellData, ["accounts", "trades", "payouts", "dashboard", "discipline"]);
+    const stop = listenForAppDataChanges(refreshShellData, ["accounts", "trades", "payouts", "dashboard", "discipline"]);
+    return () => { ++requestState.current; stop(); };
   }, [refreshShellData]);
 
   useEffect(() => {
@@ -134,6 +151,19 @@ export default function AppShell() {
   }, [mobileOpen]);
 
   const closeMobile = () => setMobileOpen(false);
+  useEffect(() => {
+    const escape = event => { if (event.key === "Escape") { setSearchOpen(false); setNotificationsOpen(false); } };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, []);
+  useEffect(() => { setMobileOpen(false); setSearchOpen(false); setNotificationsOpen(false); }, [location.pathname]);
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try { await logout(); nav("/", { replace: true }); }
+    catch { toast.error("La déconnexion n’a pas abouti. Réessaie."); }
+    finally { setLoggingOut(false); }
+  };
   return (
     <div className="pe-app-shell min-h-screen w-full overflow-x-hidden text-white">
       {/* Backdrop — mobile uniquement, sous la sidebar mais au-dessus du contenu */}
@@ -146,8 +176,8 @@ export default function AppShell() {
       </Presence>
       <Presence show={searchOpen}>
       <MotionOverlay className="fixed inset-0 z-[70] bg-black/70 p-4 flex items-start justify-center pt-[12vh]" onClick={()=>setSearchOpen(false)}>
-        <MotionPopover className="w-full max-w-lg card-elev p-4" onClick={e=>e.stopPropagation()}>
-          <input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Rechercher une page…" className="w-full bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3" />
+        <MotionPopover role="dialog" aria-modal="true" aria-label="Rechercher une page" className="w-full max-w-lg max-h-[75dvh] overflow-y-auto card-elev p-4" onClick={e=>e.stopPropagation()}>
+          <div className="flex items-center gap-2"><input aria-label="Rechercher une page" autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Rechercher une page…" className="min-w-0 w-full bg-[#0D1020] border border-white/10 rounded-xl px-4 py-3" /><button className="pe-icon-button shrink-0" aria-label="Fermer la recherche" onClick={()=>setSearchOpen(false)}><X className="h-4 w-4"/></button></div>
           <div className="mt-3 space-y-1">{links.filter(l=>l.label.toLowerCase().includes(query.toLowerCase())).map(l=><button key={l.to} onClick={()=>{nav(l.to);setSearchOpen(false);setQuery("")}} className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5">{l.label}</button>)}{!links.some(l=>l.label.toLowerCase().includes(query.toLowerCase()))&&<div className="py-8 text-center text-xs text-[#7E8798]">Aucune page trouvée.</div>}</div>
         </MotionPopover>
       </MotionOverlay>
@@ -213,9 +243,9 @@ export default function AppShell() {
         {/* Discipline du jour */}
         <div className={`px-3 mt-2 shrink-0 ${sidebarCollapsed ? "md:hidden" : ""}`}>
           <div className="card-flat px-3 py-3 text-center">
-            <div className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9CA3AF]">Discipline du jour</div>
+            <div className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9CA3AF]">Discipline du journal</div>
             <div className="relative mx-auto mt-1.5 h-[58px] w-[112px] max-w-full">
-              <svg viewBox="0 0 112 62" className="absolute inset-0 h-full w-full" aria-label={`Score de discipline : ${discipline} sur 100`}>
+              <svg viewBox="0 0 112 62" className="absolute inset-0 h-full w-full" aria-label={discipline === null ? "Score de discipline non disponible" : `Score de discipline : ${discipline} sur 100`}>
                 <defs>
                   <linearGradient id="gauge-a" x1="0" y1="0" x2="1" y2="0">
                     <stop offset="0%" stopColor="#7C4DFF" />
@@ -234,14 +264,12 @@ export default function AppShell() {
                 />
               </svg>
               <div className="absolute inset-x-0 top-[32px] flex items-baseline justify-center gap-1">
-                <span className="font-numeric text-xl font-bold leading-none text-[#F5F7FB]">{discipline}</span>
+                <span data-testid="shell-discipline-score" className="font-numeric text-xl font-bold leading-none text-[#F5F7FB]">{discipline ?? "—"}</span>
                 <span className="font-numeric text-[9px] font-medium text-[#7E8798]">/100</span>
               </div>
             </div>
-            <div className={`mt-1.5 text-[10px] font-medium leading-none ${discipline>=80?"text-[#46C99A]":discipline>=60?"text-[#FFB855]":"text-[#F26A70]"}`}>{discipline>=80?"Excellent":discipline>=60?"À consolider":discipline?"À améliorer":"En attente"}</div>
-            <svg viewBox="0 0 80 18" className="mx-auto mt-2 h-3 w-[88px] max-w-full" aria-hidden="true">
-              <path d={discipline > 0 ? "M0,15 L10,12 L20,13 L30,9 L40,10 L50,6 L60,7 L70,3 L80,4" : "M0,13 L80,13"} stroke={discipline > 0 ? "#7C4DFF" : "#343A47"} strokeWidth="1.5" fill="none" />
-            </svg>
+            <div className={`mt-1.5 text-[10px] font-medium leading-none ${discipline>=80?"text-[#46C99A]":discipline>=60?"text-[#FFB855]":"text-[#F26A70]"}`}>{shellStatus === "loading" ? "Actualisation…" : shellStatus === "error" ? "Non vérifié" : discipline>=80?"Excellent":discipline>=60?"À consolider":discipline!==null?"À améliorer":"En attente"}</div>
+            <p className="mt-2 text-[9px] text-[#7E8798]">Indice indicatif du respect du plan</p>
           </div>
         </div>
 
@@ -262,7 +290,8 @@ export default function AppShell() {
 
         <div className="border-t border-white/5 px-3 py-3 text-xs text-[#9CA3AF] shrink-0">
           <button
-            onClick={async () => { await logout(); window.location.href = "/"; }}
+            onClick={handleLogout}
+            disabled={loggingOut}
             className={`flex items-center gap-2 hover:text-[#F26A70] ${sidebarCollapsed ? "md:w-full md:justify-center md:gap-0" : ""}`}
             title={sidebarCollapsed ? "Déconnexion" : undefined}
             data-testid="sidebar-logout"
@@ -285,9 +314,11 @@ export default function AppShell() {
           onSearch={()=>setSearchOpen(true)}
           notificationsOpen={notificationsOpen}
           notifications={buildNotifications(summary, settings, t, riskAlerts, atlasAlerts)}
+          notificationsStatus={shellStatus}
+          onRetryNotifications={refreshShellData}
           onNotifications={()=>setNotificationsOpen(v=>!v)}
           onNavigate={(to)=>nav(to)}
-          onLogout={async()=>{ await logout(); window.location.href = "/"; }}
+          onLogout={handleLogout}
         />
         <main className="pe-app-content pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
           <AnnouncementBanner />
@@ -332,7 +363,7 @@ export default function AppShell() {
   );
 }
 
-function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications, onNotifications, onNavigate, onLogout }) {
+function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications, notificationsStatus, onRetryNotifications, onNotifications, onNavigate, onLogout }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
 
@@ -386,8 +417,8 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
 
       <div className="relative"><button onClick={onNotifications} aria-label="Ouvrir les notifications" aria-expanded={notificationsOpen} aria-controls="app-notifications-menu" className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70" data-testid="top-notifs">
         <Bell className="w-4 h-4 text-[#9CA3AF]" />
-        {!!notifications.length && <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-[#FF4FD8] rounded-full" />}
-      </button><Presence show={notificationsOpen}><MotionPopover id="app-notifications-menu" className="fixed left-3 right-3 top-[68px] z-50 w-auto card-elev p-4 md:absolute md:left-auto md:right-0 md:top-11 md:w-72"><div className="text-sm font-semibold">Notifications</div>{notifications.length?<div className="mt-3 space-y-2">{notifications.map(n=><button key={n.to+n.text} onClick={()=>{onNavigate(n.to);onNotifications()}} className="w-full rounded-xl border border-white/[0.06] p-3 text-left text-xs text-[#B5BBC9] hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70">{n.text}</button>)}</div>:<div className="text-xs text-[#9CA3AF] mt-3">Tout est à jour. Aucune alerte active.</div>}</MotionPopover></Presence></div>
+        {(!!notifications.length || ["error", "partial"].includes(notificationsStatus)) && <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-[#FF4FD8] rounded-full" />}
+      </button><Presence show={notificationsOpen}><MotionPopover id="app-notifications-menu" className="fixed left-3 right-3 top-[68px] z-50 w-auto card-elev p-4 md:absolute md:left-auto md:right-0 md:top-11 md:w-72"><div className="text-sm font-semibold">Notifications</div>{notificationsStatus !== "ready" && <div role="status" className="mt-3 text-xs text-[#9CA3AF]">{notificationsStatus === "loading" ? "Vérification des alertes…" : notificationsStatus === "partial" ? "Les alertes Atlas ne sont pas disponibles. Les autres alertes restent affichées." : "Impossible de vérifier les alertes. Aucune validation du risque n’est disponible."}{notificationsStatus !== "loading" && <button type="button" onClick={onRetryNotifications} className="mt-2 block text-[#B58BFF]">Réessayer</button>}</div>}{notifications.length?<div className="mt-3 space-y-2">{notifications.map(n=><button key={n.to+n.text} onClick={()=>{onNavigate(n.to);onNotifications()}} className="w-full rounded-xl border border-white/[0.06] p-3 text-left text-xs text-[#B5BBC9] hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70">{n.text}</button>)}</div>:notificationsStatus === "ready" && <div className="text-xs text-[#9CA3AF] mt-3">Aucune alerte détectée dans les données disponibles. Cela ne certifie pas les règles de ta prop firm.</div>}</MotionPopover></Presence></div>
 
       <div ref={profileRef} className="relative shrink-0">
       <button onClick={()=>setProfileOpen(v=>!v)} aria-expanded={profileOpen} aria-controls="app-profile-menu" aria-label="Ouvrir le menu du profil" className="flex items-center gap-1.5 rounded-xl border border-[#6571CF]/20 bg-[#0C1122] px-1.5 py-1 transition hover:border-[#8075ED]/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C4DFF]/70 md:gap-2 md:px-2 md:py-1.5">
@@ -398,7 +429,7 @@ function TopBar({ user, onMenuClick, onSearch, notificationsOpen, notifications,
           {user?.name || user?.email}
         </div>
         <span className="hidden whitespace-nowrap rounded-md border border-[#7C4DFF]/30 bg-[#7C4DFF]/15 px-1 py-0.5 text-[9px] font-semibold leading-none tracking-[0.08em] text-[#B58BFF] sm:inline">
-          PRO
+          {PLANS[effectivePlan(user)]?.name || "Bêta"}
         </span>
         <span className={`text-[#9CA3AF] text-xs transition-transform ${profileOpen ? "rotate-180" : ""}`}>⌄</span>
       </button>
@@ -424,10 +455,10 @@ function buildNotifications(summary, settings, t, riskAlerts = [], atlasAlerts =
   if (!summary) return [];
   const out = [];
   if (settings.daily && !summary.kpis?.active_accounts) out.push({ text: t("Ajoute ton premier compte pour commencer le suivi.", "Add your first account to start tracking."), to: "/app/accounts" });
-  else if (settings.daily && !summary.kpis?.total_trades) out.push({ text: t("Journalise ton premier trade pour activer les analyses.", "Log your first trade to activate analytics."), to: "/app/journal" });
-  if (settings.risk && summary.metrics?.plan_respect_rate < 80 && summary.kpis?.total_trades) out.push({ text: t(`Plan respecté sur ${summary.metrics.plan_respect_rate}% des trades. Consulte ta discipline.`, `Plan followed on ${summary.metrics.plan_respect_rate}% of trades. Review your discipline.`), to: "/app/discipline" });
+  else if (settings.daily && !(summary.kpis?.logged_trades ?? summary.kpis?.total_trades)) out.push({ text: t("Journalise ton premier trade pour activer les analyses.", "Log your first trade to activate analytics."), to: "/app/journal" });
+  if (settings.risk && typeof summary.metrics?.plan_respect_rate === "number" && summary.metrics.plan_respect_rate < 80 && (summary.kpis?.logged_trades ?? summary.kpis?.total_trades)) out.push({ text: t(`Plan respecté sur ${summary.metrics.plan_respect_rate}% des trades. Consulte ta discipline.`, `Plan followed on ${summary.metrics.plan_respect_rate}% of trades. Review your discipline.`), to: "/app/discipline" });
   if (settings.risk) riskAlerts.slice(0, 3).forEach(alert => out.push({ text: alert.title, to: "/app/discipline" }));
   if (settings.risk) atlasAlerts.filter(alert => ["critical", "warning"].includes(alert.severity)).slice(0, 2).forEach(alert => out.push({ text: `Atlas · ${alert.title}`, to: "/app/coach" }));
-  if (settings.payout && summary.kpis?.active_accounts && !summary.kpis?.total_payouts) out.push({ text: t("Configure ton objectif de payout pour suivre ta progression.", "Set your payout goal to track your progress."), to: "/app/payouts" });
+  if (settings.payout && summary.kpis?.active_accounts && summary.kpis?.total_payouts === 0) out.push({ text: t("Configure ton objectif de payout pour suivre ta progression.", "Set your payout goal to track your progress."), to: "/app/payouts" });
   return out.filter((item, index) => out.findIndex(candidate => candidate.text === item.text && candidate.to === item.to) === index);
 }

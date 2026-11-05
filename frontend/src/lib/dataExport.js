@@ -25,24 +25,24 @@ export const EXPORT_SCHEMAS = Object.freeze({
     ["Session", "session"], ["Setup", "setup"], ["Setups", "setups"], ["Émotion", "emotion"],
     ["Intensité émotion", "emotion_intensity"], ["Plan respecté", "plan_respected"],
     ["Favori", "starred"], ["Tags", "tags"], ["Erreurs", "mistakes"], ["Raison de sortie", "exit_reason"],
-    ["Notes", "notes"], ["Check-list", "checklist_results"], ["Créé le", "created_at"], ["Modifié le", "updated_at"],
+    ["Notes", "notes"], ["Check-list", "checklist_results"], ["Captures", "screenshots"], ["Créé le", "created_at"], ["Modifié le", "updated_at"],
   ],
   accounts: [
     ["ID", "id"], ["Nom", "name"], ["Prop firm", "firm"], ["Marché", "market_type"], ["Statut", "status"],
     ["Solde initial", "initial_balance"], ["Solde actuel", "balance"], ["Objectif de profit", "profit_target"],
     ["Drawdown maximum", "max_drawdown"], ["Limite de perte quotidienne", "daily_loss_limit"],
-    ["Drawdown actuel", "current_drawdown"], ["Créé le", "created_at"], ["Modifié le", "updated_at"],
+    ["Drawdown actuel", "current_drawdown"], ["Devise", "currency"], ["Créé le", "created_at"], ["Modifié le", "updated_at"],
   ],
   payouts: [
     ["ID", "id"], ["Date", "date"], ["Compte ID", "account_id"], ["Compte", "account_name"],
-    ["Prop firm", "account_firm"], ["Montant", "amount"], ["Note", "note"],
+    ["Prop firm", "account_firm"], ["Montant", "amount"], ["Devise", "currency"], ["Note", "note"],
     ["Créé le", "created_at"], ["Modifié le", "updated_at"],
   ],
   profile: [
     ["ID utilisateur", "id"], ["Email", "email"], ["Nom affiché", "name"], ["Type de trader", "trader_type"],
     ["Prop firms", "prop_firms"], ["Nombre de comptes", "num_accounts"],
     ["Onboarding terminé", "onboarding_completed"], ["Plan", "plan"], ["Statut abonnement", "subscription_status"],
-    ["Créé le", "created_at"], ["Modifié le", "updated_at"],
+    ["Plan de trading", "trading_plan"], ["Créé le", "created_at"], ["Modifié le", "updated_at"],
   ],
   preferences: [
     ["Devise", "currency"], ["Fuseau horaire", "timezone"], ["Langue", "language"], ["Affichage compact", "compactMode"],
@@ -128,7 +128,7 @@ export function buildZip(files) {
   return joinBytes([...localParts, central, end]);
 }
 
-export function buildFullExportFiles({ profile, accounts, trades, payouts, aiReports, settings }) {
+export function buildFullExportFiles({ profile, accounts, trades, payouts, aiReports, settings, backtest }) {
   const accountById = Object.fromEntries((accounts || []).map((account) => [account.id, account]));
   const enrich = (rows) => (rows || []).map((row) => ({
     ...row,
@@ -147,6 +147,8 @@ export function buildFullExportFiles({ profile, accounts, trades, payouts, aiRep
     { name: "trades.csv", content: buildCsv(enrich(trades), EXPORT_SCHEMAS.trades) },
     { name: "payouts.csv", content: buildCsv(enrich(payouts), EXPORT_SCHEMAS.payouts) },
     { name: "analyses-atlas.csv", content: buildCsv(aiReports || [], EXPORT_SCHEMAS.ai_reports) },
+    ...(backtest ? [{ name: "backtest.json", content: JSON.stringify(backtest, null, 2) }] : []),
+    { name: "LIRE-MOI.txt", content: "Archive personnelle PipsEvo.\nLes fichiers CSV contiennent les données du journal et du profil. backtest.json contient les historiques, stratégies et sessions du Lab.\nLes captures sont référencées dans trades.csv ; leurs fichiers binaires ne sont pas inclus. Conserve-les séparément avant une suppression de compte.\nLes secrets d’authentification et de connexion ne sont pas exportés.\n" },
   ];
 }
 

@@ -1,5 +1,16 @@
 export const tradeDateKey = value => value ? String(value).slice(0, 10) : "";
 
+// Core Supabase columns contain clocks, while older imports can contain full
+// timestamps. Sort by the calendar date first, never by a clock across days.
+export function tradeClosureOrderKey(trade) {
+  const exit = String(trade.exit_time || "");
+  const closed = String(trade.closed_at || "");
+  const timestamp = /^\d{4}-\d{2}-\d{2}[T ]/.test(closed) ? closed
+    : /^\d{4}-\d{2}-\d{2}[T ]/.test(exit) ? exit
+    : `${tradeDateKey(trade.exit_date || trade.date)}T${/^\d{2}:\d{2}/.test(exit) ? exit : "00:00:00"}`;
+  return `${timestamp}|${trade.created_at || ""}|${trade.id || ""}`;
+}
+
 export const CALENDAR_MONTHS_FR = Object.freeze([
   "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
   "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",

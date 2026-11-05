@@ -2,38 +2,28 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BookOpen, Brain, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
-import { accounts as accountsAPI, trades as tradesAPI } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import useOwnedResource from "@/hooks/useOwnedResource";
+import { EMPTY_MANUAL_REPORT, fetchManualReport } from "@/lib/manualReportingResource";
 import { CALENDAR_MONTHS_FR, buildTradeCalendarMonth, calendarYears, localDateKey, localMonthKey, shiftMonthKey, tradeDateKey } from "@/lib/tradeCalendar";
 import useTradingCurrency from "@/hooks/useTradingCurrency";
 import TradingCurrencyControl from "@/components/TradingCurrencyControl";
 import { listenForAppDataChanges } from "@/lib/appDataEvents";
-import { tradeOutcome } from "@/lib/tradeAnalytics";
+import { calculateTradeAnalytics, measuredTradePnl, measuredTradeR } from "@/lib/tradeAnalytics";
+import { formatWinRate, measuredTradeRows } from "@/lib/tradeReporting";
 
 export default function DayView() {
+  const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const requestedDate = params.get("date");
   const initialDate = /^\d{4}-\d{2}-\d{2}$/.test(tradeDateKey(requestedDate)) ? tradeDateKey(requestedDate) : "";
   const [month, setMonth] = useState(() => initialDate.slice(0, 7) || localMonthKey());
   const [selectedDate, setSelectedDate] = useState(initialDate);
-  const [allTrades, setTradeList] = useState([]);
+  const { data, loading, error, reload: load } = useOwnedResource(user?.id, fetchManualReport, EMPTY_MANUAL_REPORT, "Impossible de charger les séances.");
+  const { trades: allTrades, accounts } = data;
   const currencyScope = useTradingCurrency(allTrades);
   const { trades: tradeList, money } = currencyScope;
-  const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const load = useCallback(async () => {
-    setLoading(true); setError("");
-    try {
-      const [tradeResponse, accountResponse] = await Promise.all([tradesAPI.list(), accountsAPI.list()]);
-      setTradeList(tradeResponse.data || []);
-      setAccounts(accountResponse.data || []);
-    } catch (requestError) {
-      setError(requestError.response?.data?.detail || "Impossible de charger les séances.");
-    } finally { setLoading(false); }
-  }, []);
   useEffect(() => {
-    load();
     return listenForAppDataChanges(load, ["accounts", "trades"]);
   }, [load]);
   useEffect(() => {
@@ -56,7 +46,6 @@ export default function DayView() {
   const visibleDays = selectedDate && selectedDate.startsWith(month)
     ? availableDays.filter(([key]) => key === selectedDate)
     : availableDays;
-  const today = localDateKey();
 
   const chooseDate = useCallback((key) => {
     setSelectedDate(key);
@@ -84,10 +73,10 @@ export default function DayView() {
     setParams(hasSession ? { date: dateKey } : {}, { replace: true });
   }, [setParams, tradeList]);
   useEffect(() => {
-    if (loading || !selectedDate || selectedDate.slice(0, 7) !== month) return;
+    if (loading || error || !selectedDate || selectedDate.slice(0, 7) !== month) return;
     const sessionExists = calendarView.cells.some(cell => cell.key === selectedDate && cell.trades.length > 0);
     if (!sessionExists) showAll();
-  }, [calendarView, loading, month, selectedDate, showAll]);
+  }, [calendarView, error, loading, month, selectedDate, showAll]);
 
   return <div className="pe-page pe-page-stack mx-auto max-w-[1800px]">
     <div className="pe-page-header">
@@ -105,7 +94,7 @@ export default function DayView() {
           <button onClick={showAll} className={`min-h-9 rounded-pe-md border px-3 text-xs font-semibold transition ${!selectedDate ? "border-[#8067F4]/45 bg-[#8067F4]/15 text-white" : "border-[#6571CF]/20 text-[#98A1B5] hover:text-white"}`}>Toutes les séances</button>
         </div>
 
-        {loading ? Array.from({ length: 2 }).map((_, index) => <div key={index} className="pe-card h-72 animate-pulse"/>) : visibleDays.length ? visibleDays.map(([key, dayTrades]) => <DaySession key={key} dateKey={key} trades={dayTrades} accounts={accounts} money={money}/>) : <div className="pe-card pe-empty-state"><div><CalendarRange className="mx-auto h-9 w-9 text-[#8067F4]"/><h2 className="mt-4 text-lg font-semibold">Aucune séance sur cette période</h2><p className="pe-page-copy mt-2">Les journées apparaîtront ici dès que des trades seront synchronisés ou ajoutés au journal.</p></div></div>}
+        {loading ? Array.from({ length: 2 }).map((_, index) => <div key={index} className="pe-card h-72 animate-pulse"/>) : error ? null : visibleDays.length ? visibleDays.map(([key, dayTrades]) => <DaySession key={key} dateKey={key} trades={dayTrades} accounts={accounts} money={money}/>) : <div className="pe-card pe-empty-state"><div><CalendarRange className="mx-auto h-9 w-9 text-[#8067F4]"/><h2 className="mt-4 text-lg font-semibold">Aucune séance sur cette période</h2><p className="pe-page-copy mt-2">Les journées apparaîtront ici dès que des trades seront synchronisés ou ajoutés au journal.</p></div></div>}
       </main>
 
       <aside className="pe-card h-fit xl:sticky xl:top-4" data-month={calendarView.monthKey}>
@@ -118,20 +107,14 @@ export default function DayView() {
 
 function DaySession({ dateKey, trades, accounts, money }) {
   const [expanded, setExpanded] = useState(true);
-  const ordered = [...trades].sort((a, b) => timestamp(a) - timestamp(b));
-  const measuredTrades = ordered.filter(trade => typeof trade.pnl === "number");
-  const pnl = measuredTrades.length ? measuredTrades.reduce((sum, trade) => sum + trade.pnl, 0) : null;
-  const outcomes = ordered.map(trade => ({ trade, outcome: tradeOutcome(trade) })).filter(item => item.outcome !== null);
-  const wins = outcomes.filter(item => item.outcome > 0).map(item => item.trade);
-  const losses = outcomes.filter(item => item.outcome < 0).map(item => item.trade);
-  const monetaryWins = measuredTrades.filter(trade => trade.pnl > 0);
-  const monetaryLosses = measuredTrades.filter(trade => trade.pnl < 0);
-  const grossWin = monetaryWins.reduce((sum, trade) => sum + trade.pnl, 0);
-  const grossLoss = Math.abs(monetaryLosses.reduce((sum, trade) => sum + trade.pnl, 0));
+  const ordered = trades.map(trade => ({ ...trade, pnl: measuredTradePnl(trade), r: measuredTradeR(trade) })).sort((a, b) => timestamp(a) - timestamp(b));
+  const measuredTrades = measuredTradeRows(ordered);
+  const report = calculateTradeAnalytics(ordered, accounts);
+  const pnl = report.pnl;
   let cumulative = 0;
-  const curve = [{ index: 0, pnl: 0 }, ...measuredTrades.map((trade, index) => ({ index: index + 1, pnl: cumulative += trade.pnl }))];
+  const curve = measuredTrades.length ? [{ index: 0, pnl: 0 }, ...measuredTrades.map((trade, index) => ({ index: index + 1, pnl: cumulative += trade.pnl }))] : [];
   const label = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(new Date(`${dateKey}T12:00:00`));
-  const stats = [["Total trades", ordered.length], ["P&L net", pnl === null ? "—" : money(pnl, { signDisplay: "always" })], ["Gagnants / Perdants", `${wins.length} / ${losses.length}`], ["Win rate", `${outcomes.length ? (wins.length / outcomes.length * 100).toFixed(1) : "0.0"}%`], ["Profit factor", !measuredTrades.length ? "—" : grossLoss ? (grossWin / grossLoss).toFixed(2) : grossWin > 0 ? "∞" : "—"]];
+  const stats = [["Total trades", ordered.length], ["P&L net", pnl === null ? "—" : money(pnl, { signDisplay: "always" })], ["Gagnants / Perdants", `${report.wins} / ${report.losses}`], ["Win rate", formatWinRate(report.winrate)], ["Profit factor", report.profitFactor === null ? "—" : Number.isFinite(report.profitFactor) ? report.profitFactor.toFixed(2) : "∞"]];
 
   return <section className="pe-card overflow-hidden">
     <div className="pe-card-header flex-wrap"><button onClick={() => setExpanded(value => !value)} className="flex min-w-0 items-center gap-3 text-left"><ChevronDown className={`h-4 w-4 shrink-0 text-[#9C8EF0] transition ${expanded ? "rotate-0" : "-rotate-90"}`}/><div><h2 className="text-sm font-semibold capitalize sm:text-base">{label}</h2><div className={`mt-1 font-numeric text-xs font-semibold ${pnl === null ? "text-[#9CA3AF]" : pnl >= 0 ? "text-[#46C99A]" : "text-[#F26A70]"}`}>P&amp;L net · {pnl === null ? "—" : money(pnl, { signDisplay: "always" })}</div></div></button><div className="flex gap-2"><Link to={`/app/coach?date=${dateKey}`} className="pe-icon-button !h-9 !w-9" aria-label="Analyser avec Atlas" title="Analyser avec Atlas"><Brain className="h-4 w-4"/></Link><Link to={`/app/journal?date=${dateKey}`} className="btn-ghost inline-flex !min-h-9 items-center gap-2 !px-3 text-xs"><BookOpen className="h-3.5 w-3.5"/>Journal</Link></div></div>

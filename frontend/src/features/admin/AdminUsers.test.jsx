@@ -41,6 +41,14 @@ describe("TradeLocker administrator retry", () => {
   });
 
   afterEach(() => { act(() => root.unmount()); container.remove(); });
+  it("shows only the identity and support link for support staff", async () => {
+    useAdminSession.mockReturnValue({ role: "support" });
+    useAdminData.mockReturnValue({ reload, data: { identity: { name: "Profil test", status: "active" } } });
+    await act(async () => root.render(<AdminUserDetail />));
+    expect(container.textContent).toContain("Ouvrir les demandes de support");
+    expect(container.textContent).not.toContain("P&L");
+    expect(container.textContent).not.toContain("Suspendre");
+  });
   const click = async (label) => {
     const button = [...document.querySelectorAll("button")].find((item) => item.textContent.trim() === label);
     expect(button).toBeDefined();

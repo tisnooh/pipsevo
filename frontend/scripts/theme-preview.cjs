@@ -9,6 +9,7 @@ async function main() {
     root,
     plugins: [{ name: 'isolated-theme-fixture', transformIndexHtml: { order: 'pre', handler: () => html } }],
     resolve: { alias: [
+      { find: /^(?:@\/|(?:\.\.\/)+)lib\/api(?:\.js)?$/, replacement: path.join(root, 'tests/theme-preview-api.js') },
       { find: '@/lib/api', replacement: path.join(root, 'tests/theme-preview-api.js') },
       { find: '@/context/AuthContext', replacement: path.join(root, 'tests/theme-preview-auth.js') },
       { find: '@/features/admin/ProductOperations', replacement: path.join(root, 'tests/theme-preview-operations.jsx') },

@@ -1,6 +1,7 @@
 import { tradeDateKey } from "./tradeCalendar";
 
 export function measuredTradePnl(trade) {
+  if (trade?.currency_available === false) return null;
   if (["open", "cancelled", "canceled"].includes(String(trade?.result_status || "").toLowerCase())) return null;
   const pnl = trade?.pnl === null || trade?.pnl === undefined || trade?.pnl === "" ? null : Number(trade.pnl);
   if (!Number.isFinite(pnl)) return null;
@@ -22,18 +23,22 @@ export function tradeOutcome(trade) {
   return pnl === null ? null : pnl > 0 ? 1 : pnl < 0 ? -1 : 0;
 }
 
-export function groupTradesByWeekday(trades) {
-  const names = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
-  return names.map((name, index) => ({
-    name,
-    pnl: sumPnl(trades.filter(trade => {
-      const key = tradeDateKey(trade.date);
-      return key && new Date(`${key}T12:00:00`).getDay() === index;
-    })),
-  }));
+export function measuredTradeR(trade) {
+  return measuredTradePnl(trade) !== null && Number.isFinite(trade?.r) ? trade.r : null;
 }
 
-export function calculateTradeAnalytics(trades, accounts) {
+export function groupTradesByWeekday(trades) {
+  const names = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+  return names.map((name, index) => {
+    const rows = trades.filter(trade => {
+      const key = tradeDateKey(trade.date);
+      return key && new Date(`${key}T12:00:00`).getDay() === index;
+    });
+    return { name, pnl: rows.length && !rows.some(trade => measuredTradePnl(trade) !== null) ? null : sumPnl(rows) };
+  });
+}
+
+export function calculateTradeAnalytics(trades = [], accounts = []) {
   const closed = trades
     .map(trade => ({ ...trade, pnl: measuredTradePnl(trade) }))
     .filter(trade => trade.pnl !== null);
@@ -41,7 +46,7 @@ export function calculateTradeAnalytics(trades, accounts) {
   const wins = closed.filter(trade => trade.pnl > 0);
   const losses = closed.filter(trade => trade.pnl < 0);
   const rTrades = trades.filter(trade => Number.isFinite(trade.r) && tradeOutcome(trade) !== null);
-  const measuredPlan = trades.filter(trade => trade.plan_respected === true || trade.plan_respected === false);
+  const measuredPlan = trades.filter(trade => !["cancelled", "canceled"].includes(String(trade.result_status || "").toLowerCase()) && (trade.plan_respected === true || trade.plan_respected === false));
   const group = key => Object.values(closed.reduce((result, trade) => {
     const name = trade[key] || "Non renseigné";
     result[name] ??= { name, pnl: 0, trades: 0, wins: 0 };
@@ -61,7 +66,7 @@ export function calculateTradeAnalytics(trades, accounts) {
   const grossLoss = Math.abs(sumPnl(losses));
   return {
     pnl: closed.length ? sumPnl(closed) : null,
-    winrate: measuredOutcomes.length ? Math.round(measuredOutcomes.filter(item => item.outcome > 0).length / measuredOutcomes.length * 100) : null,
+    winrate: measuredOutcomes.length ? Math.round(measuredOutcomes.filter(item => item.outcome > 0).length / measuredOutcomes.length * 1000) / 10 : null,
     profitFactor: grossLoss ? grossWin / grossLoss : grossWin > 0 ? Infinity : closed.length ? 0 : null,
     avgWin: wins.length ? grossWin / wins.length : null,
     avgLoss: losses.length ? sumPnl(losses) / losses.length : null,
@@ -70,8 +75,11 @@ export function calculateTradeAnalytics(trades, accounts) {
       : null,
     avgR: rTrades.length ? rTrades.reduce((sum, trade) => sum + trade.r, 0) / rTrades.length : null,
     total: trades.length,
+    measuredCount: closed.length,
+    unknownCount: trades.filter(trade => !["open", "cancelled", "canceled"].includes(String(trade.result_status || "").toLowerCase()) && measuredTradePnl(trade) === null).length,
     wins: measuredOutcomes.filter(item => item.outcome > 0).length,
     losses: measuredOutcomes.filter(item => item.outcome < 0).length,
+    breakevens: measuredOutcomes.filter(item => item.outcome === 0).length,
     assets: group("instrument"),
     sessions: group("session"),
     setups: group("setup"),

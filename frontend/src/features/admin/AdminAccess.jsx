@@ -3,6 +3,7 @@ import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { adminApi } from "./api";
 import { apiErrorMessage } from "../../lib/apiError";
+import ProfileRecovery from "@/components/auth/ProfileRecovery";
 
 const AdminContext = createContext(null);
 export const useAdminSession = () => useContext(AdminContext);
@@ -15,7 +16,7 @@ export default function AdminAccess() {
   useEffect(() => {
     let active = true;
     if (loading) return undefined;
-    if (!user) {
+    if (!user || user.profile_loading_error || (user.status && user.status !== "active")) {
       setState({ loading: false, session: null, forbidden: true, error: "" });
       return undefined;
     }
@@ -34,6 +35,8 @@ export default function AdminAccess() {
     return () => { active = false; };
   }, [loading, user, retry]);
 
+  if (!loading && user?.profile_loading_error) return <ProfileRecovery />;
+  if (!loading && user?.status && user.status !== "active") return <ProfileRecovery suspended />;
   if (loading || state.loading) return <div className="admin-gate">Vérification des permissions…</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (state.forbidden) return <Navigate to="/app/dashboard" replace />;

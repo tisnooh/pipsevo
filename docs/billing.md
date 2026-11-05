@@ -16,6 +16,16 @@ on `public.subscriptions`.
   then EUR 19.99/month. Eligibility is stored but checkout remains disabled.
 - `paid`: Essential is EUR 9.99/month and Pro is EUR 19.99/month.
 
+The current launch candidate remains a **free beta**, not a paid subscription
+launch. The `paid` prices are a future configuration, not purchasable offers.
+Do not change the commercial phase to `launch_offer` or `paid` until Checkout,
+signed webhooks, payment failure, renewal, cancellation, refunds and the customer
+portal have passed sandbox and owner-approved live acceptance tests.
+
+Future automatic reports, PDF exports and premium automations remain explicitly
+marked as planned and grant no feature entitlement, including for retained Pro
+labels. Existing CSV and personal data archive exports remain available.
+
 No payment is currently simulated. `/api/billing/checkout` returns HTTP 503 until
 Stripe is implemented. A trusted Stripe webhook must be the only writer for plan,
 status, offer usage, renewal date, and cancellation state.

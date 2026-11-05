@@ -78,9 +78,14 @@ export const createDefaultJournalPreferences = () => ({
   favorites: { sessions: [], setups: [], emotions: [], durations: [] },
 });
 
-const normalizeOptionArray = (value, fallback) => Array.isArray(value) ? value.map((item,index)=>typeof item === "string" ? option(`legacy-${index}-${item.toLowerCase().replace(/[^a-z0-9]+/g,"-")}`,item) : {...item,hidden:Boolean(item.hidden)}) : fallback;
+const normalizeOptionArray = (value, fallback) => Array.isArray(value) ? value.flatMap((item,index) => {
+  if (typeof item === "string" && item.trim()) return [option(`legacy-${index}-${item.toLowerCase().replace(/[^a-z0-9]+/g,"-")}`, item)];
+  if (!item || typeof item !== "object" || Array.isArray(item) || typeof item.label !== "string" || !item.label.trim()) return [];
+  return [{ ...item, id: typeof item.id === "string" && item.id ? item.id : `legacy-option-${index}`, hidden: Boolean(item.hidden) }];
+}) : fallback;
 
-export const normalizeJournalPreferences = (stored = {}) => {
+export const normalizeJournalPreferences = (value = {}) => {
+  const stored = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const defaults=createDefaultJournalPreferences();
   return {
     ...defaults,

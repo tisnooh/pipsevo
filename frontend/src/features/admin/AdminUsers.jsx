@@ -9,12 +9,18 @@ import { Empty, LoadState, Metric, Page, Pagination, RefreshButton, Status, conf
 const money = (value) => value == null ? "—" : new Intl.NumberFormat("fr-FR", { style: "currency", currency: "USD" }).format(Number(value));
 
 export function AdminUsers() {
+  const session = useAdminSession();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("");
   const [status, setStatus] = useState("");
   const [plan, setPlan] = useState("");
   const state = useAdminData(() => adminApi.users({ page, per_page: 25, search, role: role || undefined, status: status || undefined, plan: plan || undefined }), [page, search, role, status, plan]);
+  if (session?.role === "support") return <Page eyebrow="SUPPORT" title="Utilisateurs" description="Rechercher le profil associé à une demande de support.">
+    <input type="search" aria-label="Rechercher un utilisateur" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Nom, e-mail ou UUID…" />
+    <LoadState {...state} />
+    {state.data && <section className="admin-panel">{state.data.items.length ? state.data.items.map(item => <p key={item.id}><Link to={`/admin/users/${item.id}`}>{item.name || item.email} · {item.email}</Link></p>) : <Empty />}<Pagination page={page} pages={state.data.pages} onChange={setPage} /></section>}
+  </Page>;
   return <Page eyebrow="COMPTES" title="Utilisateurs" description="Profils, accès et progression. Les mots de passe et jetons ne sont jamais exposés." actions={<RefreshButton onClick={state.reload} />}>
     <div className="admin-filters"><input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Nom, e-mail ou UUID…" /><select value={role} onChange={(event) => { setRole(event.target.value); setPage(1); }}><option value="">Tous les rôles</option><option value="user">Utilisateur</option><option value="support">Support</option><option value="admin">Admin</option><option value="super_admin">Super admin</option></select><select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }}><option value="">Tous les statuts</option><option value="active">Actifs</option><option value="suspended">Suspendus</option></select><select value={plan} onChange={(event) => { setPlan(event.target.value); setPage(1); }}><option value="">Tous les plans</option><option value="free">Free</option><option value="essential">Essential</option><option value="pro">Pro</option></select></div>
     <LoadState {...state} />
@@ -49,6 +55,9 @@ export function AdminUserDetail() {
     catch (error) { toast.error(extractError(error)); } finally { setBusy(false); }
   };
   const data = state.data;
+  if (session?.role === "support") return <Page eyebrow="SUPPORT" title={data?.identity?.name || "Fiche utilisateur"} description={data?.identity?.email} actions={<RefreshButton onClick={state.reload} />}>
+    <LoadState {...state} />{data?.identity && <section className="admin-panel"><Status value={data.identity.status} /><p>Inscription : {formatDate(data.identity.created_at)}</p><Link to="/admin/support">Ouvrir les demandes de support</Link></section>}
+  </Page>;
   return <Page eyebrow="UTILISATEUR" title={data?.identity?.name || "Fiche utilisateur"} description={data?.identity?.email} actions={<><button className="admin-button secondary" onClick={() => navigate(-1)}>Retour</button>{isSuperAdmin(session) && data?.trading?.connections?.filter((item) => item.provider === "tradelocker" && item.connection_status !== "disconnected").map((item) => <button key={item.id} className="admin-button secondary" disabled={busy} onClick={() => setSyncConfirmation(item.id)}>{busy ? "Synchronisation…" : `Synchroniser TradeLocker ${item.account_number_masked || ""}`}</button>)}<RefreshButton onClick={state.reload} /></>}>
     <AlertDialog open={Boolean(syncConfirmation)} onOpenChange={(open) => { if (!open) setSyncConfirmation(null); }}>
       <AlertDialogContent>

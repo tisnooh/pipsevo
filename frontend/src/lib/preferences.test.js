@@ -2,6 +2,11 @@ import { DEFAULT_SETTINGS, formatDate, formatMoney, listenForSettingsChanges, re
 
 beforeEach(() => localStorage.clear());
 
+test("unsupported account units remain explicit without crashing or being relabelled", () => {
+  expect(formatMoney(25, { currency: "USDT" })).toContain("25 USDT");
+  expect(formatMoney(25, { currency: "UNKNOWN" })).toBe("—");
+});
+
 test("les préférences sont fusionnées et diffusées sans perdre les valeurs par défaut", () => {
   const listener = jest.fn();
   window.addEventListener(SETTINGS_EVENT, listener);

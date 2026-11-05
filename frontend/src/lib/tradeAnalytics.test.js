@@ -89,4 +89,10 @@ describe("statistiques synchronisées avec le journal", () => {
     const stats = calculateTradeAnalytics([{ pnl: 40 }, { pnl: 60 }], accounts);
     expect(stats.profitFactor).toBe(Infinity);
   });
+
+  test("reports break-even results separately and a missing net result as unknown", () => {
+    const stats = calculateTradeAnalytics([{ pnl: 30 }, { pnl: 0 }, { pnl: -10 }, { pnl: null, result_status: "closed", date: "2026-09-02" }], accounts);
+    expect(stats).toMatchObject({ pnl: 20, winrate: 33.3, measuredCount: 3, unknownCount: 1, wins: 1, losses: 1, breakevens: 1 });
+    expect(stats.days.find(day => day.name === "Mer").pnl).toBeNull();
+  });
 });

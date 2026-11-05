@@ -18,10 +18,12 @@ export function readPreTradeChecks(checklist = []) {
 
 export function writePreTradeChecks(checks, checklist = []) {
   const normalized = normalizePreTradeChecks(checks, checklist);
-  if (typeof window !== "undefined") localStorage.setItem(PRE_TRADE_CHECKS_KEY, JSON.stringify(normalized));
+  try { if (typeof window !== "undefined") localStorage.setItem(PRE_TRADE_CHECKS_KEY, JSON.stringify(normalized)); }
+  catch { /* The current checklist stays usable even if browser storage is blocked. */ }
   return normalized;
 }
 
 export function clearPreTradeChecks() {
-  if (typeof window !== "undefined") localStorage.removeItem(PRE_TRADE_CHECKS_KEY);
+  try { if (typeof window !== "undefined") localStorage.removeItem(PRE_TRADE_CHECKS_KEY); }
+  catch { /* Saving a trade must not fail because a local preference cannot be cleared. */ }
 }

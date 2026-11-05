@@ -1,16 +1,12 @@
 import React from "react";
 import { AlertCircle, BarChart3, BrainCircuit, CalendarDays, Check, CheckCircle2, ClipboardCheck, FileQuestion, Loader2, ShieldAlert, Sparkles } from "lucide-react";
-import { actionPlanProgress, briefingPresentation, measuredValue } from "@/lib/atlasBriefing";
+import { actionPlanProgress, briefingPnl, briefingPresentation, measuredValue } from "@/lib/atlasBriefing";
 
 const severityStyle = {
   critical: { color: "#F26A70", border: "rgba(242,106,112,.22)", background: "rgba(242,106,112,.055)" },
   warning: { color: "#FFB855", border: "rgba(255,184,85,.22)", background: "rgba(255,184,85,.055)" },
   info: { color: "#7CA7FF", border: "rgba(124,167,255,.20)", background: "rgba(124,167,255,.05)" },
 };
-
-const money = (value) => value === null || value === undefined
-  ? "Non mesuré"
-  : new Intl.NumberFormat("fr-FR", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value);
 
 export default function AtlasCoachingHub({
   briefing,
@@ -40,7 +36,7 @@ export default function AtlasCoachingHub({
     <div className="space-y-5 p-5">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Metric label="Trades" value={overview.trade_count ?? 0} icon={CalendarDays}/>
-        <Metric label="P&L mesuré" value={money(overview.measured_pnl)} icon={BarChart3}/>
+        <Metric label="P&L mesuré" value={briefingPnl(overview)} icon={BarChart3}/>
         <Metric label="Win rate" value={measuredValue(overview.win_rate_percent, "%")} icon={CheckCircle2}/>
         <Metric label="Respect du plan" value={measuredValue(overview.plan_respect_percent, "%")} icon={ShieldAlert}/>
         <Metric label="Checklist" value={measuredValue(overview.checklist_completion_percent, "%")} icon={ClipboardCheck}/>
@@ -60,7 +56,7 @@ export default function AtlasCoachingHub({
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1fr_auto] xl:items-end">
-        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.015] p-4"><div className="flex items-center gap-2 text-sm font-semibold"><FileQuestion className="h-4 w-4 text-[#B58BFF]"/>Revues post-trade à compléter</div>{briefing.review_queue.length?<div className="mt-3 grid gap-2 md:grid-cols-2">{briefing.review_queue.map((trade)=><article key={trade.trade_id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-[#070A12] p-3"><div className="min-w-0"><div className="text-xs font-semibold">{trade.instrument||"Instrument"} · {trade.date}</div><div className="mt-1 truncate text-[10px] text-[#697183]">À compléter : {trade.missing.join(", ")}</div></div><button type="button" onClick={()=>onAnalyze({tradeId:trade.trade_id})} disabled={analysisLoading} className="shrink-0 rounded-lg border border-[#7C4DFF]/30 px-3 py-2 text-[10px] font-semibold text-[#C8AEFF] hover:bg-[#7C4DFF]/10 disabled:opacity-50">Revue IA</button></article>)}</div>:<p className="mt-3 text-xs text-[#72DDB6]">Les trades de la période sont suffisamment documentés.</p>}</div>
+        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.015] p-4"><div className="flex items-center gap-2 text-sm font-semibold"><FileQuestion className="h-4 w-4 text-[#B58BFF]"/>Revues post-trade à compléter</div>{briefing.review_queue.length?<div className="mt-3 grid gap-2 md:grid-cols-2">{briefing.review_queue.map((trade)=><article key={trade.trade_id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-[#070A12] p-3"><div className="min-w-0"><div className="text-xs font-semibold">{trade.instrument||"Instrument"} · {trade.date}</div><div className="mt-1 truncate text-[10px] text-[#697183]">À compléter : {trade.missing.join(", ")}</div></div><button type="button" onClick={()=>onAnalyze({tradeId:trade.trade_id})} disabled={analysisLoading} className="shrink-0 rounded-lg border border-[#7C4DFF]/30 px-3 py-2 text-[10px] font-semibold text-[#C8AEFF] hover:bg-[#7C4DFF]/10 disabled:opacity-50">Revue IA</button></article>)}</div>:<p className="mt-3 text-xs text-[#72DDB6]">{overview.trade_count ? "Aucune revue à compléter détectée sur cette période." : "Aucun trade sur cette période : la documentation n’est pas encore mesurable."}</p>}</div>
         <button type="button" onClick={()=>onAnalyze({period})} disabled={analysisLoading||!overview.trade_count} className="btn-primary inline-flex min-h-12 w-full items-center justify-center gap-2 disabled:opacity-50 xl:w-auto">{analysisLoading?<Loader2 className="h-4 w-4 animate-spin"/>:<Sparkles className="h-4 w-4"/>}{analysisLoading?"Atlas analyse…":analyzeLabel}</button>
       </div>
 

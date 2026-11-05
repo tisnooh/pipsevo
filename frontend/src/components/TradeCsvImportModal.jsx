@@ -9,6 +9,9 @@ export default function TradeCsvImportModal({ accounts, existingTrades, onClose,
   const { confirm, confirmationDialog, confirmationOpen } = useConfirmDialog();
   const inputRef = useRef(null);
   const [file, setFile] = useState(null);
+  const [fileText, setFileText] = useState("");
+  const [pnlMode, setPnlMode] = useState("auto");
+  const [dateOrder, setDateOrder] = useState("dmy");
   const [rows, setRows] = useState([]);
   const [readingError, setReadingError] = useState("");
   const [importing, setImporting] = useState(false);
@@ -29,14 +32,34 @@ export default function TradeCsvImportModal({ accounts, existingTrades, onClose,
   const selectFile = async event => {
     const nextFile = event.target.files?.[0];
     if (!nextFile) return;
-    setReadingError(""); setLastBatch(null); setFile(nextFile);
+    setReadingError(""); setLastBatch(null); setFile(nextFile); setFileText("");
     try {
+      if (nextFile.size > 10 * 1024 * 1024) throw new Error("Le fichier dépasse 10 Mo. Répartis l’historique en plusieurs fichiers.");
       const text = await nextFile.text();
-      setRows(prepareTradeFileImport({ text, fileName: nextFile.name, accounts, existingTrades }));
+      setFileText(text);
+      setRows(prepareTradeFileImport({ text, fileName: nextFile.name, accounts, existingTrades, pnlMode, dateOrder }));
     } catch (error) {
       setRows([]);
       setReadingError(error.message || "Impossible de lire ce fichier.");
     }
+  };
+
+  const changePnlMode = event => {
+    const nextMode = event.target.value;
+    setPnlMode(nextMode);
+    if (!file || !fileText) return;
+    try {
+      setRows(prepareTradeFileImport({ text: fileText, fileName: file.name, accounts, existingTrades, pnlMode: nextMode, dateOrder }));
+      setReadingError("");
+    } catch (error) { setRows([]); setReadingError(error.message || "Impossible de lire ce fichier."); }
+  };
+
+  const changeDateOrder = event => {
+    const nextOrder = event.target.value;
+    setDateOrder(nextOrder);
+    if (!file || !fileText) return;
+    try { setRows(prepareTradeFileImport({ text: fileText, fileName: file.name, accounts, existingTrades, pnlMode, dateOrder: nextOrder })); setReadingError(""); }
+    catch (error) { setRows([]); setReadingError(error.message || "Impossible de lire ce fichier."); }
   };
 
   const runImport = async () => {
@@ -52,7 +75,8 @@ export default function TradeCsvImportModal({ accounts, existingTrades, onClose,
         errorRows: summary.error,
       });
       setLastBatch(data.batch);
-      toast.success(`${data.trades.length} trade${data.trades.length > 1 ? "s" : ""} importé${data.trades.length > 1 ? "s" : ""}`);
+      if (data.report_pending) toast.warning(`${data.trades.length} trade(s) importé(s). Le rapport est en attente ; les trades ont été conservés.`);
+      else toast.success(`${data.trades.length} trade${data.trades.length > 1 ? "s" : ""} importé${data.trades.length > 1 ? "s" : ""}`);
       await onImported();
     } catch (error) {
       toast.error(error.response?.data?.detail || error.message || "Import impossible");
@@ -81,6 +105,21 @@ export default function TradeCsvImportModal({ accounts, existingTrades, onClose,
         <button type="button" onClick={onClose} disabled={importing} aria-label="Fermer" className="grid h-9 w-9 place-items-center rounded-xl text-[#8B93A3] hover:bg-white/5 hover:text-white disabled:opacity-40"><X className="h-4 w-4"/></button>
       </header>
       <div className="overflow-y-auto p-5 sm:p-6">
+        <label className="mb-4 block text-xs text-[var(--pe-text-secondary)]">Nature du résultat fourni
+          <select aria-label="Nature du P&L dans le fichier" value={pnlMode} onChange={changePnlMode} disabled={importing || Boolean(lastBatch)} className="pe-control mt-2 w-full">
+            <option value="auto">Automatique : colonnes P&amp;L net / brut explicites</option>
+            <option value="net">La colonne Profit est nette, frais déjà déduits</option>
+            <option value="gross">La colonne Profit est brute, frais à déduire</option>
+          </select>
+        </label>
+        <label className="mb-4 block text-xs text-[var(--pe-text-secondary)]">Format des dates du fichier
+          <select aria-label="Format des dates du fichier" value={dateOrder} onChange={changeDateOrder} disabled={importing || Boolean(lastBatch)} className="pe-control mt-2 w-full">
+            <option value="dmy">Jour / mois / année (31/12/2026)</option>
+            <option value="mdy">Mois / jour / année (12/31/2026)</option>
+          </select>
+          <span className="mt-2 block text-[var(--pe-text-muted)]">Les dates ISO (2026-12-31) ne changent pas. Vérifie les dates dans l’aperçu avant d’importer.</span>
+        </label>
+        <p className="mb-4 text-xs leading-5 text-[var(--pe-text-muted)]">Le journal affiche le P&amp;L net. Un résultat brut nécessite les colonnes Commission et Swap (renseigne 0 s’il n’y en a pas). Une colonne P&amp;L ou Net Profit est déjà considérée nette : les frais ne seront pas déduits deux fois.</p>
         <button type="button" onClick={() => inputRef.current?.click()} disabled={importing} className="flex w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[#7C4DFF]/40 bg-[#7C4DFF]/[0.06] px-5 py-8 text-center hover:border-[#7C4DFF]/70 disabled:opacity-50">
           <FileUp className="h-7 w-7 text-[#B58BFF]"/><span className="mt-3 text-sm font-semibold">{file?.name || "Choisir un fichier CSV, TXT ou HTML"}</span><span className="mt-1 max-w-2xl text-xs leading-5 text-[#7E8798]">MetaTrader 4/5, cTrader, NinjaTrader 8, Quantower, Sierra Chart ou modèle CSV PipsEvo.</span>
         </button>

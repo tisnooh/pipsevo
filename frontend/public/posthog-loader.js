@@ -1,5 +1,15 @@
 /* Chargé uniquement après consentement explicite. */
 (function (d, ph) {
+  var consentScript = d.getElementById("pipsevo-posthog");
+  if (!consentScript || consentScript.dataset.analyticsConsent !== "granted") return;
+  if (typeof window.__pipsevoAnalyticsConsentCheck !== "function" || !window.__pipsevoAnalyticsConsentCheck()) return;
+  var path = window.location.pathname;
+  if (path.indexOf("/auth/") === 0 || ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email"].indexOf(path) !== -1) return;
+  var sensitiveKeys = ["access_token", "refresh_token", "code", "token", "token_hash", "error_description"];
+  if ([window.location.search, window.location.hash].some(function (part) {
+    var params = new URLSearchParams(part.replace(/^[?#]/, ""));
+    return sensitiveKeys.some(function (key) { return params.has(key); });
+  })) return;
   if (ph.__SV) return;
   window.posthog = ph;
   ph._i = [];
@@ -23,6 +33,31 @@
     autocapture: false,
     disable_session_recording: true,
     capture_pageview: false,
+    capture_pageleave: false,
+    capture_dead_clicks: false,
+    capture_exceptions: false,
+    capture_performance: false,
+    rageclick: false,
+    disable_surveys: true,
+    opt_out_capturing_by_default: true,
+    before_send: function (event) {
+      if (!window.__pipsevoAnalyticsConsentCheck || !window.__pipsevoAnalyticsConsentCheck()) return null;
+      try {
+        var properties = Object.assign({}, event.properties);
+        ["$current_url", "$initial_current_url", "$referrer", "$initial_referrer"].forEach(function (key) {
+          if (!properties[key]) return;
+          var url = new URL(properties[key]);
+          url.search = "";
+          url.hash = "";
+          if (/^\/(app|admin)(\/|$)/.test(url.pathname)) url.pathname = "/" + url.pathname.split("/").filter(Boolean).slice(0, 2).join("/");
+          properties[key] = url.href;
+        });
+        ["$pathname", "$initial_pathname"].forEach(function (key) {
+          if (typeof properties[key] === "string" && /^\/(app|admin)(\/|$)/.test(properties[key])) properties[key] = "/" + properties[key].split("/").filter(Boolean).slice(0, 2).join("/");
+        });
+        return Object.assign({}, event, { properties: properties });
+      } catch (_) { return null; }
+    },
     persistence: "localStorage"
   });
 })(document, window.posthog || []);

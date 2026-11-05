@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { BookOpenCheck, CheckCircle2, Edit3, Save, ShieldCheck, Target } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { auth } from "@/lib/api";
 import { hasTradingPlanContent, normalizeTradingPlan, TRADING_PLAN_SECTION_MAX_LENGTH } from "@/lib/tradingPlan";
+import useAccountDraft from "@/hooks/useAccountDraft";
 
 const sections = [
   ["mission", "Objectif et philosophie", "Décris le trader que tu veux être et ce que ton plan doit protéger."],
@@ -24,19 +25,24 @@ const inputClass = "mt-2 w-full rounded-xl border border-white/10 bg-[#0D1020] p
 export default function TradingPlan() {
   const { user, setUser } = useAuth();
   const initial = useMemo(() => normalizeTradingPlan(user?.trading_plan), [user?.trading_plan]);
-  const [plan, setPlan] = useState(initial);
+  const [plan, setPlan, { commit: commitPlan, dirty }] = useAccountDraft(user?.id, user?.trading_plan, normalizeTradingPlan);
   const [editing, setEditing] = useState(() => !hasTradingPlanContent(initial));
   const [saving, setSaving] = useState(false);
-  const checklist = (user?.rules?.pre_trade_checklist || []).filter((item) => item.enabled !== false);
+  const checklist = (Array.isArray(user?.rules?.pre_trade_checklist) ? user.rules.pre_trade_checklist : []).filter((item) => item && typeof item.label === "string" && item.enabled !== false);
+
+  useEffect(() => {
+    if (!dirty) setEditing(!hasTradingPlanContent(initial));
+  }, [user?.id, initial, dirty]);
 
   const save = async () => {
+    if (saving) return;
     if (!plan.title.trim()) { toast.error("Donne un nom à ton plan de trading."); return; }
     setSaving(true);
     try {
       const normalized = normalizeTradingPlan(plan);
       const { data } = await auth.update({ trading_plan: normalized });
       setUser(data);
-      setPlan(normalized);
+      commitPlan(data.trading_plan ?? normalized);
       setEditing(false);
       toast.success("Plan de trading enregistré");
     } catch (error) {
@@ -47,18 +53,18 @@ export default function TradingPlan() {
   return <div className="pe-page pe-page-stack mx-auto max-w-[1500px]">
     <div className="pe-page-header items-start">
       <div><div className="pe-eyebrow">CADRE DE DÉCISION</div><h1 className="pe-page-title mt-2 flex items-center gap-3"><BookOpenCheck className="h-7 w-7 text-[#B58BFF]"/>Plan de trading</h1><p className="pe-page-copy mt-2 max-w-2xl">Centralise ta méthode, tes limites et les conditions qui autorisent réellement un trade.</p></div>
-      <button type="button" onClick={() => editing ? save() : setEditing(true)} disabled={saving} className="btn-primary inline-flex items-center gap-2 disabled:opacity-50">{editing ? <Save className="h-4 w-4"/> : <Edit3 className="h-4 w-4"/>}{saving ? "Sauvegarde…" : editing ? "Enregistrer le plan" : "Modifier le plan"}</button>
+      <div className="flex flex-wrap gap-2">{editing && hasTradingPlanContent(initial) && <button type="button" disabled={saving} className="btn-ghost" onClick={() => { setPlan(initial); setEditing(false); }}>Annuler</button>}<button type="button" onClick={() => editing ? save() : setEditing(true)} disabled={saving} className="btn-primary inline-flex items-center gap-2 disabled:opacity-50">{editing ? <Save className="h-4 w-4"/> : <Edit3 className="h-4 w-4"/>}{saving ? "Sauvegarde…" : editing ? "Enregistrer le plan" : "Modifier le plan"}</button></div>
     </div>
 
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
       <section className="pe-card overflow-hidden">
         <div className="border-b border-white/[0.06] p-5 sm:p-6">
-          {editing ? <label className="pe-field-label">Nom du plan<input value={plan.title} maxLength={120} onChange={(event) => setPlan((current) => ({ ...current, title: event.target.value }))} className={inputClass}/></label> : <h2 className="text-2xl font-bold">{plan.title}</h2>}
+          {editing ? <label className="pe-field-label">Nom du plan<input value={plan.title} disabled={saving} maxLength={120} onChange={(event) => setPlan((current) => ({ ...current, title: event.target.value }))} className={inputClass}/></label> : <h2 className="text-2xl font-bold">{plan.title}</h2>}
         </div>
         <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-2">
           {sections.map(([key, title, placeholder]) => <article key={key} className="rounded-2xl border border-white/[0.07] bg-white/[0.018] p-4">
-            <h3 className="text-sm font-semibold">{title}</h3>
-            {editing ? <textarea value={plan[key]} maxLength={TRADING_PLAN_SECTION_MAX_LENGTH} rows={key === "setup_definition" || key === "entry_rules" ? 7 : 5} onChange={(event) => setPlan((current) => ({ ...current, [key]: event.target.value }))} placeholder={placeholder} className={`${inputClass} resize-y`}/> : <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#A9B0C2]">{plan[key] || "Non renseigné"}</p>}
+            <h3 id={`plan-${key}`} className="text-sm font-semibold">{title}</h3>
+            {editing ? <textarea aria-labelledby={`plan-${key}`} disabled={saving} value={plan[key]} maxLength={TRADING_PLAN_SECTION_MAX_LENGTH} rows={key === "setup_definition" || key === "entry_rules" ? 7 : 5} onChange={(event) => setPlan((current) => ({ ...current, [key]: event.target.value }))} placeholder={placeholder} className={`${inputClass} resize-y`}/> : <p className="mt-3 break-words whitespace-pre-wrap text-sm leading-6 text-[#A9B0C2]">{plan[key] || "Non renseigné"}</p>}
           </article>)}
         </div>
       </section>

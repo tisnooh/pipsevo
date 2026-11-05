@@ -24,8 +24,21 @@ test("conserve les tableaux et objets en JSON dans une cellule", () => {
 
 test("prépare tous les fichiers de l’archive utilisateur", () => {
   const files = buildFullExportFiles({ profile: { id: "u1" }, accounts: [], trades: [], payouts: [], aiReports: [], settings: {} });
-  expect(files.map((file) => file.name)).toEqual(["profil.csv", "preferences.csv", "comptes.csv", "trades.csv", "payouts.csv", "analyses-atlas.csv"]);
+  expect(files.map((file) => file.name)).toEqual(["profil.csv", "preferences.csv", "comptes.csv", "trades.csv", "payouts.csv", "analyses-atlas.csv", "LIRE-MOI.txt"]);
   expect(files.find((file) => file.name === "trades.csv").content).toContain(EXPORT_SCHEMAS.trades[0][0]);
+});
+
+test("includes Lab portability and states that screenshot binaries are not archived", () => {
+  const backtest = { backtest_sessions: [{ id: "s1", trades: [{ pnl: 25 }] }] };
+  const files = buildFullExportFiles({ backtest });
+  expect(JSON.parse(files.find(file => file.name === "backtest.json").content)).toEqual(backtest);
+  expect(files.find(file => file.name === "LIRE-MOI.txt").content).toContain("fichiers binaires ne sont pas inclus");
+});
+
+test("archive retains the written trading plan and screenshot references", () => {
+  const files = buildFullExportFiles({ profile: { trading_plan: { title: "My plan" } }, trades: [{ screenshots: ["owner/private-shot.png"] }] });
+  expect(files.find(file => file.name === "profil.csv").content).toContain("My plan");
+  expect(files.find(file => file.name === "trades.csv").content).toContain("owner/private-shot.png");
 });
 
 test("produit une archive ZIP valide sans dépendance externe", () => {

@@ -10,27 +10,47 @@ export const DEFAULT_SETTINGS = Object.freeze({
   risk: true,
   payout: true,
   product: false,
+  education: false,
 });
 
+let temporarySettings = null;
+export function normalizeSettings(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const settings = { ...DEFAULT_SETTINGS };
+  if (/^[A-Z]{3}$/.test(String(source.currency || ""))) settings.currency = source.currency;
+  if (["fr", "en"].includes(source.language)) settings.language = source.language;
+  if (typeof source.timezone === "string") {
+    try { new Intl.DateTimeFormat("fr", { timeZone: source.timezone }); settings.timezone = source.timezone; } catch { /* Use the safe default for invalid stored timezones. */ }
+  }
+  ["compactMode", "daily", "risk", "payout", "product", "education"].forEach(key => {
+    if (typeof source[key] === "boolean") settings[key] = source[key];
+  });
+  return settings;
+}
+
 export function readSettings() {
+  if (temporarySettings) return { ...temporarySettings };
   if (typeof window === "undefined") return { ...DEFAULT_SETTINGS };
   try {
-    return { ...DEFAULT_SETTINGS, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}) };
+    return normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY)));
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
 }
 
 export function writeSettings(next) {
-  const settings = { ...readSettings(), ...next };
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  window.dispatchEvent(new CustomEvent(SETTINGS_EVENT, { detail: settings }));
+  const settings = normalizeSettings({ ...readSettings(), ...next });
+  let persisted = false;
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); temporarySettings = null; persisted = true; }
+  catch { temporarySettings = settings; }
+  Object.defineProperty(settings, "persisted", { value: persisted, enumerable: false });
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(SETTINGS_EVENT, { detail: settings }));
   return settings;
 }
 
 export function listenForSettingsChanges(callback) {
   if (typeof window === "undefined") return () => {};
-  const onSettings = event => callback(event.detail || readSettings());
+  const onSettings = event => callback(normalizeSettings(event.detail || readSettings()));
   const onStorage = event => {
     if (event.key === SETTINGS_KEY) callback(readSettings());
   };
@@ -43,16 +63,24 @@ export function listenForSettingsChanges(callback) {
 }
 
 export function applyDocumentPreferences(settings = readSettings()) {
+  if (typeof document === "undefined") return;
   document.documentElement.lang = settings.language === "en" ? "en" : "fr";
   document.documentElement.dataset.density = settings.compactMode ? "compact" : "comfortable";
 }
 
 export function formatMoney(value, options = {}) {
-  const settings = options.settings || readSettings();
+  const settings = normalizeSettings(options.settings || readSettings());
+  if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) return "—";
   const locale = settings.language === "en" ? "en-US" : "fr-FR";
+  const currency = String(options.currency || settings.currency || "USD");
+  if (currency === "UNKNOWN") return "—";
+  if (!/^[A-Z]{3}$/.test(currency)) return `${new Intl.NumberFormat(locale, {
+    minimumFractionDigits: options.minimumFractionDigits ?? 0, maximumFractionDigits: options.maximumFractionDigits ?? 2,
+    signDisplay: options.signDisplay || "auto",
+  }).format(Number(value))} ${currency}`;
   return new Intl.NumberFormat(locale, {
     style: "currency",
-    currency: options.currency || settings.currency || "USD",
+    currency,
     minimumFractionDigits: options.minimumFractionDigits ?? 0,
     maximumFractionDigits: options.maximumFractionDigits ?? 2,
     signDisplay: options.signDisplay || "auto",
@@ -61,7 +89,7 @@ export function formatMoney(value, options = {}) {
 
 export function formatDate(value, options = {}) {
   if (!value) return "—";
-  const settings = options.settings || readSettings();
+  const settings = normalizeSettings(options.settings || readSettings());
   const locale = settings.language === "en" ? "en-US" : "fr-FR";
   // Une date métier sans heure (ex. 2026-07-13) ne doit pas reculer d'un jour
   // lorsque l'utilisateur choisit un fuseau américain.

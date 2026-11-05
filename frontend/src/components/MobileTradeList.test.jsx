@@ -42,4 +42,20 @@ describe("MobileTradeList", () => {
     act(() => root.render(<MobileTradeList trades={[]} emptyMessage="Aucun résultat" />));
     expect(container.textContent).toContain("Aucun résultat");
   });
+
+  test.each([
+    { result_status: "open", pnl: 999, r: 9.99 },
+    { result_status: "cancelled", pnl: 999, r: 9.99 },
+    { result_status: "closed", pnl: Infinity, r: 9.99 },
+    { result_status: "closed", pnl: 999, r: 9.99, provider_metadata: { net_pnl_available: false } },
+  ])("never labels an unmeasured result as realized: %p", trade => {
+    act(() => root.render(<MobileTradeList
+      trades={[{ id: "unmeasured", instrument: "NQ", ...trade, result: "USD 999", rLabel: "9.99R", toneClass: "text-[#46C99A]" }]}
+      formatMoney={value => `USD ${value}`}
+    />));
+    expect(container.textContent).not.toContain("USD 999");
+    expect(container.textContent).not.toContain("9.99R");
+    expect(container.textContent).not.toContain("Infinity");
+    expect(container.textContent).toContain(trade.result_status === "open" ? "Ouverte" : "—");
+  });
 });

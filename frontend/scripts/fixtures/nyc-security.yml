@@ -1,0 +1,7 @@
+include:
+  - src/**/*.jsx
+  - src/**/*.js
+exclude:
+  - src/**/*.test.*
+check-coverage: true
+lines: 80

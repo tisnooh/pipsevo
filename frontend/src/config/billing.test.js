@@ -23,6 +23,14 @@ describe("configuration commerciale PipsEvo", () => {
     expect(hasPlanAccess("pro", "aiCoach")).toBe(true);
   });
 
+  test("un ancien libellé Pro ne débloque pas une fonctionnalité non implémentée", () => {
+    ["automaticReports", "advancedExports", "premiumAutomations"].forEach((feature) => {
+      expect(hasPlanAccess("pro", feature)).toBe(false);
+    });
+    expect(PLANS.pro.features).toContain("Exports PDF · à venir");
+    expect(PLANS.pro.features).toContain("Rapports automatiques · à venir");
+  });
+
   test("chaque fonctionnalité définit les trois niveaux", () => {
     Object.values(FEATURES).forEach((access) => {
       expect(access).toEqual(expect.objectContaining({ beta: expect.any(Boolean), essential: expect.any(Boolean), pro: expect.any(Boolean) }));

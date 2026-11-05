@@ -10,8 +10,9 @@ import { FeatureGate } from "@/components/FeatureGate";
 import { listenForAppDataChanges } from "@/lib/appDataEvents";
 import AtlasReadiness from "@/components/AtlasReadiness";
 import AtlasCoachingHub from "@/components/AtlasCoachingHub";
-import { nextActionState } from "@/lib/atlasBriefing";
+import { isAtlasBriefing, nextActionState } from "@/lib/atlasBriefing";
 import { localDateKey } from "@/lib/tradeCalendar";
+import { atlasReportPresentation } from "@/lib/atlasReportPresentation";
 
 const PRESETS = [
   { fr:"Analyse mon mois", en:"Analyze my month", tag:"review" },
@@ -24,7 +25,7 @@ const PRESETS = [
 ];
 
 export default function AICoach() {
-  const { date } = useAppSettings();
+  const { date, money } = useAppSettings();
   const { language } = useI18n();
   const { user, setUser } = useAuth();
   const hasCoachAccess = canUseFeature(user, "aiCoach");
@@ -34,6 +35,7 @@ export default function AICoach() {
   const [summary, setSummary] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [askError, setAskError] = useState("");
   const [lastQuestion, setLastQuestion] = useState("");
   const [lastTag, setLastTag] = useState("overall");
@@ -42,27 +44,58 @@ export default function AICoach() {
   const [briefingPeriod, setBriefingPeriod] = useState("weekly");
   const [savingAction, setSavingAction] = useState("");
   const conversationRef = useRef(null);
+  const loadVersion = useRef(0), askLock = useRef(false);
+  const accountContext = useRef({ id: user?.id, active: true });
+  if (accountContext.current.id !== user?.id) accountContext.current = { id: user?.id, active: true };
+
+  useEffect(() => {
+    const context = accountContext.current;
+    context.active = true;
+    setQ(""); setHistory([]); setSummary(null); setAccounts([]); setBriefing(null);
+    setAskError(""); setLoadError(""); setLastQuestion(""); setLastTag("overall"); setLastOptions({});
+    setLoading(false); setSavingAction(""); askLock.current = false;
+    return () => { context.active = false; };
+  }, [user?.id]);
 
   const load = useCallback(() => {
-    if (!hasCoachAccess) { setInitialLoading(false); return; }
+    if (!hasCoachAccess || !user?.id) { setInitialLoading(false); return; }
+    const context = accountContext.current;
     setInitialLoading(true);
-    Promise.all([coach.history(),dashboard(),accountsAPI.list(),coach.briefing(briefingPeriod,localDateKey())]).then(([h,d,a,b])=>{setHistory(h.data);setSummary(d.data);setAccounts(a.data||[]);setBriefing(b.data)}).catch(()=>toast.error("Impossible de charger l’analyse")).finally(()=>setInitialLoading(false));
-  }, [briefingPeriod,hasCoachAccess]);
+    setBriefing(null);
+    const version = ++loadVersion.current;
+    Promise.allSettled([coach.history(),dashboard(),accountsAPI.list(),coach.briefing(briefingPeriod,localDateKey())]).then(results => {
+      if (version !== loadVersion.current || !context.active || context !== accountContext.current) return;
+      const setters = [setHistory, setSummary, setAccounts, setBriefing];
+      const fallbacks = [[], null, [], null];
+      let incomplete = false;
+      results.forEach((result, index) => {
+        const data = result.status === "fulfilled" ? result.value?.data : null;
+        const valid = [0, 2].includes(index) ? Array.isArray(data) : index === 3 ? isAtlasBriefing(data) : data && typeof data === "object" && !Array.isArray(data);
+        setters[index](valid ? data : fallbacks[index]);
+        if (!valid) incomplete = true;
+      });
+      setLoadError(incomplete ? "Certaines données d’analyse n’ont pas pu être chargées. Le contenu disponible reste accessible, mais les données manquantes ne sont pas validées." : "");
+      setInitialLoading(false);
+    });
+  }, [briefingPeriod,hasCoachAccess,user?.id]);
   useEffect(() => {
     load();
     if (!hasCoachAccess) return undefined;
-    return listenForAppDataChanges(load,["trades","dashboard"]);
+    const stop = listenForAppDataChanges(load,["trades","dashboard"]);
+    return () => { stop(); loadVersion.current += 1; };
   }, [hasCoachAccess,load]);
   const planRate = summary?.metrics?.plan_respect_rate;
   const insights = summary?.kpis?.total_trades ? [
     { I: AlertTriangle, t: "Respect du plan", d: planRate === null || planRate === undefined ? "Pas encore mesuré" : `${planRate}% des trades renseignés respectent le plan`, c: planRate === null || planRate === undefined ? "#7E8798" : planRate>=80?"#46C99A":"#FFB855" },
     { I: Trophy, t: "Meilleur setup", d: summary.best_setup || "Pas encore déterminé", c: "#46C99A" },
     { I: Clock, t: "Setup à surveiller", d: summary.worst_setup || "Pas encore déterminé", c: "#F26A70" },
-    { I: Shield, t: "Score discipline", d: `${summary.kpis.discipline_score}/100`, c: "#FFB855" },
-    { I: Target, t: "Trades analysés", d: `${summary.kpis.total_trades} trades réels`, c: "#B58BFF" },
+    { I: Shield, t: "Score discipline", d: summary.kpis.discipline_score === null ? "—" : `${summary.kpis.discipline_score}/100`, c: "#FFB855" },
+    { I: Target, t: "Trades analysés", d: `${summary.kpis.total_trades} clôture(s) avec résultat mesuré`, c: "#B58BFF" },
   ] : [];
 
   const ask = async (text, tag = "overall", options = {}) => {
+    if (!hasCoachAccess || askLock.current) return;
+    const context = accountContext.current;
     const question = text || q;
     if (!question.trim()) return;
     const normalizedQuestion = question.trim();
@@ -71,17 +104,21 @@ export default function AICoach() {
     setLastTag(tag);
     setLastOptions(options);
     setLoading(true);
+    askLock.current = true;
     try {
       const { data } = await coach.ask(normalizedQuestion, tag, options);
+      if (!context.active || context !== accountContext.current) return;
+      if (!data || typeof data.id !== "string" || typeof data.answer !== "string") throw new Error("Invalid Atlas response");
       setHistory(h => [data, ...h]);
       setQ(""); toast.success("Analyse prête");
       requestAnimationFrame(()=>conversationRef.current?.scrollIntoView({behavior:"smooth",block:"start"}));
     } catch (e) {
+      if (!context.active || context !== accountContext.current) return;
       const message=e.response?.data?.detail || "Atlas ne répond pas pour le moment.";
       setAskError(message);
       toast.error(message);
     }
-    finally { setLoading(false); }
+    finally { if (context.active && context === accountContext.current) { askLock.current = false; setLoading(false); } }
   };
 
   const analyzeBriefing = ({ tradeId, period = briefingPeriod } = {}) => {
@@ -101,16 +138,17 @@ export default function AICoach() {
 
   const toggleAction = async (actionId) => {
     if (!user || savingAction) return;
+    const context = accountContext.current;
     setSavingAction(actionId);
     const appPreferences = user.app_preferences && typeof user.app_preferences === "object" ? user.app_preferences : {};
     const actionState = appPreferences.atlas_action_state && typeof appPreferences.atlas_action_state === "object" ? appPreferences.atlas_action_state : {};
     try {
       const { data } = await auth.update({ app_preferences: { ...appPreferences, atlas_action_state: nextActionState(actionState, actionId) } });
-      setUser(data);
+      if (context.active && context === accountContext.current && data?.id === user.id) setUser(data);
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Impossible d’enregistrer cette action.");
+      if (context.active && context === accountContext.current) toast.error(error.response?.data?.detail || "Impossible d’enregistrer cette action.");
     } finally {
-      setSavingAction("");
+      if (context.active && context === accountContext.current) setSavingAction("");
     }
   };
 
@@ -125,14 +163,17 @@ export default function AICoach() {
         </div>
       </div>
 
-      {hasCoachAccess && <AtlasReadiness accounts={accounts} user={user}/>}
+      {hasCoachAccess && <p className="pe-card p-4 text-xs leading-5 text-[#7E8798]">Atlas peut utiliser un moteur local par règles ou un fournisseur génératif configuré par le serveur. L’origine réelle est indiquée sur chaque rapport ; une réponse locale n’est pas présentée comme une IA générative.</p>}
+      {loadError && <div role="alert" className="pe-card p-4 text-sm text-[#FFB855]">{loadError}<button type="button" onClick={load} disabled={initialLoading} className="btn-ghost ml-3">Réessayer le chargement</button></div>}
+
+      {hasCoachAccess && <AtlasReadiness key={user?.id} accounts={accounts} user={user}/>}
 
       {hasCoachAccess && <AtlasCoachingHub briefing={briefing} loading={initialLoading} period={briefingPeriod} onPeriodChange={setBriefingPeriod} onAnalyze={analyzeBriefing} analysisLoading={loading} actionState={user?.app_preferences?.atlas_action_state||{}} onToggleAction={toggleAction} savingAction={savingAction}/>}
 
       {!hasCoachAccess ? <FeatureGate feature="aiCoach" label="le coach IA complet" className="block w-full"><div className="pe-card pe-card-pad glow-purple"><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-[#B58BFF]"/><div><div className="font-semibold">Atlas est en préparation</div><p className="mt-1 text-xs text-[#9CA3AF]">Aperçu de la future analyse comportementale, sans signal de trading.</p></div></div></div></FeatureGate> : <div className="pe-card pe-card-pad glow-purple">
         <div className="flex flex-col gap-2 sm:flex-row">
-          <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Pose ta question à Atlas…" data-testid="coach-input" className="pe-control min-w-0 flex-1" onKeyDown={(e)=>e.key==="Enter"&&ask()} />
-          <button onClick={()=>ask()} disabled={loading} className="btn-primary inline-flex items-center gap-2 text-sm" data-testid="coach-ask"><Send className="w-4 h-4"/>{loading?"…":"Envoyer"}</button>
+          <input aria-label="Question à Atlas" maxLength={4000} value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Pose ta question à Atlas…" data-testid="coach-input" className="pe-control min-w-0 flex-1" onKeyDown={(e)=>{if(e.key==="Enter"&&!e.nativeEvent.isComposing){e.preventDefault();ask();}}} />
+          <button onClick={()=>ask()} disabled={loading || !q.trim()} className="btn-primary inline-flex items-center gap-2 text-sm" data-testid="coach-ask"><Send className="w-4 h-4"/>{loading?"…":"Envoyer"}</button>
         </div>
         <div className="flex flex-wrap gap-2 mt-4">
           {PRESETS.map(p => { const label=p[language] || p.fr; return <button key={p.fr} onClick={()=>ask(label,p.tag)} disabled={loading} data-testid={`coach-preset-${p.fr.slice(0,8)}`} className="pe-badge min-h-8 hover:border-[#7C4DFF]/40 hover:text-white">{label}</button> })}
@@ -161,9 +202,10 @@ export default function AICoach() {
         {history.map(r => (
           <div key={r.id} className="pe-card pe-card-pad" data-testid={`coach-report-${r.id}`}>
             <div className="pe-eyebrow mb-2">{r.tag} · {date(r.created_at,{withTime:true})}</div>
+            <div className="mb-3 rounded-xl border border-white/10 p-3 text-xs"><strong>{atlasReportPresentation(r).label}</strong><p className="mt-1 text-[#7E8798]">{atlasReportPresentation(r).description}</p></div>
             <div className="font-semibold mb-3">{r.question}</div>
             <AnswerMarkdown text={r.answer}/>
-            {r.evidence?.length>0&&<details className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"><summary className="cursor-pointer text-xs font-semibold text-[#B58BFF]">Sources utilisées · {r.evidence.length} trade{r.evidence.length>1?"s":""}</summary><div className="mt-3 grid gap-2 sm:grid-cols-2">{r.evidence.map(source=><div key={`${source.alias}-${source.trade_id}`} className="rounded-lg border border-white/[0.06] bg-[#0A0D17] p-3 text-xs"><div className="flex items-center justify-between gap-3"><span className="font-mono font-bold text-[#B58BFF]">[{source.alias}]</span><span className={Number(source.pnl)>=0?"text-[#46C99A]":"text-[#F26A70]"}>{source.pnl===null||source.pnl===undefined?"P&L non renseigné":`${Number(source.pnl)>=0?"+":""}${Number(source.pnl).toFixed(2)}`}</span></div><div className="mt-1 font-semibold">{source.instrument||"Instrument non renseigné"} · {source.direction||"—"}</div><div className="mt-1 text-[#7E8798]">{source.date||"Date inconnue"}{source.setup?` · ${source.setup}`:""}{source.session?` · ${source.session}`:""}</div></div>)}</div></details>}
+            {r.evidence?.length>0&&<details className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"><summary className="cursor-pointer text-xs font-semibold text-[#B58BFF]">Sources utilisées · {r.evidence.length} trade{r.evidence.length>1?"s":""}</summary><div className="mt-3 grid gap-2 sm:grid-cols-2">{r.evidence.map(source=><div key={`${source.alias}-${source.trade_id}`} className="rounded-lg border border-white/[0.06] bg-[#0A0D17] p-3 text-xs"><div className="flex items-center justify-between gap-3"><span className="font-mono font-bold text-[#B58BFF]">[{source.alias}]</span><span className={Number(source.pnl)>=0?"text-[#46C99A]":"text-[#F26A70]"}>{source.pnl===null||source.pnl===undefined||!Number.isFinite(Number(source.pnl))?"P&L non renseigné":money(source.pnl,{currency:source.currency||"USD",signDisplay:"always"})}</span></div><div className="mt-1 break-words font-semibold">{source.instrument||"Instrument non renseigné"} · {source.direction||"—"}</div><div className="mt-1 text-[#7E8798]">{source.date||"Date inconnue"}{source.setup?` · ${source.setup}`:""}{source.session?` · ${source.session}`:""}</div></div>)}</div></details>}
           </div>
         ))}
       </div>}

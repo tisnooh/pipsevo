@@ -1,10 +1,13 @@
 import React from "react";
 import { ChevronRight, Star } from "lucide-react";
+import { measuredTradePnl, measuredTradeR } from "@/lib/tradeAnalytics";
 
 const pnlTone = (trade) => {
+  const pnl = measuredTradePnl(trade);
+  if (pnl === null) return "text-[#9CA3AF]";
   if (trade.toneClass) return trade.toneClass;
-  if (typeof trade.pnl !== "number" || trade.pnl === 0) return "text-[#9CA3AF]";
-  return trade.pnl > 0 ? "text-[#46C99A]" : "text-[#F26A70]";
+  if (pnl === 0) return "text-[#9CA3AF]";
+  return pnl > 0 ? "text-[#46C99A]" : "text-[#F26A70]";
 };
 
 export default function MobileTradeList({
@@ -23,8 +26,9 @@ export default function MobileTradeList({
     {trades.map((trade) => {
       const asset = trade.asset || trade.instrument || "—";
       const direction = trade.direction === "long" ? "Achat (Long)" : trade.direction === "short" ? "Vente (Short)" : trade.direction || "—";
-      const result = trade.result || (typeof trade.pnl === "number" ? formatMoney(trade.pnl) : "—");
-      const rLabel = trade.rLabel || (typeof trade.r === "number" ? `${trade.r >= 0 ? "+" : ""}${trade.r.toFixed(2)}R` : "—");
+      const pnl = measuredTradePnl(trade), r = measuredTradeR(trade);
+      const result = pnl === null ? String(trade.result_status).toLowerCase() === "open" ? "Ouverte" : "—" : trade.result || formatMoney(pnl);
+      const rLabel = r === null ? "—" : trade.rLabel || `${r >= 0 ? "+" : ""}${r.toFixed(2)}R`;
       const dateLabel = trade.dateLabel || formatDate(trade.date);
       const tone = pnlTone(trade);
 

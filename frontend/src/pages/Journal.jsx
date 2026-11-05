@@ -1,8 +1,8 @@
-import { useCallback, useState, useEffect, useMemo } from "react"
+import { useRef, useState, useEffect, useMemo } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { motion } from "framer-motion"
 import { Star, Edit2, Trash2, Camera, Check, Plus, Upload, BarChart3, Target, TrendingUp, ArrowUpRight, ArrowDownRight, Ruler, CalendarDays, X } from "lucide-react"
-import { trades as tradesAPI, accounts as accAPI, tradeScreenshots } from "@/lib/api"
+import { trades as tradesAPI, tradeScreenshots } from "@/lib/api"
 import { toast } from "sonner"
 import { useAuth } from "@/context/AuthContext"
 import { normalizeTradingRules } from "@/components/TradingRulesEditor"
@@ -15,8 +15,10 @@ import { clearPreTradeChecks, readPreTradeChecks, writePreTradeChecks } from "@/
 import { listenForAppDataChanges } from "@/lib/appDataEvents"
 import { JOURNAL_LIST_PATH, journalTradePath, resolveJournalRoute } from "@/lib/journalNavigation"
 import MobileTradeList from "@/components/MobileTradeList"
-import { measuredTradePnl, tradeOutcome } from "@/lib/tradeAnalytics"
-import { apiErrorMessage } from "@/lib/apiError"
+import { calculateTradeAnalytics, measuredTradePnl, tradeOutcome } from "@/lib/tradeAnalytics"
+import { filterTradePeriod, formatWinRate } from "@/lib/tradeReporting"
+import useOwnedResource from "@/hooks/useOwnedResource"
+import { EMPTY_MANUAL_REPORT, fetchManualReport } from "@/lib/manualReportingResource"
 import PrivateTradeImage from "@/components/PrivateTradeImage"
 import { useConfirmDialog } from "@/components/ConfirmDialog"
 import useTradingCurrency from "@/hooks/useTradingCurrency"
@@ -30,16 +32,16 @@ export function JournalPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const { tradeId = "" } = useParams()
-  const [tradeList, setTradeList] = useState([])
-  const [accounts, setAccounts] = useState([])
+  const { data: reportData, loading, error: loadError, reload: load, capture, isCurrent } = useOwnedResource(user?.id, fetchManualReport, EMPTY_MANUAL_REPORT, "Erreur de chargement")
+  const { trades: tradeList, accounts } = reportData
   const [activeTab, setActiveTab] = useState("Aperçu")
   const [activeFilter, setActiveFilter] = useState("Tous les trades")
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState("")
   const [openForm, setOpenForm] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
   const [saving, setSaving] = useState(false)
+  const saveLock = useRef(false)
+  const creationRequest = useRef(null)
   const [checklistChecks, setChecklistChecks] = useState({})
   const [accountFilter, setAccountFilter] = useState("")
   const [days, setDays] = useState("30")
@@ -47,22 +49,14 @@ export function JournalPage() {
   const userRules = normalizeTradingRules(user?.rules)
   const activeChecklist = userRules.pre_trade_checklist.filter(item=>item.enabled !== false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setLoadError("")
-    try {
-      const [t, a] = await Promise.all([tradesAPI.list(), accAPI.list()])
-      setTradeList(t.data)
-      setAccounts(a.data)
-      if (a.data.length > 0) setForm(f => ({ ...f, account_id: a.data[0].id }))
-    } catch (error) { setLoadError(apiErrorMessage(error,"Erreur de chargement")) }
-    finally { setLoading(false) }
-  }, [])
-
   useEffect(() => {
-    load()
     return listenForAppDataChanges(load, ["accounts", "trades"])
   }, [load])
+
+  useEffect(() => {
+    setOpenForm(false); setImportOpen(false); setEditingTrade(null); setChecklistChecks({})
+    setSaving(false); saveLock.current = false; creationRequest.current = null; setAccountFilter(""); setForm(createEmptyTradeForm(null))
+  }, [user?.id])
 
   useEffect(() => {
     const params = new URLSearchParams(location.search)
@@ -80,7 +74,7 @@ export function JournalPage() {
   const { dateFilter, selectedTrade } = journalRoute
 
   useEffect(() => {
-    if (dateFilter) setDays("3650")
+    if (dateFilter) setDays("all")
   }, [dateFilter])
 
   useEffect(() => {
@@ -88,38 +82,67 @@ export function JournalPage() {
   }, [activeChecklist, checklistChecks, editingTrade, openForm])
 
   const saveTrade = async (payload, screenshotFiles = []) => {
+    if (saveLock.current) return
+    const context = capture()
+    if (!context.ownerId || !isCurrent(context)) return
+    saveLock.current = true
     setSaving(true)
-    let createdTrade = null
+    const edited = editingTrade
+    let savedTrade = null
+    let financialSaveCompleted = false
+    let attachmentAttempted = false
     const uploadedPaths = []
     try {
-      const tradeId = editingTrade?.id || (await tradesAPI.create({...payload,screenshots:[]})).data.id
-      if (!editingTrade) createdTrade = { id: tradeId }
-      for (const file of screenshotFiles) uploadedPaths.push(await tradeScreenshots.upload(tradeId,file))
-      const nextScreenshots=[...(payload.screenshots || []),...uploadedPaths]
-      if (editingTrade) {
-        await tradesAPI.update(tradeId,{...payload,screenshots:nextScreenshots})
-        const removed=(editingTrade.screenshots || []).filter(path=>!nextScreenshots.includes(path))
-        if (removed.length) tradeScreenshots.delete(removed).catch(()=>toast.warning("Le trade est enregistré, mais une ancienne capture n’a pas pu être supprimée."))
-      } else if (nextScreenshots.length) {
-        await tradesAPI.update(tradeId,{screenshots:nextScreenshots})
+      if (!edited && !creationRequest.current) creationRequest.current = crypto.randomUUID()
+      // Save the financial result first. Optional media must never roll it back.
+      const response = edited
+        ? await tradesAPI.update(edited.id, payload)
+        : await tradesAPI.create({...payload,screenshots:[]}, { requestId: creationRequest.current })
+      financialSaveCompleted = true
+      savedTrade = response.data
+      if (!savedTrade?.id) throw new Error("Le résultat de l’enregistrement est indisponible. Recharge le journal avant de réessayer.")
+      if (!isCurrent(context)) return
+      for (const file of screenshotFiles) {
+        if (!isCurrent(context)) return
+        uploadedPaths.push(await tradeScreenshots.upload(savedTrade.id,file))
       }
-      localStorage.setItem("pipsevo_last_trade_choices",JSON.stringify({account_id:payload.account_id,session:payload.session,setups:payload.setups,emotion:payload.emotion,emotion_intensity:payload.emotion_intensity,duration:payload.duration,market_type:payload.market_type}))
-      if (!editingTrade) { clearPreTradeChecks(); setChecklistChecks({}) }
-      toast.success(editingTrade ? "Trade mis à jour" : "Trade ajouté")
+      if (!isCurrent(context)) return
+      const nextScreenshots=[...(payload.screenshots || []),...uploadedPaths]
+      if (nextScreenshots.length && (!edited || uploadedPaths.length)) {
+        attachmentAttempted = true
+        await tradesAPI.update(savedTrade.id,{screenshots:nextScreenshots})
+      }
+      if (!isCurrent(context)) return
+      if (edited) {
+        const removed=(edited.screenshots || []).filter(path=>!nextScreenshots.includes(path))
+        if (removed.length) tradeScreenshots.delete(removed).catch(()=>{ if (isCurrent(context)) toast.warning("Le trade est enregistré, mais une ancienne capture n’a pas pu être supprimée.") })
+      }
+      try { localStorage.setItem("pipsevo_last_trade_choices",JSON.stringify({account_id:payload.account_id,session:payload.session,setups:payload.setups,emotion:payload.emotion,emotion_intensity:payload.emotion_intensity,duration:payload.duration,market_type:payload.market_type})) }
+      catch { /* Optional preferences must never roll back an already saved trade. */ }
+      if (!edited) { clearPreTradeChecks(); setChecklistChecks({}) }
+      toast.success(edited ? "Trade mis à jour" : "Trade ajouté")
       setOpenForm(false)
       setEditingTrade(null)
       load()
     } catch (e) {
-      if (uploadedPaths.length) await tradeScreenshots.delete(uploadedPaths).catch(()=>{})
-      if (createdTrade) await tradesAPI.delete(createdTrade.id).catch(()=>{})
-      toast.error(e.response?.data?.detail || e.message || "Impossible d’enregistrer le trade")
+      if (!isCurrent(context)) return
+      // A timed-out attachment write may already have committed. Do not delete
+      // its files and leave persisted references pointing to missing media.
+      if (uploadedPaths.length && !attachmentAttempted) await tradeScreenshots.delete(uploadedPaths).catch(()=>{})
+      if (!isCurrent(context)) return
+      if (financialSaveCompleted || e.saved_trade_id) {
+        toast.warning(e.saved_trade_id ? e.message : savedTrade?.id ? "Le trade est enregistré, mais ses captures n’ont pas toutes été ajoutées. Ouvre-le pour les joindre à nouveau." : "L’enregistrement a répondu sans résultat exploitable. Recharge le journal avant toute nouvelle saisie pour éviter un doublon.")
+        if (!edited) { clearPreTradeChecks(); setChecklistChecks({}) }
+        setOpenForm(false); setEditingTrade(null); load()
+      } else toast.error(e.response?.data?.detail || e.message || "Impossible d’enregistrer le trade")
     }
-    finally { setSaving(false) }
+    finally { if (isCurrent(context)) { saveLock.current = false; setSaving(false) } }
   }
 
   const openNewTrade = () => {
     if (!accounts.length) { toast.error("Ajoute d’abord un compte de trading"); return }
     setEditingTrade(null)
+    creationRequest.current = null
     setChecklistChecks(readPreTradeChecks(activeChecklist))
     let last={};try{last=JSON.parse(localStorage.getItem("pipsevo_last_trade_choices"))||{}}catch{}
     const account=accounts.find(item=>item.id===last.account_id&&(item.status||"active")==="active") || accounts.find(item=>(item.status||"active")==="active") || accounts[0]
@@ -137,21 +160,25 @@ export function JournalPage() {
 
   const toggleFavorite = async (trade, e) => {
     e?.stopPropagation()
-    try { const { data } = await tradesAPI.update(trade.id, { starred: !trade.starred }); setTradeList(list=>list.map(t=>t.id===trade.id?data:t)) }
-    catch { toast.error("Impossible de modifier le favori") }
+    const context = capture()
+    try { await tradesAPI.update(trade.id, { starred: !trade.starred }); if (isCurrent(context)) load() }
+    catch { if (isCurrent(context)) toast.error("Impossible de modifier le favori") }
   }
 
   const deleteTrade = async (id) => {
+    const context = capture()
     const accepted = await confirm({ title: "Supprimer ce trade ?", description: "Le trade et ses données associées seront supprimés définitivement.", confirmLabel: "Supprimer", destructive: true })
-    if (!accepted) return
+    if (!accepted || !isCurrent(context)) return
     try {
       const screenshotPaths=tradeList.find(trade=>String(trade.id)===String(id))?.screenshots || []
       await tradesAPI.delete(id)
-      if (screenshotPaths.length) await tradeScreenshots.delete(screenshotPaths).catch(()=>toast.warning("Le trade est supprimé, mais ses captures devront être nettoyées ultérieurement."))
+      if (!isCurrent(context)) return
+      if (screenshotPaths.length) await tradeScreenshots.delete(screenshotPaths).catch(()=>{ if (isCurrent(context)) toast.warning("Le trade est supprimé, mais ses captures devront être nettoyées ultérieurement.") })
+      if (!isCurrent(context)) return
       toast.success("Trade supprimé")
       if (String(selectedTrade?.id) === String(id)) navigate(JOURNAL_LIST_PATH, { replace: true })
       load()
-    } catch { toast.error("Erreur") }
+    } catch { if (isCurrent(context)) toast.error("Erreur") }
   }
 
   // Normalize trade fields
@@ -182,37 +209,24 @@ export function JournalPage() {
 
   const normalized = tradeList.map(normalize)
 
-  const byAccountAndDate = normalized.filter(t => {
-    const exactDate = !dateFilter || String(t.date || "").slice(0, 10) === dateFilter
-    const recentEnough = dateFilter || !t.date || (Date.now() - new Date(t.date).getTime()) <= Number(days) * 86400000
-    return (!accountFilter || t.account_id === accountFilter) && exactDate && recentEnough
-  })
+  const byAccountAndDate = filterTradePeriod(normalized.filter(t => !accountFilter || t.account_id === accountFilter),
+    dateFilter ? { start: dateFilter, end: dateFilter } : { days })
   const currencyScope = useTradingCurrency(byAccountAndDate)
   const { money } = currencyScope
   const filtered = activeFilter === "Tous les trades" || activeFilter === "Tous"
     ? currencyScope.trades
     : activeFilter === "Positions ouvertes"
-    ? currencyScope.trades.filter(t => t.result_status === "open" || t.exit_price === null || t.exit_price === undefined)
+    ? currencyScope.trades.filter(t => ["open", "partial"].includes(t.result_status))
     : currencyScope.trades.filter(t => t.starred)
 
   // KPIs calculés depuis les vraies données
-  const outcomes = filtered.map(t => ({ trade: t, outcome: t.outcome })).filter(item => item.outcome !== null)
-  const wins = outcomes.filter(item => item.outcome > 0)
-  const losses = outcomes.filter(item => item.outcome < 0)
-  const measuredTrades = filtered.filter(t => typeof t.pnl === "number")
-  const monetaryWins = measuredTrades.filter(t => t.pnl > 0)
-  const monetaryLosses = measuredTrades.filter(t => t.pnl < 0)
-  const totalPnl = measuredTrades.length ? measuredTrades.reduce((s, t) => s + t.pnl, 0) : null
-  const winRate = outcomes.length ? Math.round((wins.length / outcomes.length) * 100) : null
-  const avgWin = monetaryWins.length ? monetaryWins.reduce((s, t) => s + t.pnl, 0) / monetaryWins.length : null
-  const avgLoss = monetaryLosses.length ? monetaryLosses.reduce((s, t) => s + t.pnl, 0) / monetaryLosses.length : null
-  const rTrades = filtered.filter(t => Number.isFinite(t.r) && t.outcome !== null)
-  const avgR = rTrades.length ? rTrades.reduce((s, t) => s + t.r, 0) / rTrades.length : null
+  const stats = calculateTradeAnalytics(filtered, accounts)
+  const { pnl: totalPnl, winrate: winRate, avgWin, avgLoss, avgR } = stats
 
   const kpis = [
     { label: "Trades", value: filtered.length.toString(), sub: "", Icon: BarChart3, color: "var(--pe-blue)" },
-    { label: "Win Rate", value: winRate === null ? "—" : `${winRate}%`, sub: "", Icon: Target, color: "var(--pe-profit)" },
-    { label: "Profit net", value: totalPnl === null ? "—" : money(totalPnl,{signDisplay:"always"}), sub: "", Icon: TrendingUp, color: totalPnl === null ? "var(--pe-text-muted)" : totalPnl >= 0 ? "var(--pe-profit)" : "var(--pe-risk)" },
+    { label: "Win Rate", value: formatWinRate(winRate), sub: "", Icon: Target, color: "var(--pe-profit)" },
+    { label: "Profit net", value: totalPnl === null ? "—" : money(totalPnl,{signDisplay:"always"}), sub: `${stats.measuredCount} résultat(s) mesuré(s)`, Icon: TrendingUp, color: totalPnl === null ? "var(--pe-text-muted)" : totalPnl >= 0 ? "var(--pe-profit)" : "var(--pe-risk)" },
     { label: "Gain moyen", value: avgWin === null ? "—" : money(avgWin,{signDisplay:"always"}), sub: "", Icon: ArrowUpRight, color: avgWin === null ? "var(--pe-text-muted)" : "var(--pe-profit)" },
     { label: "Perte moyenne", value: avgLoss === null ? "—" : money(avgLoss), sub: "", Icon: ArrowDownRight, color: avgLoss === null ? "var(--pe-text-muted)" : "var(--pe-risk)" },
     { label: "R Multiple moyen", value: avgR === null ? "—" : `${avgR.toFixed(2)}R`, sub: "", Icon: Ruler, color: "var(--pe-brand)" },
@@ -235,7 +249,7 @@ export function JournalPage() {
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
             {dateFilter && <button type="button" onClick={()=>navigate(JOURNAL_LIST_PATH)} className="pe-control inline-flex items-center gap-2 border-[#7165DD]/35 bg-[#7165DD]/10 text-[#C7C0FF]"><CalendarDays className="h-4 w-4"/>{new Intl.DateTimeFormat("fr-FR",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(`${dateFilter}T12:00:00`))}<X className="h-3.5 w-3.5"/></button>}
             <select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} className="pe-control min-w-[150px] flex-1 sm:flex-none"><option value="">Tous les comptes</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
-            <select value={days} onChange={e=>setDays(e.target.value)} className="pe-control min-w-[150px] flex-1 sm:flex-none"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option><option value="3650">Toute la période</option></select>
+            <select aria-label="Période du journal" value={days} onChange={e=>setDays(e.target.value)} className="pe-control min-w-[150px] flex-1 sm:flex-none"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option><option value="all">Toute la période</option></select>
             <CsvExportButton rows={filtered} type="trades" filename="pipsevo-trades-filtres" className="btn-ghost inline-flex h-11 items-center justify-center px-4"/>
             <button type="button" onClick={()=>setImportOpen(true)} className="btn-ghost inline-flex h-11 items-center justify-center gap-2 px-4"><Upload className="h-4 w-4"/>Importer</button>
             <button
@@ -248,6 +262,7 @@ export function JournalPage() {
         </div>
 
         <div className="mb-4"><TradingCurrencyControl {...currencyScope}/></div>
+        {stats.unknownCount > 0 && <p role="status" className="mb-4 text-xs text-[var(--pe-text-muted)]">{stats.unknownCount} résultat(s) net(s) indisponible(s), exclus des calculs. Les indicateurs utilisent {stats.measuredCount} résultat(s) mesuré(s).</p>}
         {/* Filter tabs */}
         <div className="mb-5 grid grid-cols-3 border-b border-[#1E2430]" role="tablist" aria-label="Filtres du journal">
           {["Tous les trades", "Positions ouvertes", "Favoris"].map((tab) => (

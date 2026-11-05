@@ -6,6 +6,7 @@ import {
   clearPosthogPersistence,
   createCookieConsent,
   disableAnalytics,
+  isCookieConsentPersisted,
   loadAnalytics,
   readCookieConsent,
   saveCookieConsent,
@@ -29,6 +30,7 @@ describe("cookie consent", () => {
     });
     delete window.posthog;
   });
+  afterEach(() => { jest.restoreAllMocks(); saveCookieConsent(false); });
 
   test("creates and persists an expiring structured choice", () => {
     const now = 1_000;
@@ -97,7 +99,7 @@ describe("cookie consent", () => {
     expect(localStorage.getItem("pipsevo_settings")).toBe("required");
     expect(localStorage.getItem(COOKIE_CONSENT_KEY)).not.toBeNull();
     expect(document.getElementById("pipsevo-posthog")).toBeNull();
-    expect(window.posthog).toBeUndefined();
+    expect(window.posthog.opt_out_capturing).toBe(optOut);
   });
 
   test("page views require consent and use the requested URL", () => {
@@ -120,5 +122,42 @@ describe("cookie consent", () => {
 
   test("createCookieConsent always keeps necessary storage enabled", () => {
     expect(createCookieConsent(false, 10).necessary).toBe(true);
+  });
+
+  test("blocked storage getters do not break refusal or analytics cleanup", () => {
+    jest.spyOn(window, "localStorage", "get").mockImplementation(() => { throw new DOMException("blocked", "SecurityError"); });
+    jest.spyOn(window, "sessionStorage", "get").mockImplementation(() => { throw new DOMException("blocked", "SecurityError"); });
+    expect(readCookieConsent()).toBeNull();
+    const choice = saveCookieConsent(false);
+    expect(readCookieConsent()?.analytics).toBe(false);
+    expect(isCookieConsentPersisted(choice)).toBe(false);
+    expect(() => disableAnalytics()).not.toThrow();
+  });
+
+  test("a failed write preserves the new explicit session choice over an old stored grant", () => {
+    saveCookieConsent(true);
+    jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("full", "QuotaExceededError"); });
+    const choice = saveCookieConsent(false);
+    expect(readCookieConsent()?.analytics).toBe(false);
+    expect(isCookieConsentPersisted(choice)).toBe(false);
+  });
+
+  test("withdrawal while the script loads cannot opt analytics back in", async () => {
+    saveCookieConsent(true);
+    const loading = loadAnalytics(safeLocation);
+    const script = document.getElementById("pipsevo-posthog");
+    const optIn = jest.fn(); const optOut = jest.fn();
+    window.posthog = { __SV: 1, opt_in_capturing: optIn, opt_out_capturing: optOut };
+    saveCookieConsent(false); disableAnalytics(); script.dispatchEvent(new Event("load"));
+    await expect(loading).resolves.toBe(false);
+    expect(optIn).not.toHaveBeenCalled(); expect(optOut).toHaveBeenCalled();
+  });
+
+  test("analytics page views strip record IDs, query values and fragments", () => {
+    saveCookieConsent(true);
+    const capture = jest.fn(); window.posthog = { capture };
+    const location = { pathname: "/app/journal/private-trade-id", search: "?account=private-account", hash: "#notes", href: "https://pipsevo.vercel.app/app/journal/private-trade-id?account=private-account#notes" };
+    expect(captureAnalyticsPageview(location)).toBe(true);
+    expect(capture).toHaveBeenCalledWith("$pageview", { $current_url: "https://pipsevo.vercel.app/app/journal" });
   });
 });
