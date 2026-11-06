@@ -37,3 +37,19 @@ La recette ne couvre pas encore tous les parcours, les navigateurs Safari/Firefo
 sur appareils physiques, la réception réelle des e-mails, les paiements ni un
 audit de sécurité exhaustif. Les synchronisations restent hors périmètre.
 Aucune opération destructive ou achat effectué.
+
+## Incident détecté pendant la publication
+
+La navigation d'un onglet resté ouvert vers la vue journalière a échoué sur
+un ancien module JavaScript après remplacement du déploiement. Une actualisation
+a rétabli la page. Cela invalide toute affirmation d'absence totale d'erreurs
+sur l'ensemble de cette session : l'observation console ci-dessus était antérieure.
+
+Un composant de récupération entoure désormais les routes chargées à la demande :
+message compréhensible, avertissement sur les saisies non enregistrées et bouton
+de rechargement explicite, sans boucle ni actualisation automatique. Trois tests
+couvrent une page saine, un module asynchrone introuvable et une erreur de rendu.
+Le détail technique de l'exception n'est pas affiché à l'utilisateur.
+
+Le commit d4d1e02 a été poussé et le journal publié présente bien 12 pixels
+d'espacement entre les en-têtes, vérifiés sur la session réelle après rechargement.

@@ -11,6 +11,7 @@ import { ProductTelemetry } from "@/features/admin/ProductOperations";
 import ThemeToggle from "@/components/ThemeToggle";
 import { Toaster } from "@/components/ui/sonner";
 import ProfileRecovery from "@/components/auth/ProfileRecovery";
+import RouteErrorBoundary from "@/components/RouteErrorBoundary";
 import "@/index.css";
 
 const Landing = lazy(() => import("@/pages/LandingV2"));
@@ -138,6 +139,7 @@ export default function App() {
         <CookieConsent />
         <ThemeToggle className="pe-theme-toggle-global" />
         <Toaster position="top-right" />
+        <RouteErrorBoundary>
         <Suspense fallback={<RouteLoading />}>
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -214,6 +216,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
         </Suspense>
+        </RouteErrorBoundary>
       </BrowserRouter>
     </AuthProvider>
     </I18nProvider>
