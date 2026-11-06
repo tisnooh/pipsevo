@@ -318,8 +318,8 @@ export function JournalPage() {
           <div className="pe-table-shell hidden md:block">
             {/* Header */}
             <div
-            className="grid min-w-[780px] border-b border-[#6571CF]/15 bg-[#090E1C] px-4 py-3.5 text-pe-label uppercase tracking-[0.08em] text-[#98A1B5]"
-              style={{ gridTemplateColumns: "2rem 2fr 1fr 1.5fr 1fr 0.8fr 1fr 1.5fr 1fr 2rem" }}
+            className="grid min-w-[960px] gap-x-3 border-b border-[#6571CF]/15 bg-[#090E1C] px-4 py-3.5 text-pe-label uppercase tracking-[0.08em] text-[#98A1B5]"
+              style={{ gridTemplateColumns: "2rem 1.4fr 1fr 1.5fr 1.2fr minmax(6rem, 1fr) 1fr 1.5fr 1fr 2rem" }}
             >
               <span></span>
               <span>Date</span>
@@ -340,10 +340,10 @@ export function JournalPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.04 }}
                 onClick={() => navigate(journalTradePath(trade.id))}
-                className={`grid min-w-[780px] cursor-pointer items-center border-b border-[#1E2430]/50 px-4 py-3.5 text-[13px] transition-all last:border-0 ${
+                className={`grid min-w-[960px] gap-x-3 cursor-pointer items-center border-b border-[#1E2430]/50 px-4 py-3.5 text-[13px] transition-all last:border-0 ${
                   selectedTrade?.id === trade.id ? "bg-[#15182A]" : "hover:bg-[#15182A]/50"
                 }`}
-                style={{ gridTemplateColumns: "2rem 2fr 1fr 1.5fr 1fr 0.8fr 1fr 1.5fr 1fr 2rem" }}
+                style={{ gridTemplateColumns: "2rem 1.4fr 1fr 1.5fr 1.2fr minmax(6rem, 1fr) 1fr 1.5fr 1fr 2rem" }}
               >
                 <button aria-label={trade.starred?"Retirer des favoris":"Ajouter aux favoris"} onClick={(e)=>toggleFavorite(trade,e)}><Star className={`w-3.5 h-3.5 transition-colors ${trade.starred ? "text-yellow-400 fill-yellow-400" : "text-[#374151] hover:text-yellow-400"}`}/></button>
                 <span className="text-xs text-[#9CA3AF]">{trade.dateLabel}</span>
@@ -359,6 +359,7 @@ export function JournalPage() {
                   ))}
                 </div>
                 <button
+                  aria-label="Supprimer ce trade"
                   onClick={(e) => { e.stopPropagation(); deleteTrade(trade.id) }}
                   className="text-[#6B7280] hover:text-[#F26A70] transition-colors"
                 >

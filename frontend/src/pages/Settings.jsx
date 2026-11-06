@@ -219,7 +219,7 @@ export default function Settings() {
       <div className="absolute -right-24 -top-28 h-64 w-64 rounded-full bg-[#7C4DFF]/20 blur-3xl"/>
       <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><div className="pe-eyebrow">Espace personnel</div><h1 className="pe-page-title mt-2">Paramètres du compte</h1><p className="pe-page-copy mt-2 max-w-xl">Personnalise ton expérience PipsEvo et garde le contrôle sur ton compte.</p></div>
-        <div className="flex items-center gap-3 rounded-2xl border border-white/[0.08] bg-black/20 p-3 pr-5 backdrop-blur"><span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-[#4F8CFF] to-[#7C4DFF] font-bold">{initials}</span><div><div className="text-sm font-semibold">{user?.name || "Trader"}</div><div className="mt-0.5 text-pe-micro text-[#46C99A]">● Compte actif</div></div></div>
+        <div className="flex items-center gap-3 rounded-2xl border border-[var(--pe-border)] bg-[var(--pe-surface-soft)] p-3 pr-5 backdrop-blur"><span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-[#4F8CFF] to-[#7C4DFF] font-bold">{initials}</span><div><div className="text-sm font-semibold">{user?.name || "Trader"}</div><div className="mt-0.5 text-pe-micro text-[#46C99A]">● Compte actif</div></div></div>
       </div>
     </section>
 

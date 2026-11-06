@@ -14,7 +14,7 @@ export const tradeScreenshots = { upload: readonly, delete: readonly, get: reado
 export const integrationConnections = { list: async () => ({ data: [] }), providers: async () => ({ data: [] }) };
 export const payouts = { list: async () => ({ data: [] }), create: readonly, delete: readonly };
 export const auth = { update: readonly, updatePassword: readonly, signOutOtherSessions: readonly };
-export const newsletter = { getPreferences: async () => ({ data: { daily_summary: false, risk_alerts: true, payout_updates: false, product_updates: false, education: false, newsletter_status: 'not_subscribed' } }), updatePreferences: readonly };
+export const newsletter = { getPreferences: async () => ({ data: { daily_summary: false, risk_alerts: true, payout_updates: false, product_updates: false, trading_education: false, newsletter_status: 'not_subscribed' } }), updatePreferences: readonly };
 export const dataExports = { all: readonly };
 export const dna = async () => ({ data: { trades_logged: 2, trader_type: 'Futures · Démo', best_session: null, best_setup: null, best_emotion: null } });
 export const api = { get: readonly, post: readonly, delete: readonly };
