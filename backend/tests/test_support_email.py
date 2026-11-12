@@ -91,3 +91,22 @@ def test_support_honeypot_does_not_store_or_send(monkeypatch):
     assert result == {"ok": True, "message": "Message received"}
     assert fake_db.contact_messages.inserted is None
     assert deliveries == []
+
+
+def test_saved_ticket_remains_open_when_email_provider_is_down(monkeypatch):
+    db = AsyncMongoMockClient().support
+    monkeypatch.setattr(server, "db", db)
+    monkeypatch.setattr(server.admin_service, "db", db)
+    def unavailable(**_kwargs):
+        raise server.EmailDeliveryError("test outage")
+    monkeypatch.setattr(server, "send_email", unavailable)
+    body = server.ContactIn(name="Tester", email="qa@example.com", subject="Recette", message="Recette hors production")
+    req = Request({"type": "http", "method": "POST", "path": "/api/support", "headers": [], "client": ("192.0.2.3", 50000)})
+    async def verify():
+        result = await server.contact(body, req)
+        assert result["ok"] and result["receipt_sent"] is False
+        tickets = await server.admin_service.support_list(1, 10, "open", None, "")
+        assert tickets["total"] == 1
+        assert tickets["items"][0]["id"] == result["request_id"]
+        assert (await server.admin_service.support_detail(result["request_id"]))["status"] == "open"
+    asyncio.run(verify())

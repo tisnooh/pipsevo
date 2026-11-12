@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import html as html_lib
 import os
@@ -217,6 +218,10 @@ def email_configuration_status() -> Dict[str, object]:
         _, sender_address = _sender()
         if provider == "resend":
             configured = bool(os.environ.get("RESEND_API_KEY", "").strip())
+        elif provider == "gmail_api":
+            configured = all(os.environ.get(key, "").strip() for key in (
+                "GMAIL_OAUTH_CLIENT_ID", "GMAIL_OAUTH_CLIENT_SECRET", "GMAIL_OAUTH_REFRESH_TOKEN",
+            ))
         elif provider == "smtp":
             host = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
             username = os.environ.get("SMTP_USERNAME", "").strip()
@@ -231,19 +236,8 @@ def email_configuration_status() -> Dict[str, object]:
     return {"provider": provider, "configured": configured}
 
 
-def _send_with_smtp(*, to: str, subject: str, html: str, text: str, reply_to: Optional[str], provider_headers: Dict[str, str], idempotency_key: Optional[str]) -> str:
-    host = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
-    try:
-        port = int(os.environ.get("SMTP_PORT", "587"))
-    except ValueError as exc:
-        raise EmailConfigurationError("SMTP_PORT must be an integer") from exc
-    username = os.environ.get("SMTP_USERNAME", "").strip()
-    password = os.environ.get("SMTP_PASSWORD", "")
-    if not username or not password:
-        raise EmailConfigurationError("SMTP_USERNAME and SMTP_PASSWORD are not configured")
+def _mime_message(*, to, subject, html, text, reply_to, provider_headers, idempotency_key):
     sender_name, sender_address = _sender()
-    if host.lower() == "smtp.gmail.com" and sender_address.lower() != username.lower():
-        raise EmailConfigurationError("Gmail SMTP sender must match SMTP_USERNAME")
     message = EmailMessage()
     message["From"] = formataddr((sender_name, sender_address))
     message["To"], message["Subject"] = to, subject
@@ -254,6 +248,51 @@ def _send_with_smtp(*, to: str, subject: str, html: str, text: str, reply_to: Op
         message[key] = value
     message.set_content(text)
     message.add_alternative(html, subtype="html")
+    return message, stable_id
+
+
+def _send_with_gmail_api(**kwargs) -> str:
+    if not email_configuration_status()["configured"]:
+        raise EmailConfigurationError("Gmail HTTPS is not configured")
+    message, _ = _mime_message(**kwargs)
+    def post(url, field, **request):
+        try:
+            result = requests.post(url, timeout=15, allow_redirects=False, **request)
+            if not 200 <= result.status_code < 300:
+                raise EmailDeliveryError(f"Gmail HTTPS rejected the request ({result.status_code})")
+            data = result.json()
+        except (requests.RequestException, ValueError):
+            raise EmailDeliveryError("Gmail HTTPS response unavailable") from None
+        value = data.get(field) if isinstance(data, dict) else None
+        if not isinstance(value, str) or not value.strip():
+            raise EmailDeliveryError("Gmail HTTPS returned an incomplete response")
+        return value
+
+    token = post("https://oauth2.googleapis.com/token", "access_token", data={
+        "grant_type": "refresh_token", "client_id": os.environ["GMAIL_OAUTH_CLIENT_ID"],
+        "client_secret": os.environ["GMAIL_OAUTH_CLIENT_SECRET"],
+        "refresh_token": os.environ["GMAIL_OAUTH_REFRESH_TOKEN"],
+    })
+    return post("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", "id",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"raw": base64.urlsafe_b64encode(message.as_bytes()).decode("ascii")})
+
+
+def _send_with_smtp(*, to: str, subject: str, html: str, text: str, reply_to: Optional[str], provider_headers: Dict[str, str], idempotency_key: Optional[str]) -> str:
+    host = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
+    try:
+        port = int(os.environ.get("SMTP_PORT", "587"))
+    except ValueError as exc:
+        raise EmailConfigurationError("SMTP_PORT must be an integer") from exc
+    username = os.environ.get("SMTP_USERNAME", "").strip()
+    password = os.environ.get("SMTP_PASSWORD", "")
+    if not username or not password:
+        raise EmailConfigurationError("SMTP_USERNAME and SMTP_PASSWORD are not configured")
+    _, sender_address = _sender()
+    if host.lower() == "smtp.gmail.com" and sender_address.lower() != username.lower():
+        raise EmailConfigurationError("Gmail SMTP sender must match SMTP_USERNAME")
+    message, stable_id = _mime_message(to=to, subject=subject, html=html, text=text, reply_to=reply_to,
+                                       provider_headers=provider_headers, idempotency_key=idempotency_key)
     try:
         with smtplib.SMTP(host, port, timeout=20) as smtp:
             smtp.ehlo()
@@ -302,11 +341,14 @@ def _send_with_resend(*, to: str, subject: str, html: str, text: str, reply_to: 
 def send_email(*, to: str, subject: str, html: str, text: str, category: str = "transactional", idempotency_key: Optional[str] = None, unsubscribe_url: Optional[str] = None, one_click_unsubscribe: Optional[str] = None, reply_to: Optional[str] = None) -> str:
     del category  # Sender identity is centralized for the temporary Gmail setup.
     provider_headers: Dict[str, str] = {}
-    if unsubscribe_url:
-        provider_headers["List-Unsubscribe"] = f"<{unsubscribe_url}>"
+    if one_click_unsubscribe or unsubscribe_url:
+        provider_headers["List-Unsubscribe"] = f"<{one_click_unsubscribe or unsubscribe_url}>"
     if one_click_unsubscribe:
         provider_headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     provider = _email_provider()
+    if provider == "gmail_api":
+        return _send_with_gmail_api(to=to, subject=subject, html=html, text=text, reply_to=reply_to,
+                                    provider_headers=provider_headers, idempotency_key=idempotency_key)
     if provider == "smtp":
         return _send_with_smtp(to=to, subject=subject, html=html, text=text, reply_to=reply_to, provider_headers=provider_headers, idempotency_key=idempotency_key)
     if provider == "resend":

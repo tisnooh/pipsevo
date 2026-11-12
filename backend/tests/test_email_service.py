@@ -74,7 +74,40 @@ def test_send_email_uses_marketing_sender_and_list_headers(monkeypatch):
     assert message_id == "email_123"
     assert captured["json"]["from"] == "PipsEvo <news@example.com>"
     assert captured["json"]["headers"]["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+    assert captured["json"]["headers"]["List-Unsubscribe"] == "<https://api.example.com/unsubscribe>"
     assert captured["headers"]["Idempotency-Key"] == "campaign-1"
+
+
+@pytest.mark.parametrize("token_status,send_status,response_id,success", [
+    (200, 200, "accepted", True), (401, 200, "unused", False),
+    (200, 307, "redirect", False), (200, 200, "", False),
+])
+def test_gmail_https_acceptance(monkeypatch, token_status, send_status, response_id, success):
+    from base64 import urlsafe_b64decode
+    from email import message_from_bytes
+    from unittest.mock import Mock
+    monkeypatch.setenv("EMAIL_PROVIDER", "gmail_api")
+    monkeypatch.setenv("EMAIL_FROM_ADDRESS", "sender@example.test")
+    for name in ("CLIENT_ID", "CLIENT_SECRET", "REFRESH_TOKEN"):
+        monkeypatch.setenv("GMAIL_OAUTH_" + name, "offline-test")
+    token, sent = Mock(status_code=token_status), Mock(status_code=send_status)
+    token.json.return_value = {"access_token": "temporary"}
+    sent.json.return_value = {"id": response_id}
+    post = Mock(side_effect=[token, sent])
+    monkeypatch.setattr(email_service.requests, "post", post)
+    args = dict(to="qa@example.test", subject="QA", html="<p>test</p>", text="test")
+    if success:
+        assert email_service.send_email(**args) == response_id
+        url, = post.call_args.args
+        kw = post.call_args.kwargs
+        assert url == "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+        assert kw["headers"] == {"Authorization": "Bearer temporary"}
+        assert message_from_bytes(urlsafe_b64decode(kw["json"]["raw"]))["To"] == args["to"]
+    else:
+        with pytest.raises(email_service.EmailDeliveryError):
+            email_service.send_email(**args)
+    assert post.call_count == (1 if token_status != 200 else 2)
+    assert all(call.kwargs["allow_redirects"] is False for call in post.call_args_list)
 
 
 def test_english_support_receipt_does_not_mix_languages(monkeypatch):

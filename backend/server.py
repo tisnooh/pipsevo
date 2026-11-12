@@ -843,7 +843,8 @@ async def contact(body: ContactIn, request: Request):
         await db.contact_messages.update_one(
             {"id": request_id}, {"$set": {"status": "delivery_failed", "delivery_failed_at": now}},
         )
-        raise HTTPException(503, "Le support est temporairement indisponible. Réessaie dans quelques minutes.")
+        # The durable ticket is already available in the admin support queue.
+        return {"ok": True, "message": "Message received", "request_id": request_id, "receipt_sent": False}
 
     receipt_message_id = None
     try:
@@ -862,7 +863,7 @@ async def contact(body: ContactIn, request: Request):
         {"$set": {"status": final_status, "support_message_id": support_message_id,
                   "receipt_message_id": receipt_message_id, "delivered_at": datetime.now(timezone.utc)}},
     )
-    return {"ok": True, "message": "Message received", "request_id": request_id}
+    return {"ok": True, "message": "Message received", "request_id": request_id, "receipt_sent": bool(receipt_message_id)}
 
 
 @api.post("/email/welcome", status_code=status.HTTP_202_ACCEPTED)

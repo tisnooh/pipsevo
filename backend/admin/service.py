@@ -411,7 +411,7 @@ class AdminService:
         query: dict[str, Any] = {}
         if status:
             if status == "open":
-                query["status"] = {"$in": ["sending", "delivered", "receipt_pending", "open"]}
+                query["status"] = {"$in": ["sending", "delivered", "receipt_pending", "delivery_failed", "open"]}
             else:
                 query["status"] = status
         if priority:
@@ -422,7 +422,7 @@ class AdminService:
         total = await self.db.contact_messages.count_documents(query)
         docs = await self.db.contact_messages.find(query, {"_id": 0, "ip_hash": 0}).sort("created_at", -1).skip((page - 1) * per_page).limit(per_page).to_list(per_page)
         for doc in docs:
-            if doc.get("status") in {"sending", "delivered", "receipt_pending"}:
+            if doc.get("status") in {"sending", "delivered", "receipt_pending", "delivery_failed"}:
                 doc["status"] = "open"
             doc.setdefault("priority", "normal")
             doc["last_reply_at"] = (doc.get("messages") or [{}])[-1].get("created_at") if doc.get("messages") else None
@@ -430,7 +430,7 @@ class AdminService:
 
     async def support_detail(self, ticket_id: str) -> dict[str, Any] | None:
         doc = await self.db.contact_messages.find_one({"id": ticket_id}, {"_id": 0, "ip_hash": 0})
-        if doc and doc.get("status") in {"sending", "delivered", "receipt_pending"}:
+        if doc and doc.get("status") in {"sending", "delivered", "receipt_pending", "delivery_failed"}:
             doc["status"] = "open"
         if doc:
             doc.setdefault("priority", "normal")
@@ -618,7 +618,7 @@ class AdminService:
         services = [
             {"name": "Base de données", "status": "operational" if self.supabase.configured else "not_configured", "detail": "Connexion serveur Supabase"},
             {"name": "Authentification", "status": "operational" if self.supabase.configured else "not_configured", "detail": "Supabase Auth"},
-            {"name": "E-mails", "status": "configured" if configured_env("SMTP_PASSWORD") or configured_env("RESEND_API_KEY") else "not_configured", "detail": "SMTP ou Resend"},
+            {"name": "E-mails", "status": "configured" if email_configuration_status()["configured"] else "not_configured", "detail": "Configuration d’envoi (sans preuve de réception)"},
             {"name": "Paiements", "status": "configured" if configured_env("STRIPE_SECRET_KEY") and configured_env("STRIPE_WEBHOOK_SECRET") else "not_configured", "detail": "Stripe"},
             {"name": "MetaTrader", "status": "configured" if configured_env("METAAPI_TOKEN") else "not_configured", "detail": "MetaApi"},
             {"name": "cTrader", "status": "configured" if configured_env("CTRADER_CLIENT_ID") and configured_env("CTRADER_CLIENT_SECRET") else "not_configured", "detail": "Open API"},
